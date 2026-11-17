@@ -3,3 +3,4 @@ node_modules/
 .rg-diagnostics/
 __pycache__/
 *.py[cod]
+/build/

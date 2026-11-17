@@ -10,7 +10,8 @@ import {runRepoGuard} from './run-repoguard.mjs';
 const compiler=resolve(root,'.rg-transition');
 if(git(compiler,'rev-parse','HEAD')!==PIN)throw new Error('S03_COMPILER_PIN');
 const cli=join(compiler,'dist/repo-guard.mjs');
-const head=git(root,'rev-parse','HEAD');
+// S03 is closed: its accepted transition is verified at its immutable historical HEAD.
+const head='4c46d0f3aa2176a8d63448c01df55614ce169956';
 const migration=checkMigration(root,head);
 function probe(repo,base,head) {
   return runRepoGuard(cli,'netkeep80/fgm-platform',repo,base,head);

@@ -1,4 +1,4 @@
-name: S03 requirements and historical source provenance
+name: S04 current provenance and historical S02-S03
 
 on:
   pull_request:
@@ -31,13 +31,15 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '24'
-      - name: Verify exact canonical Requirements and attestation
+      - name: Verify historical S03 and current S04 Requirements
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           node --test core/tests/document-language.test.mjs
           node core/scripts/check-document-language.mjs
           node --test tests/requirements-migration.test.mjs
-          node scripts/check-requirements-migration.mjs "${{ github.event.pull_request.head.sha }}"
+          node scripts/check-requirements-migration.mjs 4c46d0f3aa2176a8d63448c01df55614ce169956
+          node --test tests/core-integration.test.mjs
+          node scripts/check-core-integration.mjs "${{ github.event.pull_request.head.sha }}"
       - name: Checkout immutable compiler for real migration mutations
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:

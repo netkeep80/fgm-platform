@@ -12,7 +12,8 @@ test('S03 exact migration and independent integrity mutations', async t=>{
   const temp=mkdtempSync(join(tmpdir(),'fgmp-s03-map-'));
   try {
     execFileSync('git',['clone','--quiet','--shared','--no-checkout',root,temp]);
-    const positive=git(root,'rev-parse','HEAD');
+    // S03 remains an independently mutated historical snapshot after later accepted slices.
+    const positive='4c46d0f3aa2176a8d63448c01df55614ce169956';
     git(temp,'checkout','--quiet','--detach',positive);
     git(temp,'config','user.name','FGM synthetic verification');
     git(temp,'config','user.email','synthetic@example.invalid');
