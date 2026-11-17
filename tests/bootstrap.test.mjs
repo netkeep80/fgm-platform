@@ -28,7 +28,9 @@ test("positive: exact frozen RepoGuard revision, roots and artifact links",()=>
 );
 test("negative: replaced RepoGuard SHA fails closed",()=>temporary(tmp=>{
   const p=join(tmp,".github/workflows/repo-guard.yml");
-  writeFileSync(p,readFileSync(p,"utf8").replace(PIN,"0000000000000000000000000000000000000000"));
+  writeFileSync(p,readFileSync(p,"utf8").replace(
+    "uses: netkeep80/repo-guard@"+PIN,
+    "uses: netkeep80/repo-guard@0000000000000000000000000000000000000000"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
 }));
 test("negative: missing verified_by target fails closed",()=>temporary(tmp=>{
