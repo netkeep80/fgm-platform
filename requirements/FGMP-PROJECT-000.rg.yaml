@@ -1,0 +1,36 @@
+format: repo-guard/requirement-v1
+id: FGMP-PROJECT-000
+normative: "### FGMP-PROJECT-000 — Проект должен обеспечивать независимый аудит exact BASE/HEAD/TREE, явное авторское принятие, воспроизводимое CI-свидетельство, причинную трассировку изменений, сохранение истории при миграции и запрет публикации чужих игровых ресурсов в публичном репозитории."
+lifecycle:
+  accepted: true
+  current: true
+  published: false
+relations:
+  - predicates: [requires]
+    target:
+      kind: requirement
+      id: FGMP-PRODUCT-000
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "README.md"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/requirements-hierarchy.md"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "LICENSE"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: ".github/workflows/repo-guard.yml"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "scripts/check-bootstrap.mjs"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: "tests/bootstrap.test.mjs"

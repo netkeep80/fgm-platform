@@ -1,0 +1,62 @@
+name: FGM Platform — RepoGuard v6.0.1 exact BASE/HEAD
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  repo-guard:
+    name: RepoGuard exact BASE/HEAD
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Independent positive and negative bootstrap checks
+        run: |
+          node --test tests/bootstrap.test.mjs
+          node scripts/check-bootstrap.mjs
+      - name: RepoGuard exact immutable snapshot
+        id: required_guard
+        uses: netkeep80/repo-guard@74db97791e6da8a75287164f0d0b41579108f114
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          node-version: '24'
+      - name: Checkout exact diagnostic compiler after a failed gate
+        if: failure()
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: netkeep80/repo-guard
+          ref: 74db97791e6da8a75287164f0d0b41579108f114
+          path: .rg-diagnostics
+          persist-credentials: false
+      - name: Print exact typed RepoGuard findings (gate remains failed)
+        if: failure()
+        run: |
+          (cd .rg-diagnostics && npm install --omit=dev --silent)
+          node .rg-diagnostics/dist/repo-guard.mjs --repo-root "$PWD" check --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --format json > "$RUNNER_TEMP/fgmp-rg-report.json" || true
+          node --input-type=module - "$RUNNER_TEMP/fgmp-rg-report.json" <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const r=JSON.parse(readFileSync(process.argv[2],'utf8'));
+          console.log(JSON.stringify({ok:r.ok,base:r.base,head:r.head,j1:r.j1,j2:r.j2,j3:r.j3,diagnostics:r.diagnostics},null,2));
+          NODE
+      - name: Show exact RepoGuard diagnostics without bypassing failure
+        if: always()
+        env:
+          RG_STEP: ${{ steps.required_guard.outcome }}
+          RG_RESULT: ${{ steps.required_guard.outputs.result }}
+          RG_SUMMARY: ${{ steps.required_guard.outputs.summary }}
+        run: |
+          printf 'RG_STEP=%s\nRG_RESULT=%s\nRG_SUMMARY=%s\n' "$RG_STEP" "$RG_RESULT" "$RG_SUMMARY"
