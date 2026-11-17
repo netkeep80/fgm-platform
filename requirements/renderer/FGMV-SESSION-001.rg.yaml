@@ -1,0 +1,48 @@
+format: repo-guard/requirement-v1
+id: FGMV-SESSION-001
+normative: "### FGMV-SESSION-001 — Единый контракт RendererSession. Библиотека визуализации должна отделять неизменяемую идентичность и сериализованные байты FGM-пакета от экземпляров сцены, пространственного размещения, производной геометрии, камеры, профиля отображения и состояния кадра. Изменение вида, визуального профиля и детальности не должно менять авторитетные C04/C05/LOFT или игровые решения. API будущего общего backend для Studio и игры должен явно объявлять возможности, версии источника и вида, жизненный цикл, отмену, запрет устаревшего кадра и диагностический fallback; недоступные возможности должны приводить к явному отказу. Контракт не свидетельствует о существовании реализации backend."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - derives_from
+    target:
+      kind: requirement
+      id: FGMV-PRODUCT-000
+  - predicates:
+      - depends_on
+    target:
+      kind: requirement
+      id: FGMV-WHOLE-001
+  - predicates:
+      - depends_on
+    target:
+      kind: requirement
+      id: FGMV-PORT-001
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/contracts/renderer-session-v1.d.ts
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/contracts/tsconfig.json
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/contracts/renderer-session-v1.typecheck.ts
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/.github/workflows/repo-guard.yml
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: renderer/docs/renderer-session-v1.md

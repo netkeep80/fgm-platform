@@ -1,0 +1,58 @@
+format: repo-guard/requirement-v1
+id: FGMR-DATA-001
+normative: "### FGMR-DATA-001 — Свободный корпус R01. Регенератор должен создавать не менее трёх собственных воспроизводимых синтетических классов геометрии с объёмной маской, диагностической ортографической проекцией, палитрой и структурными метаданными. Происхождение каждого класса и размер с контрольной суммой каждого файла должны присутствовать в каноническом манифесте. Публичный экспорт корпуса должен отклонять дополнительные и изменённые файлы, подмену прав и происхождения, символические ссылки, NTFS junction/reparse points и неканонический состав файлов и каталогов, включая пустые каталоги посредством независимого повторного построения. Генерация не должна обращаться к оригинальным игровым ресурсам и не должна перезаписывать существующий каталог."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - derives_from
+    target:
+      kind: requirement
+      id: FGMR-PRODUCT-000
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/scripts/generate_r01.py
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/scripts/verify_r01.py
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/CMakeLists.txt
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/.gitignore
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/.github/workflows/importer-ci.yml
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: regenerator/tests/test_corpus.py
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/docs/r01-synthetic-corpus.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/docs/current-step.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/README.md

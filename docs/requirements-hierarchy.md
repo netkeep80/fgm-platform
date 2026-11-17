@@ -1,7 +1,7 @@
-# Иерархия требований FGM Platform (bootstrap)
+# Иерархия требований FGM Platform
 
 **Контрольная Issue:** https://github.com/netkeep80/fgm-platform/issues/1  
-**Нормативная база:** `requirements/*.rg.yaml`. Этот документ — пояснение, а не альтернативный источник требований.
+**Нормативная база:** `requirements/**/*.rg.yaml`. Этот документ — пояснение, а не альтернативный источник требований.
 
 ## Корни
 
@@ -10,17 +10,19 @@
 
 Корни описывают **предлагаемую** целевую модель bootstrap. Их lifecycle в исходниках является предложением для принятого merge, но **не выражает принятие до явного авторского решения**.
 
-## Планируемое добавление старых ветвей
+## Три нормативные ветви S03
 
-`requirements/core/FGMC-*`, `requirements/regenerator/FGMR-*`, `requirements/renderer/FGMV-*`. Поддержку вложенных requirements и связь old→new subject identity проверить отдельным этапом [S03](https://github.com/netkeep80/fgm-platform/issues/6). Нельзя импортировать lifecycle=accepted только потому, что старый источник был принят: будет migration audit и новая авторская приёмка.
+`requirements/core/FGMC-*` — 11 требований, `requirements/regenerator/FGMR-*` — 31, `requirements/renderer/FGMV-*` — 31. Каждая ветвь сохраняет собственные PRODUCT/PROJECT корни и исходные requirement relations. Корневые FGMP управляют платформой и переносом; новые связи подчинения между предметными ветвями не добавляются.
 
-`implemented_by`, `verified_by`, `documents` ссылаются на точные пути этого репозитория; связность проверяется RepoGuard J1/J2/J3. Обычный CI реально запускает конкретные предметные тесты и не подменяется наличием link `verified_by`.
+73 исходных ID и нормативных текста сохранены. [Протокол S03](requirements-migration.md) и [точный реестр](requirements-migration.json) фиксируют смену repository в semantic subject, префиксы paths, constraints и lifecycle. У всех новых субъектов lifecycle=false/false/false до отдельного решения автора; source lifecycle остаётся в реестре. Всего compiler должен обнаружить 77 требований: 73 перенесённых, три прежних FGMP и новое FGMP-MIG-REQ-001. Проверка выполняется реальным закреплённым RepoGuard и тремя отрицательными переходами на изолированных Git-деревьях.
+
+`implemented_by`, `verified_by`, `documents` ссылаются на точные пути этого репозитория; связность проверяется RepoGuard J1/J2/J3. Предметный CI должен запускать конкретные тесты и не подменяться наличием связи `verified_by`; активация этих запусков в Platform относится к S04–S06.
 
 ## Граница старых репозиториев
 
 `fgm-core`, `fgm-regenerator` и `fgm-renderer` сохраняют все исходные commits, Requirements, PR и audit receipts до подтверждённого cutover. Весь контекст старых Issues/PR индексируется в [S09](https://github.com/netkeep80/fgm-platform/issues/15). Приватные игровые файлы никогда не добавляются в публичную миграцию.
 
-## Bootstrap CI
+## Проверки основы CI
 
 `node --test tests/bootstrap.test.mjs` — actual positive+negative tests цепочки ссылок и pin; `node scripts/check-bootstrap.mjs` — проверка рабочего снимка; затем `RepoGuard exact BASE/HEAD` через pinned Action. GitHub required-check protection должна быть включена администратором отдельно.
 
@@ -28,4 +30,4 @@
 
 [Issue #25](https://github.com/netkeep80/fgm-platform/issues/25) фиксирует использованное разовое исключение исторического BASE. Для любого нового PR RepoGuard v6.0.1 должен проверять **оба нормативных** BASE/HEAD и завершаться SUCCESS без фильтрации diagnostics. Сквозной отрицательный тест `scripts/verify-repoguard-transition.mjs` создаёт отдельный временный Git-репозиторий, проверяет допустимое изменение документа и отвергает введённый не обоснованный Requirement ресурс через **реальный** pinned RepoGuard.
 
-Это тест исполняемого causal compiler, но не свидетельство включённой защиты ветки: required status check и запрет обхода задаются отдельно в GitHub Settings и фиксируются в Issue #25. До проверки этой настройки S00B остаётся незавершённым, а импорт исходников запрещён.
+Это тест исполняемого causal compiler, но не свидетельство включённой защиты ветки: required status check и запрет обхода задаются отдельно в GitHub Settings и фиксируются в Issue #25. Историческое условие защиты пересмотрено [явным решением автора](https://github.com/netkeep80/fgm-platform/issues/27#issuecomment-6962327932): установка protection отложена и не является текущим merge gate. Принятый PR #30 завершил S02; независимый аудит, exact author acceptance, свежий RepoGuard и SHA-проверка merge остаются обязательными.

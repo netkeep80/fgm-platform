@@ -1,4 +1,4 @@
-name: S02B source snapshot parity
+name: S03 requirements and historical source provenance
 
 on:
   pull_request:
@@ -26,4 +26,27 @@ jobs:
       - name: Check snapshot regression fixtures
         run: python -m unittest discover -s tests -p test_source_snapshots.py -v
       - name: Check real imported subtrees and Platform files
-        run: python scripts/check-source-snapshots.py --head "${{ github.event.pull_request.head.sha }}" --base "${{ github.event.pull_request.base.sha }}"
+        run: python scripts/check-source-snapshots.py --head faff85c3683a7dd87026796bf33ad11ac6d22b33 --base 9a1b41b7050ee2342d247f8d43ce5e3977de2ee6
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Verify exact canonical Requirements and attestation
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test core/tests/document-language.test.mjs
+          node core/scripts/check-document-language.mjs
+          node --test tests/requirements-migration.test.mjs
+          node scripts/check-requirements-migration.mjs "${{ github.event.pull_request.head.sha }}"
+      - name: Checkout immutable compiler for real migration mutations
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: netkeep80/repo-guard
+          ref: 74db97791e6da8a75287164f0d0b41579108f114
+          path: .rg-transition
+          persist-credentials: false
+      - name: Install compiler runtime dependencies
+        working-directory: .rg-transition
+        run: npm install --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Prove nested discovery and reject three invalid transitions
+        run: node scripts/verify-requirements-transition.mjs

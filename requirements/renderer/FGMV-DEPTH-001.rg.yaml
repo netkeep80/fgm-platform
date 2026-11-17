@@ -1,0 +1,38 @@
+format: repo-guard/requirement-v1
+id: FGMV-DEPTH-001
+normative: "### FGMV-DEPTH-001 — Независимая геометрическая аттестация глубины и отверстий. Рендерер должен подтверждать порядок перекрытия поверхностей, сквозные отверстия и сохранение видимости независимо от порядка перечисления граней при фиксированной камере на синтетических объектах посредством сравнения настоящего кадра WebGPU с аналитическим CPU-эталоном пересечения лучей и треугольников. Эталон не должен вызывать GPU-шейдер, менять C04/C05/LOFT или выдавать синтетическую геометрию за реконструкцию реальной игры. Отрицательные мутации глубины, заполнения отверстия и порядка перекрытий должны обнаруживаться автоматическими тестами."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - derives_from
+    target:
+      kind: requirement
+      id: FGMV-PRODUCT-000
+  - predicates:
+      - depends_on
+    target:
+      kind: requirement
+      id: FGMV-SESSION-006
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/tests/renderer-depth-oracle.browser.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/renderer-depth-oracle.browser.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/.github/workflows/studio-pages.yml
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: renderer/docs/renderer-s3-s2f-depth-oracle.md

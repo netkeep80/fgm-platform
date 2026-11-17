@@ -1,0 +1,33 @@
+format: repo-guard/requirement-v1
+id: FGMR-VIEW-005
+normative: "### FGMR-VIEW-005 — Целостность и отказ при несовместимости. Просмотрщик должен проверять хеш канонических FGM-пакетов, соответствие идентичности исходного объекта, отчётов и представлений и не изменять семантические пакеты при смене вида или режима. При неподтверждённых и несовместимых входах он должен отказывать с диагностикой; диагностический OBJ не становится нормативным исполнителем FGM."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - derives_from
+    target:
+      kind: requirement
+      id: FGMR-PRODUCT-000
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/viewer/index.html
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/scripts/export_rv01.py
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: regenerator/tests/test_rv01.py
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/docs/rv01-viewer.md
