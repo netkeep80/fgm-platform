@@ -25,6 +25,7 @@ jobs:
           node-version: '24'
       - name: Independent positive and negative bootstrap checks
         run: |
+          npm ci --ignore-scripts --no-audit --no-fund
           node --test tests/bootstrap.test.mjs
           node scripts/check-bootstrap.mjs
       - name: Checkout immutable RepoGuard for independent synthetic transition tests

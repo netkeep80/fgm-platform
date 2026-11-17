@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseDocument, visit, isAlias, isMap, isScalar, isSeq } from "yaml";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const PIN = "74db97791e6da8a75287164f0d0b41579108f114";
@@ -15,6 +16,8 @@ const requiredPaths = [
   "scripts/check-bootstrap.mjs",
   "tests/bootstrap.test.mjs",
   "scripts/verify-repoguard-transition.mjs",
+  "package.json",
+  "package-lock.json",
 ];
 
 function fail(code) { throw new Error("E_FGMP_" + code); }
@@ -30,58 +33,121 @@ const source = (base, path) => {
   return readFileSync(absolute,"utf8");
 };
 
-/**
- * Guard only a small, explicit workflow YAML subset. Inactive comment strings
- * and scalar block contents must never count as executable GitHub Actions.
- * Independent branch protection is a separate trust boundary.
+
+/*
+ * Parse the effective YAML graph, not source-text approximations.
+ * Lockfile-pinned yaml v2.8.3 uses YAML 1.2 semantics.
+ * Duplicate keys, aliases, tags, anchors, merges and any unapproved job/step
+ * shape fail closed. Branch-side required-check enforcement is a separate gate.
  */
 function checkWorkflowGate(workflow) {
-  const lines=workflow.replace(/\r\n/g,"\n").split("\n");
-  if(lines.some(x=>x.includes("\t"))) fail("GUARD_PIN");
-  const active=lines.filter(x=>! /^\s*(?:#|$)/.test(x));
-  const exactly=(xs,v)=>xs.filter(x=>x===v).length===1;
-  const single=(xs,v)=>{if(!exactly(xs,v))fail("GUARD_PIN");return xs.indexOf(v);};
-  single(active,"on:");
-  single(active,"  pull_request:");
-  if(!exactly(active,"    types: [opened, reopened, synchronize, ready_for_review]") ||
-     !exactly(active,"    branches: [main]")) fail("GUARD_PIN");
-  const jobs=active.slice(single(active,"jobs:")+1);
-  const jobNames=jobs.filter(x=>/^  [\w-]+:\s*$/.test(x));
-  if(jobNames.length!==1||jobNames[0]!=="  repo-guard:") fail("GUARD_PIN");
-  const job=jobs.slice(single(jobs,"  repo-guard:")+1);
-  if(!exactly(job,"    name: RepoGuard exact BASE/HEAD") ||
-     !exactly(job,"    runs-on: ubuntu-24.04") ||
-     job.some(x=>/^    (?:if|continue-on-error):/.test(x))) fail("GUARD_PIN");
-  const steps=job.slice(single(job,"    steps:")+1);
-  if(steps.some(x=>/^    [\w-]+:/.test(x))) fail("GUARD_PIN");
-  const starts=[];
-  for(let i=0;i<steps.length;i++)
-    if(/^      - name: [^#]+$/.test(steps[i])) starts.push(i);
-  const step=label=>{
-    const ix=starts.filter(i=>steps[i]==="      - name: "+label);
-    if(ix.length!==1) fail("GUARD_PIN");
-    const next=starts.find(i=>i>ix[0])??steps.length;
-    return steps.slice(ix[0],next);
+  let doc;
+  try { doc = parseDocument(workflow, {version:"1.2", uniqueKeys:true, merge:false, strict:true}); }
+  catch { fail("GUARD_PIN"); }
+  if(doc.errors.length) fail("GUARD_PIN");
+  try {
+    visit(doc,(_key,node)=>{
+      if(node && (isAlias(node) || node.anchor != null || node.tag != null))
+        fail("GUARD_PIN");
+    });
+  } catch { fail("GUARD_PIN"); }
+
+  const map=(node, keys)=>{
+    if(!isMap(node)) fail("GUARD_PIN");
+    const actual=node.items.map(pair=>{
+      if(!isScalar(pair.key) || typeof pair.key.value!=="string" ||
+         pair.key.value==="<<") fail("GUARD_PIN");
+      return pair.key.value;
+    });
+    if(new Set(actual).size!==actual.length ||
+       actual.length!==keys.length ||
+       actual.some(key=>!keys.includes(key))) fail("GUARD_PIN");
+    return node;
   };
-  const guard=step("RepoGuard exact immutable snapshot");
-  if(!exactly(guard,"        id: required_guard") ||
-     !exactly(guard,"        uses: netkeep80/repo-guard@"+PIN) ||
-     !exactly(guard,"        with:") ||
-     !exactly(guard,"          base: ${{ github.event.pull_request.base.sha }}") ||
-     !exactly(guard,"          head: ${{ github.event.pull_request.head.sha }}") ||
-     !exactly(guard,"          node-version: '24'") ||
-     guard.some(x=>/^        (?:run|if|continue-on-error):/.test(x)))
-    fail("GUARD_PIN");
-  if(steps.filter(x=>x==="        id: required_guard").length!==1)
-    fail("GUARD_PIN");
-  const oracle=step("Verify real RepoGuard positive and orphan-negative transitions");
-  if(!exactly(oracle,"        run: |") ||
-     !exactly(oracle,"          node scripts/verify-repoguard-transition.mjs") ||
-     oracle.some(x=>/^        (?:if|continue-on-error|uses):/.test(x)) ||
-     oracle.some(x=>/\|\|\s*true/.test(x))) fail("GUARD_PIN");
-  if(!starts.length || /continue-on-error:\s*true/.test(workflow))
-    fail("GUARD_PIN");
+  const node=(m,key)=>m.get(key,true);
+  const eq=(v,expected)=>isScalar(v) && v.value===expected;
+  const must=(ok)=>{if(!ok)fail("GUARD_PIN");};
+  const strings=(seq,want)=>{
+    must(isSeq(seq) && seq.items.length===want.length);
+    seq.items.forEach((v,i)=>must(eq(v,want[i])));
+  };
+
+  const root=map(doc.contents,["name","on","permissions","jobs"]);
+  must(eq(node(root,"name"),"FGM Platform — RepoGuard v6.0.1 exact BASE/HEAD"));
+  const on=map(node(root,"on"),["pull_request"]);
+  const pr=map(node(on,"pull_request"),["types","branches"]);
+  strings(node(pr,"types"),["opened","reopened","synchronize","ready_for_review"]);
+  strings(node(pr,"branches"),["main"]);
+  const perms=map(node(root,"permissions"),["contents"]);
+  must(eq(node(perms,"contents"),"read"));
+  const jobs=map(node(root,"jobs"),["repo-guard"]);
+  const job=map(node(jobs,"repo-guard"),["name","runs-on","steps"]);
+  must(eq(node(job,"name"),"RepoGuard exact BASE/HEAD") &&
+       eq(node(job,"runs-on"),"ubuntu-24.04"));
+  const steps=node(job,"steps");
+  must(isSeq(steps) && steps.items.length===9);
+  const step=(index,name,keys)=>{
+    const s=map(steps.items[index],["name",...keys]);
+    must(eq(node(s,"name"),name));
+    return s;
+  };
+  const withOptions=(s,expected)=>{
+    const m=map(node(s,"with"),Object.keys(expected));
+    for(const [key,value] of Object.entries(expected))
+      must(eq(node(m,key),value));
+  };
+  const checkout="actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803";
+  const setupNode="actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38";
+  const pinned="74db97791e6da8a75287164f0d0b41579108f114";
+  const eventSha=dim=>"$"+"{{ github.event.pull_request."+dim+".sha }}";
+
+  const source=step(0,"Checkout exact PR HEAD",["uses","with"]);
+  must(eq(node(source,"uses"),checkout));
+  withOptions(source,{ref:eventSha("head"),"fetch-depth":0,"persist-credentials":false});
+  const setup=step(1,"Set up Node.js 24",["uses","with"]);
+  must(eq(node(setup,"uses"),setupNode));
+  withOptions(setup,{"node-version":"24"});
+
+  const bootstrap=step(2,"Independent positive and negative bootstrap checks",["run"]);
+  must(eq(node(bootstrap,"run"),
+    "npm ci --ignore-scripts --no-audit --no-fund\n"+
+    "node --test tests/bootstrap.test.mjs\n"+
+    "node scripts/check-bootstrap.mjs\n"));
+
+  const compiler=step(3,"Checkout immutable RepoGuard for independent synthetic transition tests",["uses","with"]);
+  must(eq(node(compiler,"uses"),checkout));
+  withOptions(compiler,{repository:"netkeep80/repo-guard",ref:pinned,
+    path:".rg-transition","persist-credentials":false});
+
+  const oracle=step(4,"Verify real RepoGuard positive and orphan-negative transitions",["run"]);
+  must(eq(node(oracle,"run"),
+    "(cd .rg-transition && npm install --omit=dev --silent)\n"+
+    "node scripts/verify-repoguard-transition.mjs\n"));
+
+  const required=step(5,"RepoGuard exact immutable snapshot",["id","uses","with"]);
+  must(eq(node(required,"id"),"required_guard") &&
+       eq(node(required,"uses"),"netkeep80/repo-guard@"+pinned));
+  withOptions(required,{base:eventSha("base"),head:eventSha("head"),"node-version":"24"});
+
+  const diagCheckout=step(6,"Checkout exact diagnostic compiler after a failed gate",["if","uses","with"]);
+  must(eq(node(diagCheckout,"if"),"failure()") &&
+       eq(node(diagCheckout,"uses"),checkout));
+  withOptions(diagCheckout,{repository:"netkeep80/repo-guard",ref:pinned,
+    path:".rg-diagnostics","persist-credentials":false});
+
+  const diag=step(7,"Print exact typed RepoGuard findings (gate remains failed)",["if","run"]);
+  must(eq(node(diag,"if"),"failure()") && isScalar(node(diag,"run")) &&
+       typeof node(diag,"run").value==="string");
+
+  const summary=step(8,"Show exact RepoGuard diagnostics without bypassing failure",["if","env","run"]);
+  must(eq(node(summary,"if"),"always()"));
+  const env=map(node(summary,"env"),["RG_STEP","RG_RESULT","RG_SUMMARY"]);
+  must(eq(node(env,"RG_STEP"),"$"+"{{ steps.required_guard.outcome }}") &&
+       eq(node(env,"RG_RESULT"),"$"+"{{ steps.required_guard.outputs.result }}") &&
+       eq(node(env,"RG_SUMMARY"),"$"+"{{ steps.required_guard.outputs.summary }}") &&
+       isScalar(node(summary,"run")) && typeof node(summary,"run").value==="string");
 }
+
 
 export function checkBootstrap(base=root) {
   for (const p of requiredPaths) source(base,p);

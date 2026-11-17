@@ -12,6 +12,7 @@ const paths=[
   ".github/workflows/repo-guard.yml",
   "scripts/check-bootstrap.mjs","tests/bootstrap.test.mjs",
   "scripts/verify-repoguard-transition.mjs",
+  "package.json","package-lock.json",
 ];
 function temporary(operate) {
   const tmp=mkdtempSync(join(tmpdir(),"fgmp-bootstrap-"));
@@ -80,3 +81,39 @@ test("negative: conditional RepoGuard action cannot be skipped",()=>temporary(tm
   writeFileSync(p,w.replace("        id: required_guard","        id: required_guard\n        if: false"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
 }));
+
+
+function workflowMutation(label, needle, replacement) {
+  test("negative YAML semantics: "+label,()=>temporary(tmp=>{
+    const p=join(tmp,".github/workflows/repo-guard.yml");
+    const w=readFileSync(p,"utf8");
+    assert.ok(w.includes(needle),"missing mutation anchor");
+    writeFileSync(p,w.replace(needle,replacement));
+    assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+  }));
+}
+workflowMutation("guard whitespace-before-colon conditional",
+  "        id: required_guard","        id: required_guard\n        if : false");
+workflowMutation("guard quoted conditional key",
+  "        id: required_guard",'        id: required_guard\n        "if": false');
+workflowMutation("guard whitespace-before-colon continue-on-error",
+  "        id: required_guard","        id: required_guard\n        continue-on-error : true");
+workflowMutation("oracle whitespace-before-colon conditional",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions\n        if : false");
+workflowMutation("oracle whitespace-before-colon continue-on-error",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions\n        continue-on-error : true");
+workflowMutation("job whitespace-before-colon conditional",
+  "    runs-on: ubuntu-24.04","    runs-on: ubuntu-24.04\n    if : false");
+workflowMutation("duplicate effective guard key",
+  "        id: required_guard","        id: required_guard\n        id: required_guard");
+workflowMutation("alias/anchor forbidden in governance workflow",
+  "        id: required_guard","        id: &guard_id required_guard");
+workflowMutation("unapproved extra job with identical check name",
+  "jobs:\n","jobs:\n  fake:\n    name: RepoGuard exact BASE/HEAD\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo fake-green\n");
+workflowMutation("quoted continue-on-error job key",
+  "    runs-on: ubuntu-24.04",'    runs-on: ubuntu-24.04\n    "continue-on-error": true');
+workflowMutation("block scalar action uses cannot impersonate pinned uses",
+  "        uses: netkeep80/repo-guard@"+PIN,
+  "        run: |\n          uses: netkeep80/repo-guard@"+PIN);
