@@ -1,0 +1,16 @@
+format: repo-guard/requirement-v1
+id: FGMP-PRODUCT-000
+normative: "### FGMP-PRODUCT-000 — Платформа FGM должна сохранять единую авторитетную математическую модель, версионированный Regenerator, независимый Renderer и общую Web Studio с трассируемой Native/WASM сборкой; описание целевой платформы не означает готовности её модулей."
+lifecycle:
+  accepted: true
+  current: true
+  published: false
+relations:
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "README.md"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/requirements-hierarchy.md"
