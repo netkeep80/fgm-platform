@@ -14,6 +14,7 @@ const requiredPaths = [
   ".github/workflows/repo-guard.yml",
   "scripts/check-bootstrap.mjs",
   "tests/bootstrap.test.mjs",
+  "scripts/verify-repoguard-transition.mjs",
 ];
 
 function fail(code) { throw new Error("E_FGMP_" + code); }
@@ -34,7 +35,10 @@ export function checkBootstrap(base=root) {
   if(!workflow.includes("uses: netkeep80/repo-guard@"+PIN) ||
      !workflow.includes("github.event.pull_request.base.sha") ||
      !workflow.includes("github.event.pull_request.head.sha") ||
-     !workflow.includes("ready_for_review")) fail("GUARD_PIN");
+     !workflow.includes("ready_for_review") ||
+     !workflow.includes("node scripts/verify-repoguard-transition.mjs") ||
+     !workflow.includes("id: required_guard") ||
+     /continue-on-error:\s*true/.test(workflow)) fail("GUARD_PIN");
   for(const [file,id] of [
     ["requirements/FGMP-PRODUCT-000.rg.yaml","FGMP-PRODUCT-000"],
     ["requirements/FGMP-PROJECT-000.rg.yaml","FGMP-PROJECT-000"],

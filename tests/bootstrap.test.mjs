@@ -11,6 +11,7 @@ const paths=[
   "requirements/FGMP-PROJECT-000.rg.yaml",
   ".github/workflows/repo-guard.yml",
   "scripts/check-bootstrap.mjs","tests/bootstrap.test.mjs",
+  "scripts/verify-repoguard-transition.mjs",
 ];
 function temporary(operate) {
   const tmp=mkdtempSync(join(tmpdir(),"fgmp-bootstrap-"));
@@ -39,4 +40,15 @@ test("negative: candidate root lifecycle cannot masquerade as accepted bootstrap
   const p=join(tmp,"requirements/FGMP-PRODUCT-000.rg.yaml");
   writeFileSync(p,readFileSync(p,"utf8").replace("accepted: true","accepted: false"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_ROOT_SCHEMA/);
+}));
+
+test("negative: CI cannot skip real synthetic transition regression",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  writeFileSync(p,readFileSync(p,"utf8").replace("node scripts/verify-repoguard-transition.mjs","echo ignored"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+test("negative: CI cannot continue on a failed RepoGuard action",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  writeFileSync(p,readFileSync(p,"utf8").replace("id: required_guard","id: required_guard\n        continue-on-error: true"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
 }));

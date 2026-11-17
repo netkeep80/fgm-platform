@@ -27,6 +27,17 @@ jobs:
         run: |
           node --test tests/bootstrap.test.mjs
           node scripts/check-bootstrap.mjs
+      - name: Checkout immutable RepoGuard for independent synthetic transition tests
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: netkeep80/repo-guard
+          ref: 74db97791e6da8a75287164f0d0b41579108f114
+          path: .rg-transition
+          persist-credentials: false
+      - name: Verify real RepoGuard positive and orphan-negative transitions
+        run: |
+          (cd .rg-transition && npm install --omit=dev --silent)
+          node scripts/verify-repoguard-transition.mjs
       - name: RepoGuard exact immutable snapshot
         id: required_guard
         uses: netkeep80/repo-guard@74db97791e6da8a75287164f0d0b41579108f114
