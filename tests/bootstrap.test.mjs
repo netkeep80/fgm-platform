@@ -54,3 +54,29 @@ test("negative: CI cannot continue on a failed RepoGuard action",()=>temporary(t
   writeFileSync(p,readFileSync(p,"utf8").replace("id: required_guard","id: required_guard\n        continue-on-error: true"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
 }));
+
+
+test("negative: commented RepoGuard uses plus fake run cannot pass",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const w=readFileSync(p,"utf8");
+  const needle="        uses: netkeep80/repo-guard@"+PIN+"\n        with:\n";
+  assert.ok(w.includes(needle));
+  writeFileSync(p,w.replace(needle,"        # uses: netkeep80/repo-guard@"+PIN+"\n        run: echo fake-green\n        with:\n"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+
+test("negative: commented oracle invocation plus echo cannot pass",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const w=readFileSync(p,"utf8");
+  const needle="          node scripts/verify-repoguard-transition.mjs";
+  assert.ok(w.includes(needle));
+  writeFileSync(p,w.replace(needle,"          # node scripts/verify-repoguard-transition.mjs\n          echo fake-green"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+
+test("negative: conditional RepoGuard action cannot be skipped",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const w=readFileSync(p,"utf8");
+  writeFileSync(p,w.replace("        id: required_guard","        id: required_guard\n        if: false"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
