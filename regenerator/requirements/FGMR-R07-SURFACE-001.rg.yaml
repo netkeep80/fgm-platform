@@ -1,0 +1,28 @@
+format: repo-guard/requirement-v1
+id: FGMR-R07-SURFACE-001
+normative: "### FGMR-R07-SURFACE-001 — Непрерывное наблюдение поверхности при неизменной игровой занятости. Регенератор должен предоставлять отдельный ограниченный нативный исполнитель, который по проверенному хэшу канонического пакета FGM строит новую воспроизводимую бинарную проекцию непрерывной поверхности на калиброванную аффинную камеру R05, используя принятый вычислитель FGM, а не дискретную проекцию LOFT. До вычисления изображения исполнитель должен требовать точного совпадения всех 6144 центровых проб занятости и материала с переданной эталонной таблицей; успешная проверка этой таблицы не должна выдаваться за доказательство происхождения оригинальных игровых файлов либо полноты непрерывных коллизий. Исполнитель обязан сохранить неизменными существующие R05 и C05, выпускать отдельное версионированное свидетельство с параметрами камеры, SHA-256 и явной неопределённостью относительно тонких поверхностей. При неверных входных данных, хэшах, ограничениях или C05 исполнитель должен отказывать без успешного свидетельства. Независимый синтетический тест обязан удостоверить, что две модели с одинаковой LOFT-занятостью дают равную проекцию LOFT, но различную проекцию поверхности, и распознавать подмену последней неизменной LOFT-маской. Реальные игровые файлы и полученные из них изображения запрещено публиковать в публичных CI, репозиториях и Pages."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-FIT-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-R05-OBS-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-R07-LOCAL-001"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/r07-surface-main.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "CMakeLists.txt"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_r07_surface.py"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/r07-surface-observation.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/requirements-hierarchy.md"}

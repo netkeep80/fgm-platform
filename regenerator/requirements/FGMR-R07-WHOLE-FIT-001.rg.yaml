@@ -1,0 +1,26 @@
+format: repo-guard/requirement-v1
+id: FGMR-R07-WHOLE-FIT-001
+normative: "### FGMR-R07-WHOLE-FIT-001 — Ограниченный совместный подбор геометрии единой FGM-модели. Регенератор должен предоставлять локальный синтетический режим проверки ограниченного детерминированного подбора единственного канонического пакета многоклеточного объекта в грамматике r06_multicell_loft_boxes с явно фиксированным SHA-256 исходной модели, принадлежностью всех клеток одному якорю и независимыми исходными наблюдениями минимум двух частей. Каждый параметрический кандидат обязан сохранять общую модель и отличаться от неё лишь документированными разрешёнными общими изменениями геометрии и воспроизводимыми метаданными; все 6144 центров каждой заявленной клетки должны проверяться посредством принятого native whole-surface и C05 до вычисления пиксельной ошибки. Типизированный отказ C05 допускается только для кандидатов при точных exit, stdout и stderr, а все иные ошибки должны прерывать запуск без публикации результата. Подбор использует точное дробное сравнение суммарной IoU, дополнительную контурную метрику и запрет скрытого регресса любого наблюдения. Отчёт должен связывать baseline, вариант, происхождение предоставленных синтетических наблюдений и состояние Stage A NOT_ACCEPTED. Синтетический режим не имеет права принимать неподтверждённые исходные игровые данные за source-bound эксперимент или утверждать, что часть игровых ракурсов, скрытые поверхности, независимость внешнего B1-источника либо четыре новых 3D-вида доказаны. Все настоящие игровые и производные материалы должны оставаться исключительно в локальном или приватном контуре. Комплект выходных файлов должен публиковаться атомарно под новым именем каталога с запретом замены уже существующего имени."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-R07-WHOLE-SURFACE-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-R07-WHOLE-SOURCE-001"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "scripts/r07_whole_joint_fit.py"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "CMakeLists.txt"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_r07_whole_joint_fit.py"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/r07-whole-joint-synthetic.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/requirements-hierarchy.md"}

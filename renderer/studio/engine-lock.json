@@ -1,0 +1,7 @@
+{
+  "schema": "fgmv-studio-engine/1",
+  "regenerator": "b9da2f2d5f2e4a5f6d1767535e87d4e0d63acf94",
+  "core": "ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b",
+  "workerProtocol": 1,
+  "wholeBuild": "r06-whole-build/1"
+}

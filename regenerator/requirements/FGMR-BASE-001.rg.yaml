@@ -1,0 +1,30 @@
+format: repo-guard/requirement-v1
+id: FGMR-BASE-001
+normative: "### FGMR-BASE-001 — Воспроизводимая базовая реконструкция. Регенератор должен из маски статической части клетки выпускать канонический FGM-пакет с заданным семантическим материалом и воспроизводимым семенем, проверять занятость всех центров вокселей принятым интерпретатором, измерять расхождения со спрайтом в исходной проекции и сохранять происхождение входов и неопределённость скрытых поверхностей. Трёхмерная сетка должна отображать границы проверенной занятости. Тесты должны использовать три самостоятельно созданных класса и проверять повторяемость байтов."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "scripts/reconstruct_r06.py"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/model-sample.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/model-occupancy.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "CMakeLists.txt"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_r06.py"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/r06-reconstruction.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/current-step.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/requirements-hierarchy.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "README.md"}

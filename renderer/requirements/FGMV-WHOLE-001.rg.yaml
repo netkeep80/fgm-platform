@@ -1,0 +1,22 @@
+format: repo-guard/requirement-v1
+id: FGMV-WHOLE-001
+normative: "### FGMV-WHOLE-001 — Просмотр целого объекта в Reconstruction Studio. Пользователь должен иметь возможность загрузить локальные подготовленные B1/R03 с явно указанными SHA-256, реконструировать 2–8 связанных клеток как одну FGM-модель через принятый C++20 WASM BuildWholeObject, проверить C05, получить единую OBJ-поверхность и производные SliceByCell с неизменной идентичностью модели. При отмене или изменении входов устаревший результат сбрасывается, а существующий одноклеточный режим остаётся доступен. SHA не является самостоятельным удостоверением происхождения."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMV-USER-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMV-STUDIO-003"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/index.html"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/whole-ui.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/studio-s2a.browser.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/studio-pages.live.mjs"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/studio-whole-object-ui.md"}

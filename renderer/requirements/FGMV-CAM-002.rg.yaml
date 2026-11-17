@@ -1,0 +1,29 @@
+format: repo-guard/requirement-v1
+id: FGMV-CAM-002
+normative: "### FGMV-CAM-002 — Диметрическая камера карты. Рендерер должен проецировать непрерывные координаты прямоугольной карты, поддерживать четыре поворота вокруг её центра, масштаб и область просмотра, выбирать клетку на явно заданной плоскости по полуоткрытому правилу и сохранять мировую точку под курсором при смене масштаба и поворота. Обратный запрос по результату проекции должен сохранять сторону границы, если её отличает точность этого результата. Нулевая ориентация должна совпадать с непрерывной проекцией локальной плитки R05 при тех же условиях."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMV-PRODUCT-000"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/v03-map-camera.hpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/v03-map-camera.cpp"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/v03-map-camera.test.cpp"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "scripts/test-v03-map.mjs"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/v03-map-camera.md"}
+constraints:
+  - id: fgmv_cam_002_cpu_evidence
+    activation: scoped_change
+    scope:
+      relations: [implemented_by, verified_by]
+    evidence:
+      class: execution
+      key: "execution:scripts/test-v03-map.mjs"
+      verifier: {kind: artifact, path: "scripts/test-v03-map.mjs"}

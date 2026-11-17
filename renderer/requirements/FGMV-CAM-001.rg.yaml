@@ -1,0 +1,29 @@
+format: repo-guard/requirement-v1
+id: FGMV-CAM-001
+normative: "### FGMV-CAM-001 — Детерминированная диметрическая камера. Для одной локальной плитки 16×16×24 рендерер должен воспроизводить дискретную ортографическую проекцию R05 с точным усечением к нулю, иметь четыре обратимых поворота на 90° без изменения семантики FGM и обеспечивать отдельное непрерывное обратное преобразование только на явно заданной плоскости высоты с отказом для недопустимых входов."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMV-PRODUCT-000"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/v03-camera.hpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/v03-camera.cpp"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/v03-camera.test.cpp"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "scripts/test-v03.mjs"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/v03-camera.md"}
+constraints:
+  - id: fgmv_cam_001_cpu_evidence
+    activation: scoped_change
+    scope:
+      relations: [implemented_by, verified_by]
+    evidence:
+      class: execution
+      key: "execution:scripts/test-v03.mjs"
+      verifier: {kind: artifact, path: "scripts/test-v03.mjs"}

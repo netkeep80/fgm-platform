@@ -1,0 +1,256 @@
+name: Reconstruction Studio — публикация и откат Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Выпуск Studio или восстановление V03
+        required: true
+        type: choice
+        options: [studio, rollback-v03]
+      release_sha:
+        description: Полный SHA принятого коммита main с этим workflow
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.event_name != 'pull_request' && 'fgm-pages-production' || format('fgm-pages-review-{0}', github.event.pull_request.number) }}
+  queue: max
+
+jobs:
+  verify:
+    name: Проверить точные пакеты Studio и V03
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      MODE: ${{ inputs.mode || 'studio' }}
+      STUDIO_RENDERER_REV: ${{ github.event.pull_request.head.sha || github.sha }}
+    outputs:
+      hashes: ${{ steps.stage.outputs.hashes }}
+      version: ${{ steps.stage.outputs.version }}
+    steps:
+      - name: Проверить явный снимок выпуска
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$RELEASE_SHA"
+          [[ "$MODE" == studio || "$MODE" == rollback-v03 ]]
+      - name: Получить точный код проверки
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Сверить собранную ревизию
+        run: test "$(git rev-parse HEAD)" = "$STUDIO_RENDERER_REV"
+      - name: Определить точный переход для RepoGuard
+        id: repo_guard_base
+        if: env.MODE == 'studio'
+        env:
+          BASE_SHA: ${{ github.event.before || github.event.pull_request.base.sha }}
+        run: |
+          base="${BASE_SHA:-$(git rev-parse HEAD^1)}"
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$base^{commit}"
+          printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
+      - name: Проверить допуск к выпуску через RepoGuard
+        if: env.MODE == 'studio'
+        uses: netkeep80/repo-guard@74db97791e6da8a75287164f0d0b41579108f114
+        with:
+          base: ${{ steps.repo_guard_base.outputs.base }}
+          head: ${{ env.STUDIO_RENDERER_REV }}
+          node-version: '24'
+      - name: Получить неизменяемый снимок отката
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 29d9ed509c5ef50e3a92b8bb72db10eb7903069f
+          path: build/v03-rollback-source
+          persist-credentials: false
+      - name: Прочитать закреплённую ревизию регенератора
+        id: studio_engine
+        if: env.MODE == 'studio'
+        run: |
+          revision="$(python3 -c 'from scripts.studio_pages import read_engine_lock; print(read_engine_lock()["regenerator"])')"
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+      - name: Получить точный снимок регенератора
+        if: env.MODE == 'studio'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: netkeep80/fgm-regenerator
+          ref: ${{ steps.studio_engine.outputs.revision }}
+          path: deps/regenerator
+          persist-credentials: false
+      - name: Сверить закреплённую ревизию регенератора
+        if: env.MODE == 'studio'
+        env:
+          STUDIO_REGENERATOR_REV: ${{ steps.studio_engine.outputs.revision }}
+        run: test "$(git -C deps/regenerator rev-parse HEAD)" = "$STUDIO_REGENERATOR_REV"
+      - name: Node.js 24
+        if: env.MODE == 'studio'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Install Emscripten 4.0.21 (pinned)
+        if: env.MODE == 'studio'
+        run: |
+          git clone --depth 1 --branch 4.0.21 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          test "$(git -C "$RUNNER_TEMP/emsdk" rev-parse HEAD)" = b2436aafa7351ee1b581f15841f1b45ed716a279
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.21
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.21
+      - name: Собрать WASM из закреплённых исходников
+        if: env.MODE == 'studio'
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S deps/regenerator -B build/studio-wasm -DCMAKE_BUILD_TYPE=Release
+          core="$(python3 -c 'from scripts.studio_pages import read_engine_lock; print(read_engine_lock()["core"])')"
+          test "$(git -C build/studio-wasm/_deps/fgm_core-src rev-parse HEAD)" = "$core"
+          cmake --build build/studio-wasm --parallel 2
+      - name: Собрать пакет Studio для этой ревизии
+        if: env.MODE == 'studio'
+        run: |
+          export STUDIO_REGENERATOR_REV="$(git -C deps/regenerator rev-parse HEAD)"
+          node scripts/build-studio-s2a.mjs build/studio-wasm
+      - name: Проверить схемы, хеши, отрицательные сценарии и подготовить пакет
+        id: stage
+        env:
+          PREVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*pages*.py' -v
+          rollback="$(python3 -m scripts.studio_pages rollback-v03 build/v03-rollback-source build/pages-rollback)"
+          if [[ "$MODE" == rollback-v03 ]]; then
+            printf 'hashes=%s\npath=build/pages-rollback\n' "$rollback" >> "$GITHUB_OUTPUT"
+          else
+            studio="$(python3 -m scripts.studio_pages studio build/studio build/pages-studio \
+              --revision "$STUDIO_RENDERER_REV" --preview-base "$PREVIEW_BASE")"
+            version="$(python3 -c 'import json; print(json.load(open("build/pages-studio/studio-manifest.json"))["version"])')"
+            printf 'hashes=%s\npath=build/pages-studio\nversion=%s\n' "$studio" "$version" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Проверить упакованную Studio с реальным WASM
+        if: env.MODE == 'studio'
+        env:
+          STUDIO_VERSION: ${{ steps.stage.outputs.version }}
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          node --test tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs
+          node tests/studio-s2a.browser.mjs build/pages-studio --catalog
+      - name: Сверить многоклеточную сборку из пакета Pages в Chromium
+        if: env.MODE == 'studio'
+        run: |
+          output="$PWD/build/studio-native"
+          cmake -S deps/regenerator -B "$output" -DCMAKE_BUILD_TYPE=Release \
+            -DFETCHCONTENT_SOURCE_DIR_FGM_CORE="$PWD/build/studio-wasm/_deps/fgm_core-src"
+          cmake --build "$output" --parallel 2 --target \
+            fgmr-studio-native fgmr-r06-multicell-sample fgmr-r06-whole-build
+          worker="$PWD/build/pages-studio/engine/worker.mjs"
+          STUDIO_CHROMIUM="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
+          test -x "$STUDIO_CHROMIUM"
+          export STUDIO_CHROMIUM
+          cd deps/regenerator
+          node tests/test_studio_whole.mjs "$output/fgmr-studio-native" "$output/fgmr-r06-multicell-sample" \
+            "$worker" --builder "$output/fgmr-r06-whole-build"
+      - name: S3-S2E — целый объект WASM, очередь и отказы WebGPU
+        if: env.MODE == 'studio'
+        run: |
+          npx tsc -p runtime/tsconfig.json
+          node tests/renderer-session-wasm.browser.mjs build/pages-studio
+      - name: S3-S2F — независимый CPU-ray эталон глубины и сквозных отверстий в Chromium
+        if: env.MODE == 'studio'
+        run: |
+          npx tsc -p runtime/tsconfig.json
+          node tests/renderer-depth-oracle.browser.mjs
+      - name: Сохранить проверенный пакет для ревью PR
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: studio-ufo-catalog-review-only
+          path: build/pages-studio/
+          if-no-files-found: error
+      - name: Передать проверенный сайт заданию публикации
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
+        with:
+          path: ${{ steps.stage.outputs.path }}
+
+  deploy:
+    name: Развернуть подготовленный сайт
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      published: ${{ steps.publish.outcome == 'success' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - name: Сверить актуальность выпуска Studio
+        id: revision
+        if: inputs.mode != 'rollback-v03'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)"
+          if [[ "$latest" == "$GITHUB_SHA" ]]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Ветка main уже на $latest. Эта сборка не заменит публичную Studio."
+          fi
+      - name: Подтвердить выбранный источник GitHub Actions
+        if: inputs.mode == 'rollback-v03' || steps.revision.outputs.current == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .build_type)" = workflow
+      - name: Опубликовать сайт
+        if: inputs.mode == 'rollback-v03' || steps.revision.outputs.current == 'true'
+        id: publish
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+
+  confirm:
+    name: Подтвердить публичные байты и запуск
+    needs: [verify, deploy]
+    if: needs.deploy.outputs.published == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Проверить опубликованный сайт в Chromium
+        env:
+          PAGES_MODE: ${{ inputs.mode || 'studio' }}
+          PAGES_HASHES: ${{ needs.verify.outputs.hashes }}
+          PAGES_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          for attempt in 1 2 3 4 5; do
+            if node tests/studio-pages.live.mjs; then exit 0; fi
+            if [[ "$attempt" != 5 ]]; then sleep 15; fi
+          done
+          exit 1
+      - name: Сохранить снимок запущенного синтетического примера
+        if: inputs.mode != 'rollback-v03'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: studio-pages-published-smoke
+          path: build/published-studio.png
+          if-no-files-found: error

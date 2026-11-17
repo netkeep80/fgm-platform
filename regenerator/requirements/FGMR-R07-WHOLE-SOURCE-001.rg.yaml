@@ -1,0 +1,26 @@
+format: repo-guard/requirement-v1
+id: FGMR-R07-WHOLE-SOURCE-001
+normative: "### FGMR-R07-WHOLE-SOURCE-001 — Предварительное удостоверение полноты связей исходных частей. Перед объявлением результатов R07 восстановлением целой ObjectDefinition регенератор должен отдельно проверить заранее полученное независимым источниковым свидетельством членство экземпляра в версии R06-S2B1. Он обязан сверять точный SHA-256 исходного B1 receipt, SHA-256 и порядок MAP/MCD исходных файлов с источниковым снимком R07-S0, а также однозначное присутствие выбранного R04/R05 наблюдения среди членов экземпляра. Для каждой заявленной части он должен вызывать единственный принятый native R03 и удостоверять координату, запись MAP, TilePart, набор/локальный индекс MCD, LOFT-идентификаторы и корректность всех 384 строк. Выбранная часть должна повторно пройти принятый native Studio R04/R05/R06/C05. Неполная/противоречивая принадлежность, неверный SHA, порядок исходных наборов, сбой native или неподтверждённая строка должны вызывать fail-closed отказ без успешного receipt. Доверенные исполняемые файлы должны вызываться из проверенных по внешнему SHA-256 приватных копий. Внешняя истинность удостоверившего принадлежность лица не доказывается этой процедурой; результат предварительной проверки не является общим параметрическим fit, полным C05 для изменённого целого объекта, четырьмя новыми ракурсами или Stage A acceptance. Исходные и производные игровые байты, модели и личные пути допускаются только offline/private; публичная CI использует собственную синтетику."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-R07-LOCAL-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-R07-FIT-LOCAL-001"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "scripts/r07_whole_source_preflight.py"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "CMakeLists.txt"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_r07_whole_source_preflight.py"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/r07-whole-source-preflight.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/requirements-hierarchy.md"}
