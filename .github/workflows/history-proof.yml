@@ -1,0 +1,26 @@
+name: S02A isolated Git history proof
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  history-proof:
+    name: Git history proof / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Prove synthetic graphs, file modes and negative cases
+        run: python -m unittest discover -s tests -p test_history_migration.py -v

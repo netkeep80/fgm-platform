@@ -1,0 +1,27 @@
+{
+  "schema": "fgm-platform-history-lock/1",
+  "platform": {
+    "head": "9a1b41b7050ee2342d247f8d43ce5e3977de2ee6",
+    "tree": "a4ecfb47862b916b40e48f305e684d961f1a29f1"
+  },
+  "sources": [
+    {
+      "key": "core",
+      "prefix": "core",
+      "head": "ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b",
+      "tree": "df897d1ac87fe5c119352007e4bbb88670181f82"
+    },
+    {
+      "key": "regenerator",
+      "prefix": "regenerator",
+      "head": "ec919b5a9c99ac8c660dda867f8a2688553160f5",
+      "tree": "3bbd588087967e2ff3a3d2bf927671023e43af89"
+    },
+    {
+      "key": "renderer",
+      "prefix": "renderer",
+      "head": "7f99b2ef1d360846bddce79eeeabd53cf84731ad",
+      "tree": "9fa103d401af04151673ab04433ca6439e49e1cc"
+    }
+  ]
+}

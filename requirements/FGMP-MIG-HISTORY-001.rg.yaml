@@ -1,0 +1,32 @@
+format: repo-guard/requirement-v1
+id: FGMP-MIG-HISTORY-001
+normative: "### FGMP-MIG-HISTORY-001 — До переноса исходного кода инструмент проверки миграции должен в изолированном Git-репозитории воспроизводимо объединять закреплённые истории Core, Regenerator и Renderer под отдельными префиксами, сохраняя идентичность исходных коммитов, их родителей, содержимое и режимы файлов; неправильные снимки, неполная shallow-история, коллизии префиксов и изменение файлов вне префикса должны обнаруживаться."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target:
+      kind: requirement
+      id: FGMP-PROJECT-000
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "scripts/prove-history-migration.py"
+  - predicates: [requires]
+    target:
+      kind: artifact
+      path: "docs/history-source-lock.json"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: "tests/test_history_migration.py"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: ".github/workflows/history-proof.yml"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/history-migration-proof.md"
