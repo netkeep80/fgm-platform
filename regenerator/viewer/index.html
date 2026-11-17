@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FGM Reconstruction Viewer · RV01</title>
+<style>
+:root{color-scheme:dark;font:14px/1.5 system-ui,Segoe UI,sans-serif;background:#0d131c;color:#e4e9ee}
+*{box-sizing:border-box}body{margin:0}header{padding:14px 22px;border-bottom:1px solid #283649;display:flex;align-items:center;justify-content:space-between;gap:16px}
+header strong{font-size:17px;letter-spacing:.1px}header small{display:block;color:#9badbd}
+main{display:grid;grid-template-columns:minmax(230px,300px) minmax(340px,1fr) minmax(230px,310px);height:calc(100vh - 70px);min-height:500px}
+aside{padding:18px;border-right:1px solid #283649;overflow:auto}aside:last-child{border-right:0;border-left:1px solid #283649}
+section{margin:0 0 24px}h2{font-size:13px;color:#aebdcb;text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px}
+p{margin:8px 0;color:#a9b9c8}label{display:block;margin:10px 0 5px;color:#bcc9d5}
+button,select,input[type=file]{font:inherit;max-width:100%}
+button,select{background:#192536;color:#e4e9ee;border:1px solid #40536a;border-radius:7px;padding:7px 10px;cursor:pointer}
+button:hover{background:#293e54}select{width:100%}button:focus-visible,select:focus-visible{outline:2px solid #95cbeb}
+input[type=file]{width:100%;color:#95aabd;font-size:12px}
+.row{display:flex;flex-wrap:wrap;gap:6px}.row button{flex:1 1 auto}
+#center{position:relative;min-width:0;min-height:320px;background:#101c28}
+#viewport{width:100%;height:100%;display:block;touch-action:none}
+#help{position:absolute;bottom:12px;left:12px;font-size:12px;color:#b1c2cf;background:#0b1420b5;padding:8px 11px;border-radius:7px;pointer-events:none}
+#info{position:absolute;top:12px;left:12px;font-size:12px;color:#d8e6f0;background:#0b1420c9;padding:8px 11px;border-radius:7px;max-width:calc(100% - 24px)}
+#diagnostic{image-rendering:pixelated;max-width:100%;width:100%;background:#121923;border:1px solid #354357}
+#metrics{white-space:pre-wrap;overflow-wrap:anywhere;background:#111c2a;border:1px solid #29384b;border-radius:7px;padding:12px;font:12px/1.65 ui-monospace,Consolas,monospace}
+#status{font-size:12px;color:#b1e9d1;overflow-wrap:anywhere;margin-top:12px}
+.warn{color:#f6b7a3!important}.note{font-size:12px;color:#93a7b8}
+@media(max-width:970px){main{grid-template-columns:200px 1fr}aside:last-child{grid-column:1 / -1;border:0;border-top:1px solid #283649}main{height:auto}#center{height:65vh;min-height:400px}}
+@media(max-width:630px){main{display:flex;flex-direction:column}aside{border:0;border-bottom:1px solid #283649}#center{height:55vh}}
+</style>
+</head>
+<body>
+<header><div><strong>FGM Reconstruction Viewer</strong><small>RV01 · локальная диагностическая 3D-сессия · без загрузки на сервер</small></div><div class="note">FGM ≠ LOFT ≠ визуальный профиль</div></header>
+<main>
+<aside>
+  <section><h2>1 · Открыть результаты</h2>
+    <label>Каталог R06 / RV01 (все вложенные файлы)</label>
+    <input id="directory" type="file" webkitdirectory multiple>
+    <label>Или выбрать файлы вручную</label>
+    <input id="individual" type="file" multiple>
+    <p class="note">R06: модель, OBJ, отчёт и viewer-proof.json (выход обновлённого R06); LOFT/спрайт по желанию. R07: полный каталог после export_rv01.py. Original — отдельная диагностическая панель справа, Free 3D — камера во всех режимах.</p>
+    <div id="status" role="status">Откройте локальные файлы. Сетевые запросы отсутствуют.</div>
+  </section>
+  <section><h2>2 · Сцена</h2>
+    <label for="object">Объект</label><select id="object" aria-label="Объект"></select>
+    <label for="mode">Представление</label>
+    <select id="mode">
+      <option value="reconstructed">Reconstructed · геометрия</option>
+      <option value="baseline">Baseline · исходный кандидат</option>
+      <option value="difference">Difference · сравнение</option>
+      <option value="collision">Collision · LOFT</option>
+    </select>
+    <label><input id="grid" type="checkbox" checked> Тактическая сетка</label>
+  </section>
+  <section><h2>3 · Камера</h2>
+    <button id="reset">Исходный ракурс R05 / R07</button>
+    <div class="row" style="margin-top:8px">
+      <button data-view="left">Слева</button><button data-view="right">Справа</button>
+      <button data-view="rear">Сзади</button><button data-view="top">Сверху</button>
+    </div>
+    <p class="note">Исходный R05-вектор для геометрии является непрерывной диагностической камерой. Точное целочисленное сравнение пикселей выполняет R05, а не этот WebGL-кадр.</p>
+  </section>
+</aside>
+<div id="center">
+  <canvas id="viewport" aria-label="Трёхмерный осмотр FGM"></canvas>
+  <div id="info">Нет загруженной сцены</div>
+  <div id="help">Левая кнопка — вращать · колесо — масштаб · Shift/правая — перемещать</div>
+</div>
+<aside>
+  <section><h2>Наблюдение и силуэт</h2>
+    <canvas id="diagnostic" width="96" height="40" aria-label="Маски источника, реконструкции и разности"></canvas>
+    <p id="observation" class="note">Для исходного наблюдения выберите соответствующие локальные факты.</p>
+  </section>
+  <section><h2>Метрики и происхождение</h2>
+    <div id="metrics">Входные файлы ещё не загружены.</div>
+  </section>
+  <section><h2>Граница достоверности</h2>
+    <p class="note">LOFT подтверждает только тактическую занятость, а не художественную форму. Скрытые поверхности без отдельного provenance считаются гипотетическими. OBJ — производный диагностический mesh. Редактирования исходного FGM нет.</p>
+  </section>
+</aside>
+</main>
+<script>
+"use strict";
+(() => {
+const $ = id => document.getElementById(id);
+const canvas = $("viewport");
+const gl = canvas.getContext("webgl2", {antialias:true,alpha:false,preserveDrawingBuffer:true});
+const status = (message, bad=false) => { $("status").textContent=message; $("status").className=bad?"warn":""; };
+const diagnostic = $("diagnostic");
+const dctx=diagnostic.getContext("2d");
+const scenes=[];
+let active=null, renderState=null, program=null, geometry=null, gridBuffer=null;
+const camera={az:Math.PI/4,el:Math.atan(1/Math.sqrt(2)),zoom:1,pan:[0,0,0]};
+const vec=(a,b)=>a.map((v,i)=>v-b[i]);
+const add=(a,b)=>a.map((v,i)=>v+b[i]);
+const mul=(a,s)=>a.map(v=>v*s);
+const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const norm=a=>{const len=Math.hypot(...a)||1;return mul(a,1/len);};
+function basis() {
+  const a=camera.az,e=camera.el;
+  const view=norm([Math.cos(e)*Math.cos(a),Math.cos(e)*Math.sin(a),Math.sin(e)]);
+  const right=norm([Math.sin(a),-Math.cos(a),0]);
+  const up=norm(active&&active.projection==="R05-UFO-dimetric" ? cross(right,view) : cross(view,right));
+  return {right,up,view};
+}
+function resetCamera(){
+  camera.pan=[0,0,0];camera.zoom=1;
+  if(active&&active.projection==="R07-synthetic-front"){camera.az=Math.PI/2;camera.el=Math.PI/2-0.00001;}
+  else{camera.az=Math.PI/4;camera.el=Math.atan(1/Math.sqrt(2));}
+  draw();
+}
+function fixedView(name){
+  const base=active?.projection==="R07-synthetic-front"?Math.PI/2:Math.PI/4;
+  camera.az=base+({left:-Math.PI/2,right:Math.PI/2,rear:Math.PI,top:0}[name]||0);
+  camera.el=name==="top"?Math.PI/2-0.001:Math.PI/6;
+  draw();
+}
+function compile(type,source){
+  const shader=gl.createShader(type);gl.shaderSource(shader,source);gl.compileShader(shader);
+  if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw Error("WebGL: "+gl.getShaderInfoLog(shader));
+  return shader;
+}
+function initGL(){
+  if(!gl){status("WebGL2 недоступен. Требуется браузер с WebGL2.",true);return;}
+  const vs=compile(gl.VERTEX_SHADER,`#version 300 es
+layout(location=0) in vec3 p;layout(location=1) in vec3 n;
+uniform vec3 center,right,up,front;uniform float span,aspect;
+uniform bool lineMode;out float shade;
+void main(){vec3 q=p-center;gl_Position=vec4(dot(q,right)/(span*aspect),dot(q,up)/span,-dot(q,front)/(span*4.0),1.0);
+shade=lineMode?1.0:(0.58+0.42*abs(dot(normalize(n),normalize(vec3(0.35,0.55,0.75)))));}`);
+  const fs=compile(gl.FRAGMENT_SHADER,`#version 300 es
+precision highp float;in float shade;uniform vec4 tint;out vec4 frag;
+void main(){frag=vec4(tint.rgb*shade,tint.a);}`);
+  program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
+  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error("WebGL link: "+gl.getProgramInfoLog(program));
+  gl.useProgram(program);
+}
+function parseObj(text,{allowEmpty=false}={}) {
+  const vertices=[],faces=[];
+  for(const line of text.split(/\r?\n/)){
+    const words=line.trim().split(/\s+/);if(words[0]==="v"){
+      if(words.length!==4)throw Error("OBJ: некорректная вершина");
+      const p=words.slice(1).map(Number);
+      if(p.some(v=>!Number.isFinite(v)))throw Error("OBJ: нечисловая вершина");
+      vertices.push(p);
+    } else if(words[0]==="f"){
+      if(words.length<4)throw Error("OBJ: недостаточно вершин грани");
+      const ids=words.slice(1).map(t=>Number(t.split("/")[0])-1);
+      if(ids.some(i=>!Number.isInteger(i)||i<0||i>=vertices.length))throw Error("OBJ: неверный индекс");
+      faces.push(ids);
+    }
+  }
+  if(vertices.length>1000000||faces.length>1200000)throw Error("OBJ слишком большой");
+  const tris=[],edges=[];
+  for(const ids of faces){
+    const points=ids.map(i=>vertices[i]);
+    const n=norm(cross(vec(points[1],points[0]),vec(points[2],points[0])));
+    for(let i=1;i<points.length-1;i++)for(const p of [points[0],points[i],points[i+1]])tris.push(...p,...n);
+    for(let i=0;i<points.length;i++)for(const p of [points[i],points[(i+1)%points.length]])edges.push(...p,0,0,1);
+  }
+  if(tris.length===0&&!(allowEmpty&&vertices.length===0&&faces.length===0))
+    throw Error("OBJ не содержит непустых граней");
+  return {triangles:new Float32Array(tris),edges:new Float32Array(edges),
+          points:vertices,faces};
+}
+async function hashFile(file){
+  if(!crypto.subtle)throw Error("SHA-256 недоступен в этом браузерном контексте");
+  const bytes=await file.arrayBuffer();
+  const sha=await crypto.subtle.digest("SHA-256",bytes);
+  return [...new Uint8Array(sha)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function safeName(name){
+  if(typeof name!=="string"||!(/^[a-zA-Z0-9_.-]{1,80}$/).test(name)||name==="."||name==="..")throw Error("Недопустимый локальный путь");
+  return name;
+}
+function makeMap(files){
+  const map=new Map();
+  for(const file of files){
+    if(file.size>32*1024*1024)throw Error("Файл превышает локальный лимит 32 МиБ: "+file.name);
+    const name=file.webkitRelativePath||file.name;
+    if(map.has(name))throw Error("Неоднозначный путь: "+name);
+    map.set(name,file);
+  }
+  return map;
+}
+
+function equal(a,b){return canonical(a)===canonical(b);}
+function canonical(value){
+  const sorted=x=>Array.isArray(x)?x.map(sorted):x&&typeof x==="object"?
+    Object.fromEntries(Object.keys(x).sort().map(k=>[k,sorted(x[k])])):x;
+  return JSON.stringify(sorted(value));
+}
+async function shaText(s){
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(v=>v.toString(16).padStart(2,"0")).join("");
+}
+function must(ok,code){if(!ok)throw Error(code);}
+function validHash(h){return typeof h==="string"&&/^[a-f0-9]{64}$/.test(h);}
+function validFrame(frame,axes,unit){
+  return frame&&equal(frame.axes,axes)&&frame.unit===unit&&frame.scale===1;
+}
+async function seedFor(generation){
+  return shaText(canonical(["fgm:seed:1",{generation,purpose:"model"}]));
+}
+function checkEnvelope(pack,algorithm,material){
+  must(pack&&pack.format==="fgm-package/1"&&pack.interpreter==="fgm-0/1"&&
+    pack.generation?.algorithm===algorithm&&pack.generation?.version==="1.0.0",
+    "E_RV01_FGM_ENVELOPE");
+  const model=pack.model,contributions=model?.contributions;
+  must(validHash(model?.seed)&&model.volumes&&Object.keys(model.volumes).length===0&&
+    Array.isArray(contributions)&&contributions.length===1&&
+    contributions[0].material===material&&contributions[0].priority===0&&
+    contributions[0].field?.op==="program"&&
+    Object.keys(contributions[0].field.parameters||{}).length===0,
+    "E_RV01_FGM_STRUCTURE");
+  return contributions[0].field.program;
+}
+function checkR06Graph(pack,report) {
+  const p=checkEnvelope(pack,"r06_loft_boxes",report.material);
+  must(p.version==="fgm-0"&&Array.isArray(p.nodes)&&p.nodes.length<100000 &&
+    pack.model.contributions[0].id==="terrain"&&
+    Object.keys(pack.generation.parameters||{}).length===0&&
+    validHash(pack.generation.resources?.loft_observation)&&
+    Number.isInteger(report.occupied)&&report.occupied>=0&&report.occupied<=6144&&
+    Number.isInteger(report.boxes)&&report.boxes>=0&&report.voxel_checks===6144,
+    "E_RV01_R06_PROGRAM");
+  if(report.boxes===0){
+    must(equal(p.nodes,[
+      {id:"extent",op:"constant",type:"vec3",value:[1,1,1]},
+      {id:"box",op:"box",halfSize:"extent"},
+      {id:"empty",op:"subtract",left:"box",right:"box"}
+    ])&&p.root==="empty"&&report.occupied===0,"E_RV01_R06_EMPTY");
+    return new Set();
+  }
+  const n=report.boxes;
+  must(p.nodes.length===5*n-1,"E_RV01_R06_NODE_COUNT");
+  const voxels=new Set();
+  let current=[];
+  for(let i=0;i<n;i++){
+    const nodes=p.nodes.slice(i*4,i*4+4);
+    const e="extent_"+i,o="offset_"+i,b="box_"+i,m="move_"+i;
+    must(nodes[0]?.id===e&&nodes[0].op==="constant"&&nodes[0].type==="vec3"&&
+      nodes[1]?.id===o&&nodes[1].op==="constant"&&nodes[1].type==="vec3"&&
+      equal(nodes[2],{id:b,op:"box",halfSize:e})&&
+      equal(nodes[3],{id:m,op:"translate",field:b,offset:o}),
+      "E_RV01_R06_GRAPH");
+    const extent=nodes[0].value,center=nodes[1].value;
+    must(Array.isArray(extent)&&extent.length===3&&Array.isArray(center)&&center.length===3&&
+      [...extent,...center].every(v=>typeof v==="number"&&Number.isFinite(v)),
+      "E_RV01_R06_BOUNDS");
+    const lo=center.map((v,j)=>v-extent[j]),hi=center.map((v,j)=>v+extent[j]);
+    must(lo.every((v,j)=>Number.isInteger(v)&&v>=0&&v<[16,16,24][j])&&
+      hi.every((v,j)=>Number.isInteger(v)&&v>lo[j]&&v<=[16,16,24][j]),
+      "E_RV01_R06_BOUNDS");
+    for(let x=lo[0];x<hi[0];x++)for(let y=lo[1];y<hi[1];y++)for(let z=lo[2];z<hi[2];z++){
+      const key=[x,y,z].join(",");
+      must(!voxels.has(key),"E_RV01_R06_OVERLAP");
+      voxels.add(key);
+    }
+    current.push(m);
+  }
+  let offset=4*n,k=0;
+  while(current.length>1){
+    const next=[];
+    for(let j=0;j+1<current.length;j+=2){
+      const name="union_"+k++,expected={id:name,op:"union",left:current[j],right:current[j+1]};
+      must(equal(p.nodes[offset++],expected),"E_RV01_R06_UNION");
+      next.push(name);
+    }
+    if(current.length%2)next.push(current[current.length-1]);
+    current=next;
+  }
+  must(offset===p.nodes.length&&p.root===current[0]&&voxels.size===report.occupied,
+       "E_RV01_R06_OCCUPANCY");
+  return voxels;
+}
+const R06_FACES=[
+  [[-1,0,0],[[0,0,0],[0,0,1],[0,1,1],[0,1,0]]],
+  [[1,0,0],[[1,0,0],[1,1,0],[1,1,1],[1,0,1]]],
+  [[0,-1,0],[[0,0,0],[1,0,0],[1,0,1],[0,0,1]]],
+  [[0,1,0],[[0,1,0],[0,1,1],[1,1,1],[1,1,0]]],
+  [[0,0,-1],[[0,0,0],[0,1,0],[1,1,0],[1,0,0]]],
+  [[0,0,1],[[0,0,1],[1,0,1],[1,1,1],[0,1,1]]]
+];
+function r06ExpectedMesh(occupied){
+  const vertexMap=new Map(),faces=[];
+  const sorted=[...occupied].map(k=>k.split(",").map(Number))
+    .sort((a,b)=>a[0]-b[0]||a[1]-b[1]||a[2]-b[2]);
+  for(const [x,y,z] of sorted)for(const [d,corners] of R06_FACES){
+    if(occupied.has([x+d[0],y+d[1],z+d[2]].join(",")))continue;
+    const ids=corners.map(c=>{
+      const p=[x+c[0],y+c[1],z+c[2]],key=p.join(",");
+      if(!vertexMap.has(key))vertexMap.set(key,vertexMap.size+1);
+      return vertexMap.get(key);
+    });
+    faces.push("f "+ids.join(" "));
+  }
+  const vertices=[...vertexMap.keys()].map(k=>"v "+k.split(",").join(" "));
+  return ["o terrain",...vertices,...faces].join("\n")+"\n";
+}
+async function verifyR06Pack(pack,report,meshText,proof,modelFile,meshFile,reportFile){
+  window.__rv01LoadStage="r06-graph";
+  const occupied=checkR06Graph(pack,report);
+  window.__rv01LoadStage="r06-mesh";
+  must(meshText===r06ExpectedMesh(occupied),"E_RV01_R06_MESH_MISMATCH");
+  window.__rv01LoadStage="r06-hash";
+  const [seed,modelSha,meshSha,reportSha]=await Promise.all([
+    seedFor(pack.generation),hashFile(modelFile),hashFile(meshFile),hashFile(reportFile)
+  ]);
+  window.__rv01LoadStage="r06-hashes-ready";
+  must(pack.model.seed===seed,"E_RV01_R06_SEED");
+  must(proof?.schema==="fgmr-r06-view-proof/1"&&
+    proof.producer==="reconstruct_r06.py/1.0.0"&&
+    proof.evaluation==="fgmr-r06-sample/C05"&&
+    proof.geometry==="r06_voxel_boundary_obj/1"&&
+    validFrame(proof.coordinate_frame,["x","y","z"],"loft-voxel")&&
+    proof.occupied===occupied.size&&proof.voxels_checked===6144&&
+    proof.model_sha256===modelSha&&proof.mesh_sha256===meshSha&&
+    proof.report_sha256===reportSha&&
+    proof.model_sha256===report.package_bytes_sha256&&
+    proof.source_loft_sha256===report.input_sha256?.loft_json&&
+    proof.source_sprite_sha256===report.input_sha256?.sprite_json,
+    "E_RV01_R06_PROOF");
+  return occupied;
+}
+function checkR07Parameters(p){
+  must(Array.isArray(p)&&p.length===3&&p.every(Number.isInteger)&&
+    p[0]>=-7&&p[0]<=-2&&p[1]>=2&&p[1]<=8&&p[2]>=2&&p[2]<=8&&p[0]<p[1],
+    "E_RV01_R07_PARAMS");
+}
+function expectedR07Graph(fit){
+  const [left,right,top]=fit,bottom=-5;
+  return [
+    {id:"outer_extent",op:"constant",type:"vec3",value:[1.5,1.5,0.25]},
+    {id:"outer",op:"box",halfSize:"outer_extent"},
+    {id:"hole_extent",op:"constant",type:"vec3",value:[(right-left)/16,(top-bottom)/16,0.5]},
+    {id:"hole_center",op:"constant",type:"vec3",value:[(right+left)/16,(top+bottom)/16,0]},
+    {id:"hole",op:"box",halfSize:"hole_extent"},
+    {id:"move",op:"translate",field:"hole",offset:"hole_center"},
+    {id:"panel",op:"subtract",left:"outer",right:"move"}
+  ];
+}
+async function verifyR07Pack(pack,fit,referenceHash){
+  checkR07Parameters(fit);
+  const p=checkEnvelope(pack,"r07_panel_fit","steel");
+  must(pack.model.contributions[0].id==="panel"&&
+    equal(pack.generation.parameters,{opening_steps:fit})&&
+    equal(pack.generation.resources,{front_mask:referenceHash})&&
+    p.root==="panel"&&p.version==="fgm-0"&&
+    equal(p.nodes,expectedR07Graph(fit))&&
+    pack.model.seed===await seedFor(pack.generation),
+    "E_RV01_R07_PACKAGE_MISMATCH");
+}
+function expectedR07Mesh(fit){
+  const [left,right,top]=fit.map(x=>x/8),e=1.5,bottom=-0.625,dz=0.25;
+  const vertices=[],faces=[];
+  const quad=pts=>{const start=vertices.length;vertices.push(...pts);
+    faces.push([start,start+1,start+2,start+3]);};
+  const rect=(x0,x1,y0,y1,z,front)=>{
+    const p=[[x0,y0,z],[x1,y0,z],[x1,y1,z],[x0,y1,z]];
+    quad(front?p:p.reverse());
+  };
+  for(const [x0,x1,y0,y1] of [
+    [-e,e,-e,bottom],[-e,left,bottom,top],[right,e,bottom,top],[-e,e,top,e]
+  ]){rect(x0,x1,y0,y1,dz,true);rect(x0,x1,y0,y1,-dz,false);}
+  for(const [x,y0,y1,reverse] of [
+    [-e,-e,e,false],[e,-e,e,true],[left,bottom,top,true],[right,bottom,top,false]
+  ]){
+    const p=[[x,y0,-dz],[x,y0,dz],[x,y1,dz],[x,y1,-dz]];
+    quad(reverse?p.reverse():p);
+  }
+  for(const [y,x0,x1,reverse] of [
+    [-e,-e,e,true],[e,-e,e,false],[bottom,left,right,false],[top,left,right,true]
+  ]){
+    const p=[[x0,y,-dz],[x0,y,dz],[x1,y,dz],[x1,y,-dz]];
+    quad(reverse?p.reverse():p);
+  }
+  return {vertices,faces};
+}
+function verifyR07Mesh(text,fit){
+  const parsed=parseObj(text),expected=expectedR07Mesh(fit);
+  must(equal(parsed.points,expected.vertices)&&equal(parsed.faces,expected.faces),
+    "E_RV01_R07_MESH_MISMATCH");
+  return parsed;
+}
+// Узкий аналитический oracle для фронтальной маски фиксированной R07-панели.
+// Соответствует front/ray/frontOracle в panel-fit.cpp; не интерпретирует общий FGM.
+function r07FrontMask(fit){
+  checkR07Parameters(fit);
+  const [left,right,top]=fit.map(v=>v*0.125),bottom=-0.625;
+  let result="";
+  for(let y=0;y<32;y++)for(let x=0;x<32;x++){
+    const u=(x+0.5-16)*0.125,v=(16-y-0.5)*0.125;
+    const occupied=Math.abs(u)<1.5&&Math.abs(v)<1.5&&
+      !(u>left&&u<right&&v>bottom&&v<top);
+    result+=occupied?"1":"0";
+  }
+  return result;
+}
+function pgmMasks(blob){
+  const header=new TextEncoder().encode("P5\n96 32\n255\n");
+  must(blob.length===header.length+96*32&&header.every((v,i)=>blob[i]===v),
+    "E_RV01_R07_OBSERVATION");
+  const pixels=blob.subarray(header.length),masks=["","",""];
+  for(let y=0;y<32;y++)for(let x=0;x<32;x++)
+    for(let role=0;role<3;role++){
+      const pixel=pixels[y*96+role*32+x];
+      must(pixel===0||pixel===255,"E_RV01_R07_OBSERVATION");
+      masks[role]+=pixel===255?"1":"0";
+    }
+  return masks;
+}
+function r07Metrics(value,target){
+  const boundary=mask=>{
+    const points=[],at=(x,y)=>x>=0&&y>=0&&x<32&&y<32&&mask[y*32+x]==="1";
+    for(let y=0;y<32;y++)for(let x=0;x<32;x++)
+      if(at(x,y)&&(!at(x-1,y)||!at(x+1,y)||!at(x,y-1)||!at(x,y+1)))
+        points.push([x,y]);
+    return points;
+  };
+  const a=boundary(value),b=boundary(target);
+  const directed=(from,to)=>from.reduce((sum,[x,y])=>{
+    let nearest=64;
+    for(const [u,v] of to)nearest=Math.min(nearest,Math.abs(x-u)+Math.abs(y-v));
+    return sum+nearest;
+  },0);
+  let maskXor=0;
+  for(let i=0;i<1024;i++)if(value[i]!==target[i])maskXor++;
+  return {mask_xor:maskXor,contour_l1:directed(a,b)+directed(b,a)};
+}
+
+async function loadSceneFiles(files){
+  window.__rv01LoadStage="start";
+  if(!gl)throw Error("WebGL2 недоступен");
+  const map=makeMap(files),found=[];
+  window.__rv01LoadStage="r07-scan";
+  for(const [path,file] of map)if(path.endsWith("viewer-session.json")){
+    const prefix=path.slice(0,path.lastIndexOf("/")+1);
+    const spec=JSON.parse(await file.text());
+    must(spec.schema==="fgmr-view-session/1"&&spec.source==="synthetic-r07"&&
+      spec.projection==="R07-synthetic-front"&&spec.units==="fgm-model"&&
+      spec.mesh_profile==="r07_panel_diagnostic_obj/2"&&
+      validFrame(spec.coordinate_frame,["x","y","z"],"fgm-model")&&
+      equal(spec.camera,{id:"R07-synthetic-front",projection:"orthographic",
+        image_size:[96,32],observation_columns:3})&&
+      Array.isArray(spec.models)&&spec.models.length===2,
+      "E_RV01_R07_SESSION");
+    const reportFile=map.get(prefix+safeName(spec.diagnostics));
+    must(!!reportFile&&validHash(spec.diagnostics_sha256)&&
+      await hashFile(reportFile)===spec.diagnostics_sha256,
+      "E_RV01_R07_REPORT_HASH");
+    const report=JSON.parse(await reportFile.text());
+    must(report.schema==="fgm-regenerator/panel-fit-v1"&&report.c05_verified===true&&
+      Array.isArray(report.starts)&&report.starts.length===3&&
+      validHash(report.package_bytes_sha256),
+      "E_RV01_R07_REPORT");
+    const referenceFiles=["front","rear","left_yaw","right_yaw","upper_pitch"];
+    must(equal(spec.observations,referenceFiles.map(s=>s+".pgm"))&&
+      spec.observation_sha256&&Object.keys(spec.observation_sha256).length===5,
+      "E_RV01_R07_OBSERVATIONS");
+    const observations={};
+    for(const name of referenceFiles){
+      const filename=name+".pgm",file=map.get(prefix+filename);
+      must(!!file&&validHash(spec.observation_sha256[filename])&&
+        await hashFile(file)===spec.observation_sha256[filename],
+        "E_RV01_R07_OBSERVATION_HASH");
+      observations[name]=new Uint8Array(await file.arrayBuffer());
+      must(observations[name].length===("P5\n96 32\n255\n".length+3072),
+        "E_RV01_R07_OBSERVATION");
+    }
+    const frontMasks=pgmMasks(observations.front);
+    const frontHash=await shaText(frontMasks[0]),models={};
+    for(const m of spec.models){
+      must(["baseline","reconstructed"].includes(m.role)&&!models[m.role]&&
+        m.object_id==="r07_panel"&&m.observation_id==="front"&&
+        validHash(m.sha256)&&validHash(m.mesh_sha256),
+        "E_RV01_R07_ROLE");
+      checkR07Parameters(m.parameters);
+      const modelFile=map.get(prefix+safeName(m.fgm)),meshFile=map.get(prefix+safeName(m.mesh));
+      must(!!modelFile&&!!meshFile&&await hashFile(modelFile)===m.sha256&&
+        await hashFile(meshFile)===m.mesh_sha256,"E_RV01_R07_FILE_HASH");
+      const pack=JSON.parse(await modelFile.text());
+      await verifyR07Pack(pack,m.parameters,frontHash);
+      models[m.role]=verifyR07Mesh(await meshFile.text(),m.parameters);
+      if(m.role==="reconstructed")
+        must(m.sha256===report.package_bytes_sha256,"E_RV01_R07_PACKAGE_HASH");
+    }
+    must(!!models.baseline&&!!models.reconstructed,"E_RV01_R07_PAIR");
+    const first=spec.models.find(x=>x.role==="baseline");
+    const fitted=spec.models.find(x=>x.role==="reconstructed");
+    must(equal(first.parameters,report.starts[0].initial)&&
+      equal(fitted.parameters,report.fit),"E_RV01_R07_REPORT_PARAMS");
+    // Проверяем ровно те три маски, которые paintMasks() покажет пользователю.
+    // Пересчитанный SHA манифеста не может легализовать подмену baseline/fitted.
+    must(frontMasks[1]===r07FrontMask(first.parameters)&&
+      frontMasks[2]===r07FrontMask(fitted.parameters),
+      "E_RV01_R07_FRONT_SILHOUETTE");
+    must(equal(r07Metrics(frontMasks[1],frontMasks[0]),report.starts[0].before)&&
+      equal(r07Metrics(frontMasks[2],frontMasks[0]),report.starts[0].after),
+      "E_RV01_R07_FRONT_METRICS");
+    found.push({id:path,label:"R07 · сквозная панель",projection:spec.projection,
+      models,report,observation:observations.front,loft:null,sprite:null});
+  }
+  window.__rv01LoadStage="r06-groups";
+  const groups=new Map();
+  for(const [path,file] of map){
+    const dir=path.slice(0,path.lastIndexOf("/")+1),name=path.slice(dir.length);
+    if(!groups.has(dir))groups.set(dir,new Map());
+    groups.get(dir).set(name,file);
+  }
+  for(const [dir,g] of groups){
+    window.__rv01LoadStage="r06-found-group";
+    if(!g.has("model.fgm.json")&&!g.has("preview.obj")&&!g.has("viewer-proof.json"))continue;
+    must(g.has("model.fgm.json")&&g.has("preview.obj")&&g.has("report.json")&&
+      g.has("viewer-proof.json"),"E_RV01_R06_INPUT_SET");
+    const modelFile=g.get("model.fgm.json"),meshFile=g.get("preview.obj"),reportFile=g.get("report.json");
+    const report=JSON.parse(await reportFile.text()),pack=JSON.parse(await modelFile.text());
+    const proof=JSON.parse(await g.get("viewer-proof.json").text());
+    must(report.schema==="fgm-regenerator/reconstruction-v1"&&
+      report.source&&["floor","west_wall","north_wall","object"].includes(report.source.part)&&
+      typeof report.material==="string"&&/^[a-z][a-z0-9_]*$/.test(report.material),
+      "E_RV01_R06_REPORT");
+    window.__rv01LoadStage="r06-model-read";
+    const meshText=await meshFile.text();
+    window.__rv01LoadStage="r06-semantic-verify";
+    const occupied=await verifyR06Pack(pack,report,meshText,proof,
+                                        modelFile,meshFile,reportFile);
+    window.__rv01LoadStage="r06-parse-obj";
+    const mesh=parseObj(meshText,{allowEmpty:occupied.size===0});
+    let loft=null,sprite=null;
+    if(g.has("loft.json")){
+      must(await hashFile(g.get("loft.json"))===report.input_sha256?.loft_json,
+        "E_RV01_R06_LOFT_HASH");
+      loft=JSON.parse(await g.get("loft.json").text());
+    }
+    if(g.has("sprite.json")){
+      must(await hashFile(g.get("sprite.json"))===report.input_sha256?.sprite_json,
+        "E_RV01_R06_SPRITE_HASH");
+      sprite=JSON.parse(await g.get("sprite.json").text());
+      must(sprite.schema==="fgm-regenerator/sprite-facts-v1"&&
+        sprite.width===32&&sprite.height===40&&
+        Number.isInteger(report.slot)&&report.slot>=0&&report.slot<8&&
+        Array.isArray(sprite.mcd_frame_slots)&&sprite.mcd_frame_slots.length===8&&
+        Array.isArray(sprite.frames),"E_RV01_R06_SPRITE");
+      const frame=sprite.frames.find(x=>x.id===sprite.mcd_frame_slots[report.slot]);
+      must(frame&&hexBytes(frame.alpha_hex).length===1280,
+        "E_RV01_R06_ALPHA");
+    }
+    const label=dir.split("/").filter(Boolean).pop()||report.source.dataset_label||"R06";
+    found.push({id:dir+"r06",label:"R06 · "+label,projection:"R05-UFO-dimetric",
+      models:{reconstructed:mesh},report,loft,sprite,observation:null,
+      occupiedFromModel:occupied,sourceResourceHash:pack.generation.resources.loft_observation});
+  }
+  must(found.length>0,"E_RV01_NO_COMPATIBLE_SCENES");
+  // Двухфазная загрузка: все LOFT/семантические проверки до изменения active и UI.
+  window.__rv01LoadStage="prepare";
+  for(const scene of found){
+    scene.loftPoints=loftOccupancy(scene);
+    if(scene.loftPoints){
+      const index=["floor","west_wall","north_wall","object"].indexOf(scene.report.source.part);
+      const observation={
+        source:scene.report.source,rows:scene.loft.part_rows[index],material:scene.report.material
+      };
+      must(await shaText(canonical(observation))===scene.sourceResourceHash,
+        "E_RV01_LOFT_SOURCE_RESOURCE");
+      must(scene.occupiedFromModel&&scene.loftPoints.size===scene.occupiedFromModel.size&&
+        [...scene.loftPoints].every(x=>scene.occupiedFromModel.has(x)),
+        "E_RV01_LOFT_FGM_DIVERGENCE");
+    }
+    scene.collisionEdges=scene.loftPoints?edgesFromLoft(scene.loftPoints):null;
+  }
+  window.__rv01LoadStage="activate";
+  scenes.splice(0,scenes.length,...found);
+  $("object").replaceChildren();
+  for(let i=0;i<scenes.length;i++){
+    const option=document.createElement("option");
+    option.value=i;option.textContent=scenes[i].label;$("object").append(option);
+  }
+  selectScene(0);
+  window.__rv01LoadStage="loaded";
+  status("Локально загружено объектов: "+scenes.length+"; отправки в сеть нет.");
+}
+
+function hexBytes(hex){
+  if(typeof hex!=="string"||hex.length%2||!/^[0-9a-fA-F]*$/.test(hex))throw Error("Некорректный индексный растр");
+  return Uint8Array.from(hex.match(/../g)||[],v=>parseInt(v,16));
+}
+function loftOccupancy(scene){
+  if(!scene.loft)return null;
+  const loft=scene.loft,report=scene.report;
+  must(loft.schema==="fgm-regenerator/loft-terrain-v1"&&
+    equal(loft.voxel_dimensions_xyz,[16,16,24])&&loft.terrain_only===true&&
+    equal(loft.tile?.xyz,report.tile)&&
+    Array.isArray(loft.sources)&&loft.sources.length===4&&
+    Array.isArray(loft.part_rows)&&loft.part_rows.length===4,
+    "E_RV01_LOFT_LAYOUT");
+  const part=report.source.part;
+  const index=["floor","west_wall","north_wall","object"].indexOf(part);
+  const source=loft.sources[index];
+  must(source&&source.part===part&&source.present===true&&
+    source.dataset_label===report.source.dataset_label&&
+    source.local_index===report.source.local_index,
+    "E_RV01_LOFT_IDENTITY");
+  const rows=loft.part_rows[index],occupied=new Set();
+  must(Array.isArray(rows)&&rows.length===24,"E_RV01_LOFT_ROWS");
+  for(let z=0;z<24;z++){
+    must(Array.isArray(rows[z])&&rows[z].length===16,"E_RV01_LOFT_ROWS");
+    for(let y=0;y<16;y++){
+      const row=rows[z][y];
+      must(Number.isInteger(row)&&row>=0&&row<=65535,"E_RV01_LOFT_ROWS");
+      for(let x=0;x<16;x++)
+        if(row&(1<<(15-x)))occupied.add([x,y,z].join(","));
+    }
+  }
+  return occupied;
+}
+function edgesFromLoft(occupied){
+  const lines=[];
+  function side(p){lines.push(...p,0,0,1);}
+  const faces=[
+    [[-1,0,0],[[0,0,0],[0,0,1],[0,1,1],[0,1,0]]],
+    [[1,0,0],[[1,0,0],[1,1,0],[1,1,1],[1,0,1]]],
+    [[0,-1,0],[[0,0,0],[1,0,0],[1,0,1],[0,0,1]]],
+    [[0,1,0],[[0,1,0],[0,1,1],[1,1,1],[1,1,0]]],
+    [[0,0,-1],[[0,0,0],[0,1,0],[1,1,0],[1,0,0]]],
+    [[0,0,1],[[0,0,1],[1,0,1],[1,1,1],[0,1,1]]]
+  ];
+  for(const key of occupied){
+    const [x,y,z]=key.split(",").map(Number);
+    for(const [d,corners] of faces){
+      if(occupied.has([x+d[0],y+d[1],z+d[2]].join(",")))continue;
+      const v=corners.map(c=>[x+c[0],y+c[1],z+c[2]]);
+      for(let i=0;i<4;i++){side(v[i]);side(v[(i+1)%4]);}
+    }
+  }
+  return new Float32Array(lines);
+}
+function selectScene(index){
+  const proposed=scenes[index];
+  if(!proposed)return;
+  const points=Object.values(proposed.models).flatMap(m=>m.points);
+  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
+  for(const p of points)for(let i=0;i<3;i++){
+    lo[i]=Math.min(lo[i],p[i]);hi[i]=Math.max(hi[i],p[i]);
+  }
+  // Нулевая занятость R06 — валидный результат, а не аварийная геометрия.
+  proposed.center=points.length?mul(add(lo,hi),.5):[8,8,12];
+  proposed.span=(points.length?Math.max(1,...hi.map((x,i)=>x-lo[i])):24)*.85;
+  if(proposed.projection==="R05-UFO-dimetric")proposed.span*=1.4;
+  active=proposed;
+  for(const option of $("mode").options){
+    option.disabled=(option.value==="baseline"||option.value==="difference")&&!active.models.baseline||
+      option.value==="collision"&&!active.collisionEdges;
+  }
+  if($("mode").selectedOptions[0]?.disabled)$("mode").value="reconstructed";
+  resetCamera();
+  updateDiagnostics();
+}
+function createBuffer(values){
+  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  gl.bufferData(gl.ARRAY_BUFFER,values,gl.STATIC_DRAW);return buffer;
+}
+function drawBuffer(data,kind,color,depth){
+  if(!data||!data.length)return;
+  const buffer=createBuffer(data);
+  gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);
+  gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);
+  gl.uniform4fv(gl.getUniformLocation(program,"tint"),color);
+  gl.uniform1i(gl.getUniformLocation(program,"lineMode"),kind===gl.LINES);
+  if(depth)gl.enable(gl.DEPTH_TEST);else gl.disable(gl.DEPTH_TEST);
+  gl.drawArrays(kind,0,data.length/6);gl.deleteBuffer(buffer);
+}
+function createGrid(){
+  if(!active)return null;
+  const e=active.projection==="R05-UFO-dimetric"?16:2;
+  const z=active.projection==="R05-UFO-dimetric"?-0.2:-0.55,step=active.projection==="R05-UFO-dimetric"?1:0.25;
+  const v=[];
+  function push(p){v.push(...p,0,0,1);}
+  for(let n=-e;n<=e+0.00001;n+=step){
+    push([-e,n,z]);push([e,n,z]);push([n,-e,z]);push([n,e,z]);
+  }
+  return new Float32Array(v);
+}
+function draw(){
+  if(!gl||!program)return;
+  const ratio=Math.min(devicePixelRatio||1,2);
+  const w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  gl.viewport(0,0,w,h);gl.clearColor(.052,.09,.135,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);if(!active)return;
+  const b=basis(),origin=add(active.center,camera.pan);
+  gl.useProgram(program);
+  for(const [key,value] of Object.entries({center:origin,right:b.right,up:b.up,front:b.view}))
+    gl.uniform3fv(gl.getUniformLocation(program,key),value);
+  gl.uniform1f(gl.getUniformLocation(program,"span"),active.span/camera.zoom);
+  gl.uniform1f(gl.getUniformLocation(program,"aspect"),w/h);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+  const mode=$("mode").value;
+  if(mode==="baseline"){
+    drawBuffer(active.models.baseline?.triangles,gl.TRIANGLES,[.93,.64,.42,1],true);
+  }else if(mode==="difference"){
+    drawBuffer(active.models.baseline?.edges,gl.LINES,[1,.29,.26,.75],false);
+    drawBuffer(active.models.reconstructed?.edges,gl.LINES,[.37,.98,.64,.75],false);
+  }else if(mode==="collision"){
+    drawBuffer(active.collisionEdges,gl.LINES,[.99,.75,.26,1],false);
+  }else{
+    drawBuffer(active.models.reconstructed?.triangles,gl.TRIANGLES,[.54,.78,.94,1],true);
+  }
+  if($("grid").checked)drawBuffer(createGrid(),gl.LINES,[.37,.44,.53,.24],false);
+  const descriptor=(mode==="collision"&&!active.collisionEdges)?"LOFT отсутствует в загрузке":
+    (mode==="baseline"&&!active.models.baseline)?"Нет baseline для данного объекта":
+    (mode==="difference"&&!active.models.baseline)?"Нужна пара baseline/reconstructed":"";
+  $("info").textContent=active.label+" · "+active.projection+(descriptor?" · "+descriptor:"");
+}
+function paintMasks(){
+  if(!active)return;
+  diagnostic.width=96;diagnostic.height=40;
+  dctx.fillStyle="#121923";dctx.fillRect(0,0,96,40);
+  if(active.projection==="R07-synthetic-front"&&active.observation){
+    const blob=new Uint8Array(active.observation);
+    const header=new TextEncoder().encode("P5\n96 32\n255\n");
+    if(blob.length===header.length+96*32&&header.every((v,i)=>blob[i]===v)){
+      const pixels=dctx.createImageData(96,32);
+      for(let i=0;i<96*32;i++){
+        const z=blob[header.length+i];const p=4*i;
+        pixels.data[p]=z;pixels.data[p+1]=z;pixels.data[p+2]=z;pixels.data[p+3]=255;
+      }
+      dctx.putImageData(pixels,0,0);
+      $("observation").textContent="R07 front, одинаковый масштаб: слева эталон · центр baseline · справа reconstructed. Другие ракурсы — контрольные.";
+      return;
+    }
+  }
+  if(active.sprite&&active.loftPoints){
+    const report=active.report,sprite=active.sprite;
+    const frameNo=sprite.mcd_frame_slots?.[report.slot];
+    const frame=sprite.frames?.find(f=>f.id===frameNo);
+    if(frame&&sprite.width===32&&sprite.height===40){
+      const mask=hexBytes(frame.alpha_hex);
+      const predicted=new Set();
+      for(const key of active.loftPoints){
+        const [x,y,z]=key.split(",").map(Number);
+        const u=16+x-y,v=Math.trunc((40+x+y-2*z)/2);
+        if(u>=0&&u<32&&v>=0&&v<40)predicted.add(v*32+u);
+      }
+      for(let y=0;y<40;y++)for(let x=0;x<32;x++){
+        const i=y*32+x;
+        const spriteY=y+(Number.isInteger(report.p_level)?report.p_level:0);
+        const original=spriteY>=0&&spriteY<40&&mask[spriteY*32+x]!==0 && !(report.right_half&&x<16);
+        const derived=predicted.has(i);
+        for(let col=0;col<3;col++){
+          const on=col===0?original:col===1?derived:original!==derived;
+          if(on){dctx.fillStyle=col===2?"#e48e52":"#e5e8ea";dctx.fillRect(x+col*32,y,1,1);}
+        }
+      }
+      $("observation").textContent="R05: слева исходный alpha · центр LOFT-проекция · справа XOR. Одинаковые пиксельные координаты 32×40.";
+      return;
+    }
+  }
+  $("observation").textContent="Нет согласованной пары исходного спрайта/LOFT или изображения R07. Исходное наблюдение не имитируется.";
+}
+function updateDiagnostics(){
+  if(!active)return;
+  const report=active.report;
+  const mode=active.projection;
+  const data=mode==="R07-synthetic-front" ?
+    {тип:"Ограниченный синтетический R07-S1",исходное:report.starts?.[0]?.initial,
+     восстановлено:report.fit,до:report.starts?.[0]?.before,после:report.starts?.[0]?.after,
+     защищённые_пробы:report.starts?.[0]?.violations_final,
+     контрольные_виды:Object.keys(report.held_out||{}),скрытые_поверхности:"гипотеза"}:
+    {тип:"R06 — статический LOFT",источник:report.source,вокселей:report.occupied,
+     проверено_C05:report.voxel_checks,расхождения_R05:report.silhouette,
+     LOFT_доступен:!!active.loftPoints,скрытые_поверхности:"неизвестно"};
+  $("metrics").textContent=JSON.stringify(data,null,2);
+  paintMasks();
+}
+$("directory").addEventListener("change",e=>loadSceneFiles([...e.target.files]).catch(err=>status(err.message,true)));
+$("individual").addEventListener("change",e=>loadSceneFiles([...e.target.files]).catch(err=>status(err.message,true)));
+$("object").addEventListener("change",e=>{try{selectScene(Number(e.target.value));}catch(err){status(err.message,true);}});
+$("mode").addEventListener("change",()=>{draw();updateDiagnostics();});
+$("grid").addEventListener("change",draw);
+$("reset").addEventListener("click",resetCamera);
+for(const btn of document.querySelectorAll("[data-view]"))btn.addEventListener("click",()=>fixedView(btn.dataset.view));
+canvas.addEventListener("contextmenu",e=>e.preventDefault());
+let drag=null;
+canvas.addEventListener("pointerdown",e=>{if(!active)return;drag={x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener("pointermove",e=>{
+  if(!drag||!active)return;
+  const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;
+  if(drag.pan){
+    const b=basis(),factor=2*active.span/(camera.zoom*canvas.clientHeight);
+    camera.pan=add(camera.pan,add(mul(b.right,-dx*factor),mul(b.up,dy*factor)));
+  }else{camera.az-=dx*.012;camera.el=Math.max(-1.48,Math.min(1.569,camera.el+dy*.009));}
+  draw();
+});
+for(const type of ["pointerup","pointercancel","lostpointercapture"])canvas.addEventListener(type,()=>{drag=null;});
+canvas.addEventListener("wheel",e=>{if(!active)return;e.preventDefault();camera.zoom=Math.max(.15,Math.min(25,camera.zoom*Math.exp(-e.deltaY*.0015)));draw();},{passive:false});
+window.addEventListener("resize",draw);
+try{initGL();draw();}catch(err){status(err.message,true);}
+})();
+</script>
+</body>
+</html>

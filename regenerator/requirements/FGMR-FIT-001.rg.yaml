@@ -1,0 +1,28 @@
+format: repo-guard/requirement-v1
+id: FGMR-FIT-001
+normative: "### FGMR-FIT-001 — Базовый подбор параметров проёма. Регенератор должен воспроизводимо подобрать допустимые параметры фиксированной синтетической панели по одной фронтальной маске в явном бюджете. Он должен проверять защищённые пробы до оценки кандидата, сохранять измерения до и после подбора, отклонённые попытки, число рендеров и время. Выходная программа должна сохранить число узлов и совпасть с независимой проверкой материала и занятости. Четыре контрольных ракурса проверяются после подбора, а вывод о невидимых поверхностях отмечается как гипотеза."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "scripts/run_r07.py"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/panel-fit.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "CMakeLists.txt"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_r07.py"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/r07-panel-fit.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/current-step.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/requirements-hierarchy.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "README.md"}

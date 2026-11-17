@@ -1,0 +1,133 @@
+name: Импортёр R12 (C++20)
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  importer:
+    name: C++20 R12 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout exact HEAD
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Установить Node.js для проверки Worker
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+      - name: Synthetic tests
+        run: ctest --test-dir build --build-config Release --output-on-failure
+      - name: Проверить протокол STUDIO-S0 на Windows
+        if: matrix.os == 'windows-latest'
+        run: node tests/test_studio.mjs build/Release/fgmr-studio-native.exe
+      - name: Проверить сквозной STUDIO-S1 на Windows
+        if: matrix.os == 'windows-latest'
+        run: node tests/test_studio_cell.mjs build/Release/fgmr-studio-native.exe
+      - name: Проверить локальный каталог UFO на Windows
+        if: matrix.os == 'windows-latest'
+        run: node tests/test_studio_catalog.mjs build/Release/fgmr-studio-native.exe
+      - name: Проверить выборку и сборку целого объекта в native Runner (Windows)
+        if: matrix.os == 'windows-latest'
+        run: node tests/test_studio_whole.mjs build/Release/fgmr-studio-native.exe build/Release/fgmr-r06-multicell-sample.exe --builder build/Release/fgmr-r06-whole-build.exe
+      - name: Сопоставить STUDIO-S0 в native и Worker с WASM
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          git clone --depth 1 --branch 4.0.21 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/fgmr-emsdk"
+          test "$(git -C "$RUNNER_TEMP/fgmr-emsdk" rev-parse HEAD)" = b2436aafa7351ee1b581f15841f1b45ed716a279
+          "$RUNNER_TEMP/fgmr-emsdk/emsdk" install 4.0.21
+          "$RUNNER_TEMP/fgmr-emsdk/emsdk" activate 4.0.21
+          source "$RUNNER_TEMP/fgmr-emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build/studio-wasm -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/studio-wasm --parallel 2
+          node tests/test_studio.mjs build/fgmr-studio-native build/studio-wasm/worker.mjs
+          node tests/test_studio_catalog.mjs build/fgmr-studio-native build/studio-wasm/worker.mjs
+      - name: Сопоставить STUDIO-S1 в native и двух средах Worker
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          export STUDIO_CHROMIUM="$(command -v google-chrome || command -v chromium)"
+          test -n "$STUDIO_CHROMIUM"
+          node tests/test_studio_cell.mjs build/fgmr-studio-native build/studio-wasm/worker.mjs
+      - name: Проверить выборку и сборку целого объекта в native/WASM/Chromium (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          export STUDIO_CHROMIUM="$(command -v google-chrome || command -v chromium)"
+          test -n "$STUDIO_CHROMIUM"
+          node tests/test_studio_whole.mjs build/fgmr-studio-native build/fgmr-r06-multicell-sample build/studio-wasm/worker.mjs --builder build/fgmr-r06-whole-build
+      - name: Проверить детальный журнал R02-S1
+        run: ctest --test-dir build --build-config Release --verbose -R r02-map-mcd-facts
+      - name: Проверить детальный журнал R03-S1
+        run: ctest --test-dir build --build-config Release --verbose -R r03-loft-voxels
+      - name: Проверить детальный журнал R04-S1
+        env:
+          FGMR_R04_COMPARISON: ${{ github.workspace }}/build/r04-comparison.png
+        run: ctest --test-dir build --build-config Release --verbose -R r04-sprite-facts
+      - name: Сохранить сравнение синтетических кадров R04
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r04-synthetic-${{ matrix.os }}
+          path: build/r04-comparison.png
+          if-no-files-found: error
+      - name: Проверить детальный журнал R05-S1
+        run: ctest --test-dir build --build-config Release --verbose -R r05-projection
+      - name: Собрать синтетические пакеты и сетки R06-S1
+        env:
+          FGMR_R06_ARTIFACT: ${{ github.workspace }}/build/r06-synthetic
+        run: ctest --test-dir build --build-config Release --verbose -R r06-reconstruction
+      - name: Сохранить синтетические результаты R06
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r06-synthetic-${{ matrix.os }}
+          path: build/r06-synthetic/
+          if-no-files-found: error
+      - name: Выполнить синтетический подбор R07-S1
+        env:
+          FGMR_R07_ARTIFACT: ${{ github.workspace }}/build/r07-synthetic
+        run: ctest --test-dir build --build-config Release --verbose -R r07-panel-fit
+      - name: Сохранить пакет, сравнения и метрики R07
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r07-synthetic-${{ matrix.os }}
+          path: build/r07-synthetic/
+          if-no-files-found: error
+      - name: Проверить локальный R07-S0 источник и C05/R05 baseline (только synthetic)
+        run: ctest --test-dir build --build-config Release --verbose -R r07-local-source-baseline
+      - name: Проверить непрерывный R07-S1A и независимый аналитический оракул (synthetic)
+        run: ctest --test-dir build --build-config Release --verbose -R r07-surface-observability
+      - name: Проверить R07-S1B0 constrained real-source fit (strictly synthetic fixture)
+        run: ctest --test-dir build --build-config Release --verbose -R r07-local-constrained-fit
+      - name: Проверить R07-S1B1A source and whole-membership preflight (strictly synthetic)
+        run: ctest --test-dir build --build-config Release --verbose -R r07-whole-source-preflight
+      - name: Проверить whole-FGM C05 для всех клеток и R05 поверхность (synthetic)
+        run: ctest --test-dir build --build-config Release --verbose -R r07-whole-surface-observability
+      - name: Проверить совместный подбор одной whole-FGM на двух аналитических наблюдениях (только synthetic)
+        run: ctest --test-dir build --build-config Release --verbose -R r07-whole-joint-synthetic-fit
+      - name: Проверить локальный RV01 Viewer и экспорт R07
+        run: ctest --test-dir build --build-config Release --verbose -R rv01-reconstruction-viewer
+      - name: Проверить RV01 в настоящем браузере (Linux / Chromium)
+        if: matrix.os == 'ubuntu-latest'
+        run: >-
+          python scripts/smoke_rv01.py
+          --html viewer/index.html
+          --browser-script viewer/rv01-browser-smoke.js
+          --cdp-script scripts/rv01-cdp.mjs
+          --r06-script scripts/reconstruct_r06.py
+          --r06-test tests/test_r06.py
+          --sampler build/fgmr-r06-sample
+          --loft build/fgmr-r03
+          --sprite build/fgmr-r04
+          --r07-script scripts/run_r07.py
+          --export scripts/export_rv01.py
+          --fit build/fgmr-r07-fit
+      - name: Проверить журнал тестов R01 и NTFS junction
+        run: ctest --test-dir build --build-config Release --verbose -R r01-free-corpus

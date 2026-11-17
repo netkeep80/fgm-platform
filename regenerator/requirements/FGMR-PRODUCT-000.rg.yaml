@@ -1,0 +1,96 @@
+format: repo-guard/requirement-v1
+id: FGMR-PRODUCT-000
+normative: "### FGMR-PRODUCT-000 — Продукт должен компилировать поддерживаемую исходную геометрию и визуальные ограничения в детерминированные FGM-программы с прослеживаемым происхождением, сохранением объявленных инвариантов и заменяемыми алгоритмами реконструкции."
+lifecycle:
+  accepted: true
+  current: true
+  published: false
+relations:
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "README.md"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/requirements-hierarchy.md"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/r06-entity-evidence.md"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "scripts/build_r06_evidence.py"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "scripts/verify_r06_membership.py"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: "tests/test_r06_evidence.py"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/r06-s2b1-verified-membership.md"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "scripts/assemble_r06_multicell.py"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "src/multicell-sample.cpp"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: "tests/test_r06_multicell.py"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/r06-s2b2-whole-object.md"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "src/whole-sampling.hpp"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "src/whole-sampling.cpp"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "src/studio-run.cpp"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: "tests/test_studio_whole.mjs"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/r06-abi-s1-sampler.md"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "src/whole-build.cpp"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "src/whole-build.hpp"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "src/whole-build-main.cpp"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: "tests/test_whole_build.py"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/r06-abi-s2a-builder.md"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/r06-abi-s2b-worker.md"

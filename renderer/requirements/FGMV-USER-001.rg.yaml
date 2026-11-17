@@ -1,0 +1,18 @@
+format: repo-guard/requirement-v1
+id: FGMV-USER-001
+normative: "### FGMV-USER-001 — Пользовательская задача выбора и реконструкции элемента UFO. Пользователь, имеющий локальную папку с ресурсами UFO, должен иметь возможность без ручного знания форматов исходных файлов выбрать тактическую карту и именованный элемент, выполнить локальную реконструкцию одной его статической части и получить проверяемые визуальный результат, метрики и экспорт без сетевой отправки исходных игровых данных."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMV-PRODUCT-000"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/index.html"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/studio-app.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/studio-s2a.browser.mjs"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/studio-user-acceptance.md"}

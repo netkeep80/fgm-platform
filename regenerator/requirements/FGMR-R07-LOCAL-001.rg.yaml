@@ -1,0 +1,28 @@
+format: repo-guard/requirement-v1
+id: FGMR-R07-LOCAL-001
+normative: "### FGMR-R07-LOCAL-001 — Локальное исходное наблюдение R07. Регенератор должен предоставлять отдельный локальный запуск для одной выбранной части исходной тактической карты с явно заданными и проверяемыми байтовыми привязками MAP/MCD/PCK/TAB/палитры/LOFT. Исполнитель должен проверить точные SHA-256 исходных файлов и связи выбранного MCD, вызвать принятые R04/R05/R06/C05 без повторного нормативного декодирования и сохранить проверяемые локальные baseline-артефакты, измеримые маски и раздельное свидетельство идентичности. При ошибках исходных байтов, привязок или согласованности C05/пиксельных масок исполнитель должен завершаться отказом без успешного выходного каталога; если объектная принадлежность не подтверждена, он должен маркировать успешное исходное наблюдение как неаттестованное и не выдавать его за принятую ObjectDefinition или готовую R07-подгонку. Запрещены публикация исходных игровых байтов, файловых путей и полученных на них производных изображений в публичных CI, репозиториях и Pages."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-FIT-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-R05-OBS-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-UFO-CATALOG-001"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "scripts/r07_local_observation.py"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_r07_local_observation.py"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "CMakeLists.txt"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/r07-mvp-local-source-baseline.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/requirements-hierarchy.md"}

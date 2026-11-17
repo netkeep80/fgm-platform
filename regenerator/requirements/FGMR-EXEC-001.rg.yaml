@@ -1,0 +1,28 @@
+format: repo-guard/requirement-v1
+id: FGMR-EXEC-001
+normative: "### FGMR-EXEC-001 — Исполнение native и WASM. Регенератор должен использовать общий код проверки занятости и закреплённый интерпретатор C05. Для синтетического пакета ограниченного профиля S0 ответы протокола должны совпадать побайтово между нативным процессом и Worker с WASM. Выход за профиль должен явно отклоняться."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/model-occupancy.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/model-occupancy.hpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/studio-wasm.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/studio-native.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/worker.mjs"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "CMakeLists.txt"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_studio.mjs"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/studio-s0.md"}

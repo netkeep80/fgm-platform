@@ -1,0 +1,22 @@
+build/
+__pycache__/
+*.pyc
+# Пользовательские игровые ресурсы никогда не размещать в этом репозитории.
+MAPS/
+TERRAIN/
+GEODATA/
+UNITS/
+UFOGRAPH/
+UFOINTRO/
+GEOGRAPH/
+ROUTES/
+SOUND/
+cloud_saves/
+GAME_*/
+GAME_*
+*.MAP
+*.MCD
+*.PCK
+*.TAB
+LOFTEMPS.DAT
+

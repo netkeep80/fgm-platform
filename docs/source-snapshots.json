@@ -1,0 +1,36 @@
+{
+  "schema": "fgm-platform-source-snapshots/1",
+  "method": "snapshot-files-only",
+  "date": "2026-11-17",
+  "platform_base": {
+    "head": "9a1b41b7050ee2342d247f8d43ce5e3977de2ee6",
+    "tree": "a4ecfb47862b916b40e48f305e684d961f1a29f1"
+  },
+  "historical_provenance": {
+    "url": "https://github.com/netkeep80/fgm-platform/issues/15#issuecomment-6958264307",
+    "sha256": "ce7f05824a5d86dd18cb896b4dcc071a23e1619447787e9f384ea1f96ed7b4aa"
+  },
+  "sources": [
+    {
+      "repository": "https://github.com/netkeep80/fgm-core",
+      "head": "ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b",
+      "tree": "df897d1ac87fe5c119352007e4bbb88670181f82",
+      "target": "core",
+      "files": 39
+    },
+    {
+      "repository": "https://github.com/netkeep80/fgm-regenerator",
+      "head": "ec919b5a9c99ac8c660dda867f8a2688553160f5",
+      "tree": "3bbd588087967e2ff3a3d2bf927671023e43af89",
+      "target": "regenerator",
+      "files": 143
+    },
+    {
+      "repository": "https://github.com/netkeep80/fgm-renderer",
+      "head": "7f99b2ef1d360846bddce79eeeabd53cf84731ad",
+      "tree": "9fa103d401af04151673ab04433ca6439e49e1cc",
+      "target": "renderer",
+      "files": 123
+    }
+  ]
+}

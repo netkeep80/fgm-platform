@@ -1,0 +1,37 @@
+format: repo-guard/requirement-v1
+id: FGMP-MIG-SNAPSHOT-001
+normative: "### FGMP-MIG-SNAPSHOT-001 — Импорт закреплённых файлов Core, Regenerator и Renderer должен сохранить точные Git-поддеревья и прежние файлы Platform, записать исходные URL и HEAD/TREE в манифест и обеспечить автоматическую проверку снимка; единственный родитель коммита импорта должен быть выбранным Platform BASE."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target:
+      kind: requirement
+      id: FGMP-PROJECT-000
+  - predicates: [requires]
+    target:
+      kind: artifact
+      path: "docs/source-snapshot-resources.json"
+    collection: true
+  - predicates: [requires]
+    target:
+      kind: artifact
+      path: "docs/source-snapshots.json"
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: "scripts/check-source-snapshots.py"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: "tests/test_source_snapshots.py"
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: ".github/workflows/source-snapshots.yml"
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: "docs/source-snapshot-import.md"

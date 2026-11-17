@@ -1,0 +1,29 @@
+name: S02B source snapshot parity
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-snapshots:
+    name: Source snapshots / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check snapshot regression fixtures
+        run: python -m unittest discover -s tests -p test_source_snapshots.py -v
+      - name: Check real imported subtrees and Platform files
+        run: python scripts/check-source-snapshots.py --head "${{ github.event.pull_request.head.sha }}" --base "${{ github.event.pull_request.base.sha }}"

@@ -1,0 +1,26 @@
+format: repo-guard/requirement-v1
+id: FGMV-SESSION-003
+normative: "### FGMV-SESSION-003 — Сквозная передача целого объекта в диагностическую сессию. Система визуализации должна принимать фактические сериализованные артефакты целого объекта, полученные утверждённым C++20/WASM BuildWholeObject, с подтверждением SHA-256 точных байтов модели и производной OBJ-геометрии до отображения через RendererSession. Должны проверяться целые синтетические объекты 2×1 и 2×2 без независимой повторной реконструкции клеток. При ошибке загрузки, недопустимом виде и уничтожении сессии ранее отображённый кадр должен быть очищен. Идентичности mesh, сцены с клеточными привязками и экземпляром, и представления с камерой должны различаться. Этот срез не должен менять авторитетные C04/C05/LOFT, подменять подтверждение происхождения B1/R03, заявлять рабочий WebGPU или автоматически переключать опубликованную Studio."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMV-PRODUCT-000"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMV-SESSION-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMV-SESSION-002"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMV-WHOLE-001"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "runtime/renderer-session-v1.ts"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/renderer-session-wasm.browser.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/renderer-session.test.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: ".github/workflows/studio-pages.yml"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/renderer-session-s3-s2b.md"}

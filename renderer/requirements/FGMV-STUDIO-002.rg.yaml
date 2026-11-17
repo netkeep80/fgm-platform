@@ -1,0 +1,28 @@
+format: repo-guard/requirement-v1
+id: FGMV-STUDIO-002
+normative: "### FGMV-STUDIO-002 — Пиксельное сравнение реконструкции одной клетки. Приложение должно показывать исходный кадр R04, реконструированный силуэт, наложение, разницу и проекцию LOFT-занятости в общей системе координат, полученной из нативного R05. Перед показом оно должно проверять схему локального наблюдения, совпадение SHA-256 и статистики с результатом запуска. При отсутствии или повреждении наблюдения приложение должно очищать результат и сообщать код ошибки. Пиксели локального наблюдения не должны автоматически передаваться по сети."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMV-PRODUCT-000"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMV-STUDIO-001"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/index.html"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/studio-app.mjs"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "studio/r05-view.mjs"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "scripts/build-studio-s2a.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/studio-r05.test.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/studio-s2a.browser.mjs"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/studio-s2b.md"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/requirements-hierarchy.md"}

@@ -1,0 +1,26 @@
+format: repo-guard/requirement-v1
+id: FGMR-UFO-CATALOG-001
+normative: "### FGMR-UFO-CATALOG-001 — Локальный каталог тактических элементов UFO. Исполнитель должен принимать список путей выбранной папки, выделять тактические карты и связывать штатные блоки с проверенным порядком наборов и соответствующими графическими ресурсами. Для выбранного блока он должен перечислять именованные типы элементов, стабильные исходные идентификаторы и привязки для запуска реконструкции. Неопознанные блоки, недостающие файлы и несколько корней должны быть явно диагностированы. Каталог не должен читать файлы по переданным путям или передавать исходные данные по сети."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: "FGMR-PRODUCT-000"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-CELL-001"}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: "FGMR-MAP-001"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/studio-catalog.hpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/studio-catalog.cpp"}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: "src/studio-run.cpp"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: "tests/test_studio_catalog.mjs"}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: ".github/workflows/importer-ci.yml"}
+  - predicates: [documents]
+    target: {kind: artifact, path: "docs/studio-ufo-catalog.md"}
