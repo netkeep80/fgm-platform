@@ -28,8 +28,17 @@ jobs:
           node --test tests/bootstrap.test.mjs
           node scripts/check-bootstrap.mjs
       - name: RepoGuard exact immutable snapshot
+        id: required_guard
         uses: netkeep80/repo-guard@74db97791e6da8a75287164f0d0b41579108f114
         with:
           base: ${{ github.event.pull_request.base.sha }}
           head: ${{ github.event.pull_request.head.sha }}
           node-version: '24'
+      - name: Show exact RepoGuard diagnostics without bypassing failure
+        if: always()
+        env:
+          RG_STEP: ${{ steps.required_guard.outcome }}
+          RG_RESULT: ${{ steps.required_guard.outputs.result }}
+          RG_SUMMARY: ${{ steps.required_guard.outputs.summary }}
+        run: |
+          printf 'RG_STEP=%s\nRG_RESULT=%s\nRG_SUMMARY=%s\n' "$RG_STEP" "$RG_RESULT" "$RG_SUMMARY"
