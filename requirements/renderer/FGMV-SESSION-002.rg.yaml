@@ -1,0 +1,53 @@
+format: repo-guard/requirement-v1
+id: FGMV-SESSION-002
+normative: "### FGMV-SESSION-002 — Исполнение минимальной диагностической сессии. Библиотека визуализации должна принимать один подготовленный цельный объект FGM как неизменяемый пакет и связанную производную геометрию OBJ, до публикации кадра проверять типы, ресурсные пределы, SHA-256 фактических байтов и ссылочную целостность; отличать контентный хеш от независимо подтверждённой семантики C04. Изменение сцены, вида, отмена и уничтожение сессии должны запрещать публикацию устаревшего кадра. Для неподдерживаемого WebGPU допускается только явно разрешённый диагностический Canvas2D fallback. Параметры производной геометрии должны формировать однозначный ключ. Этот срез не заменяет проверку Core/Regenerator C04/C05/LOFT и не требует переключения принятой Studio."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - derives_from
+    target:
+      kind: requirement
+      id: FGMV-PRODUCT-000
+  - predicates:
+      - depends_on
+    target:
+      kind: requirement
+      id: FGMV-SESSION-001
+  - predicates:
+      - depends_on
+    target:
+      kind: requirement
+      id: FGMV-WHOLE-001
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/runtime/renderer-session-v1.ts
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/runtime/tsconfig.json
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/renderer-session.test.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/renderer-session.browser.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/.github/workflows/repo-guard.yml
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: renderer/docs/renderer-session-s3-s2a.md

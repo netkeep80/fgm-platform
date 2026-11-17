@@ -1,0 +1,58 @@
+format: repo-guard/requirement-v1
+id: FGMR-PROJ-001
+normative: "### FGMR-PROJ-001 — Диагностическая диметрическая проекция местности. Регенератор должен воспроизводить экранные якоря клеток и вокселей для исходного холста 32×40, учитывая порядок округления и смещение камеры. Сравнение должно сохранять исходный якорь спрайта с поправкой P_Level, прозрачность нулевого индекса и координаты правой половины при выбранном режиме отсечения. В исходных пикселях он должен строить маску проекций занятых вокселей и вычислять число общих и несовпадающих пикселей со спрайтом. Якоря и маски проверяются на самостоятельно созданных сценах, отдельно от художественной реконструкции."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - derives_from
+    target:
+      kind: requirement
+      id: FGMR-PRODUCT-000
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/src/projection.hpp
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/src/projection.cpp
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/CMakeLists.txt
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: regenerator/.github/workflows/importer-ci.yml
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: regenerator/tests/test_r05.cpp
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/docs/r05-projection.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/docs/current-step.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/docs/requirements-hierarchy.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: regenerator/README.md

@@ -1,0 +1,81 @@
+format: repo-guard/requirement-v1
+id: FGMV-CAM-003
+normative: "### FGMV-CAM-003 — Камера карты в браузере. Браузерная демонстрация должна выводить синтетическую прямоугольную карту через WebGPU по проекции математической камеры, собранной в WASM, давать четыре поворота, сохранять мировую точку под курсором при масштабе и показывать клетку на явно заданной плоскости. Полный оборот должен восстанавливать исходный кадр при неизменных параметрах камеры."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - derives_from
+    target:
+      kind: requirement
+      id: FGMV-PRODUCT-000
+  - predicates:
+      - depends_on
+    target:
+      kind: requirement
+      id: FGMV-CAM-002
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/CMakeLists.txt
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/src/wasm-camera.cpp
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/web/fgm_scene.d.mts
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/web/camera.ts
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/web/camera.wgsl
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/web/camera.html
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/web/index.html
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: renderer/scripts/stage-web.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/browser.test.mjs
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: renderer/docs/v03-browser-camera.md
+constraints:
+  - id: fgmv_cam_003_browser_evidence
+    activation: scoped_change
+    scope:
+      relations:
+        - implemented_by
+        - verified_by
+    evidence:
+      class: execution
+      key: execution:renderer/tests/browser.test.mjs
+      verifier:
+        kind: artifact
+        path: renderer/tests/browser.test.mjs

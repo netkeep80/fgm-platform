@@ -1,0 +1,18 @@
+format: repo-guard/requirement-v1
+id: FGMV-PROJECT-000
+normative: "### FGMV-PROJECT-000 — Проект должен поддерживать явную иерархию требований, воспроизводимые свидетельства для точных ревизий, независимую проверку свойств продукта и соблюдение границ лицензий и исходных данных."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: renderer/README.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: renderer/docs/requirements-hierarchy.md

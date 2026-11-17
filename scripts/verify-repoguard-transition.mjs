@@ -1,9 +1,10 @@
 // Exact RepoGuard v6.0.1 integration regression: real synthetic Git BASE/HEAD.
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, appendFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runRepoGuard } from "./run-repoguard.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pin = "74db97791e6da8a75287164f0d0b41579108f114";
@@ -14,15 +15,7 @@ function git(cwd, ...args) {
   return execFileSync("git", args, {cwd, encoding:"utf8", stdio:["ignore","pipe","pipe"]}).trim();
 }
 function probe(directory, base, head) {
-  const proc = spawnSync(process.execPath,
-    [cli, "--repo-root", directory, "check", "--base", base, "--head", head, "--format", "json"],
-    { encoding:"utf8", maxBuffer: 16*1024*1024,
-      env: {...process.env, GITHUB_REPOSITORY:"netkeep80/fgm-platform"} });
-  if (proc.error) throw proc.error;
-  let report;
-  try { report=JSON.parse(proc.stdout); }
-  catch { throw new Error("RepoGuard returned non-JSON: "+proc.stderr.slice(0,1200)); }
-  return {status:proc.status,report};
+  return runRepoGuard(cli,"netkeep80/fgm-platform",directory,base,head);
 }
 function ensure(ok, code) {if(!ok) throw new Error("E_FGMP_S00B_"+code);}
 ensure(git(toolDir,"rev-parse","HEAD")===pin, "COMPILER_SHA");
