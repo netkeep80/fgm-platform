@@ -23,3 +23,9 @@
 ## Bootstrap CI
 
 `node --test tests/bootstrap.test.mjs` — actual positive+negative tests цепочки ссылок и pin; `node scripts/check-bootstrap.mjs` — проверка рабочего снимка; затем `RepoGuard exact BASE/HEAD` через pinned Action. GitHub required-check protection должна быть включена администратором отдельно.
+
+## S00B — полный нормативный переход, без bootstrap-исключения
+
+[Issue #25](https://github.com/netkeep80/fgm-platform/issues/25) фиксирует использованное разовое исключение исторического BASE. Для любого нового PR RepoGuard v6.0.1 должен проверять **оба нормативных** BASE/HEAD и завершаться SUCCESS без фильтрации diagnostics. Сквозной отрицательный тест `scripts/verify-repoguard-transition.mjs` создаёт отдельный временный Git-репозиторий, проверяет допустимое изменение документа и отвергает введённый не обоснованный Requirement ресурс через **реальный** pinned RepoGuard.
+
+Это тест исполняемого causal compiler, но не свидетельство включённой защиты ветки: required status check и запрет обхода задаются отдельно в GitHub Settings и фиксируются в Issue #25. До проверки этой настройки S00B остаётся незавершённым, а импорт исходников запрещён.

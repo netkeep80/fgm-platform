@@ -11,6 +11,8 @@ const paths=[
   "requirements/FGMP-PROJECT-000.rg.yaml",
   ".github/workflows/repo-guard.yml",
   "scripts/check-bootstrap.mjs","tests/bootstrap.test.mjs",
+  "scripts/verify-repoguard-transition.mjs",
+  "package.json","package-lock.json",
 ];
 function temporary(operate) {
   const tmp=mkdtempSync(join(tmpdir(),"fgmp-bootstrap-"));
@@ -27,7 +29,9 @@ test("positive: exact frozen RepoGuard revision, roots and artifact links",()=>
 );
 test("negative: replaced RepoGuard SHA fails closed",()=>temporary(tmp=>{
   const p=join(tmp,".github/workflows/repo-guard.yml");
-  writeFileSync(p,readFileSync(p,"utf8").replace(PIN,"0000000000000000000000000000000000000000"));
+  writeFileSync(p,readFileSync(p,"utf8").replace(
+    "uses: netkeep80/repo-guard@"+PIN,
+    "uses: netkeep80/repo-guard@0000000000000000000000000000000000000000"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
 }));
 test("negative: missing verified_by target fails closed",()=>temporary(tmp=>{
@@ -40,3 +44,76 @@ test("negative: candidate root lifecycle cannot masquerade as accepted bootstrap
   writeFileSync(p,readFileSync(p,"utf8").replace("accepted: true","accepted: false"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_ROOT_SCHEMA/);
 }));
+
+test("negative: CI cannot skip real synthetic transition regression",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  writeFileSync(p,readFileSync(p,"utf8").replace("node scripts/verify-repoguard-transition.mjs","echo ignored"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+test("negative: CI cannot continue on a failed RepoGuard action",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  writeFileSync(p,readFileSync(p,"utf8").replace("id: required_guard","id: required_guard\n        continue-on-error: true"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+
+
+test("negative: commented RepoGuard uses plus fake run cannot pass",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const w=readFileSync(p,"utf8");
+  const needle="        uses: netkeep80/repo-guard@"+PIN+"\n        with:\n";
+  assert.ok(w.includes(needle));
+  writeFileSync(p,w.replace(needle,"        # uses: netkeep80/repo-guard@"+PIN+"\n        run: echo fake-green\n        with:\n"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+
+test("negative: commented oracle invocation plus echo cannot pass",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const w=readFileSync(p,"utf8");
+  const needle="          node scripts/verify-repoguard-transition.mjs";
+  assert.ok(w.includes(needle));
+  writeFileSync(p,w.replace(needle,"          # node scripts/verify-repoguard-transition.mjs\n          echo fake-green"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+
+test("negative: conditional RepoGuard action cannot be skipped",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const w=readFileSync(p,"utf8");
+  writeFileSync(p,w.replace("        id: required_guard","        id: required_guard\n        if: false"));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+
+
+function workflowMutation(label, needle, replacement) {
+  test("negative YAML semantics: "+label,()=>temporary(tmp=>{
+    const p=join(tmp,".github/workflows/repo-guard.yml");
+    const w=readFileSync(p,"utf8");
+    assert.ok(w.includes(needle),"missing mutation anchor");
+    writeFileSync(p,w.replace(needle,replacement));
+    assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+  }));
+}
+workflowMutation("guard whitespace-before-colon conditional",
+  "        id: required_guard","        id: required_guard\n        if : false");
+workflowMutation("guard quoted conditional key",
+  "        id: required_guard",'        id: required_guard\n        "if": false');
+workflowMutation("guard whitespace-before-colon continue-on-error",
+  "        id: required_guard","        id: required_guard\n        continue-on-error : true");
+workflowMutation("oracle whitespace-before-colon conditional",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions\n        if : false");
+workflowMutation("oracle whitespace-before-colon continue-on-error",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions",
+  "      - name: Verify real RepoGuard positive and orphan-negative transitions\n        continue-on-error : true");
+workflowMutation("job whitespace-before-colon conditional",
+  "    runs-on: ubuntu-24.04","    runs-on: ubuntu-24.04\n    if : false");
+workflowMutation("duplicate effective guard key",
+  "        id: required_guard","        id: required_guard\n        id: required_guard");
+workflowMutation("alias/anchor forbidden in governance workflow",
+  "        id: required_guard","        id: &guard_id required_guard");
+workflowMutation("unapproved extra job with identical check name",
+  "jobs:\n","jobs:\n  fake:\n    name: RepoGuard exact BASE/HEAD\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo fake-green\n");
+workflowMutation("quoted continue-on-error job key",
+  "    runs-on: ubuntu-24.04",'    runs-on: ubuntu-24.04\n    "continue-on-error": true');
+workflowMutation("block scalar action uses cannot impersonate pinned uses",
+  "        uses: netkeep80/repo-guard@"+PIN,
+  "        run: |\n          uses: netkeep80/repo-guard@"+PIN);
