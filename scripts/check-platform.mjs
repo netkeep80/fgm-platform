@@ -213,8 +213,8 @@ const PINS={
   },
   ".github/workflows/platform.yml": {
     "mode": "100644",
-    "blob": "e11967697d0155f3cce0b414e9b10406e3baf656",
-    "sha256": "4ea1861232422890e85198e4a32beb92bfec7e5ddafa166e0e5576303d3f2835"
+    "blob": "84c3d6b52c436b8667274c0bb393a1e054df160f",
+    "sha256": "a5fc29f04734127def487b98df85d1efd8848d9b4d8fc015f88c6f2ecf951797"
   },
   "renderer/scripts/studio_release.py": {
     "mode": "100644",

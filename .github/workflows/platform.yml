@@ -158,13 +158,12 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "24"
-      - name: Reject empty CTest suites and masked native command failures
-        run: |
-          node --test tests/ctest-gate.test.mjs
-          node --test --test-name-pattern="real shell:" tests/bootstrap.test.mjs
+      - name: Reject empty and incomplete CTest suites
+        run: node --test tests/ctest-gate.test.mjs
       - name: Install the root workspace and verify Core and Renderer contracts
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
+          node --test --test-name-pattern="real shell:" tests/bootstrap.test.mjs
           node --test core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
           npm run test:node --workspace renderer
           node --test renderer/tests/studio-bundle.test.mjs
