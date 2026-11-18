@@ -4,6 +4,15 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 export const REQUIRED_SUITES=Object.freeze({
+  platform:Object.freeze(['fgm_cpu','core-c05-parity','core-external-consumer',
+    'raster-rvi-oracle','raster-c05-parity',
+    'r12-cli','r01-free-corpus','r02-map-mcd-facts','r03-loft-voxels','r04-sprite-facts',
+    'r05-projection','r06-reconstruction','r06-entity-evidence','r06-whole-object',
+    'r06-whole-build-native','r07-panel-fit','r07-local-source-baseline',
+    'r07-surface-observability','r07-local-constrained-fit','r07-whole-source-preflight',
+    'r07-whole-surface-observability','r07-whole-joint-synthetic-fit','rv01-reconstruction-viewer',
+    'regenerator-studio-protocol','regenerator-studio-cell','regenerator-studio-catalog',
+    'regenerator-studio-whole']),
   core:Object.freeze(['core-c05-parity','core-external-consumer','fgm_cpu']),
   consumer:Object.freeze(['consumer-public-api']),
 });

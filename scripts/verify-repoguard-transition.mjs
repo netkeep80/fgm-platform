@@ -4,6 +4,7 @@ import { cpSync, mkdtempSync, mkdirSync, readFileSync, appendFileSync, writeFile
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {parseDocument,stringify} from "yaml";
 import { runRepoGuard } from "./run-repoguard.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -54,7 +55,21 @@ try {
   ensure((negative.report.diagnostics||[]).some(x=>
     x.code==="unjustified_resource" &&
     String(x.subject||"").includes("not-authorized-in-requirements.txt")), "NEGATIVE_TYPED_DIAGNOSTIC");
-  console.log(JSON.stringify({result:"PASS",repoGuard:pin,positive:{
+  const typed=[];
+  const req=join(temp,"requirements/core/FGMC-EVAL-001.rg.yaml");
+  for(const kind of ["removed_verified_by","missing_target"]){
+    git(temp,"reset","--hard",goodHead);git(temp,"clean","-fd");
+    const document=parseDocument(readFileSync(req,"utf8")).toJS();
+    if(kind==="removed_verified_by")document.relations=document.relations.filter(r=>!r.predicates.includes("verified_by"));
+    else document.relations.find(r=>r.target.path==="core/src/evaluator.cpp").target.path="core/src/missing-policy-target.cpp";
+    writeFileSync(req,stringify(document));git(temp,"add","-A");git(temp,"commit","-qm","synthetic "+kind);
+    const result=probe(temp,goodHead,git(temp,"rev-parse","HEAD"));
+    ensure(result.status!==0&&!result.report.ok,"TYPED_NEGATIVE_FALSE_PASS");
+    ensure(result.report.diagnostics.some(d=>d.code==="unjustified_resource"),"TYPED_NEGATIVE_DIAGNOSTIC");
+    if(kind==="missing_target")ensure(result.report.diagnostics.some(d=>d.code==="missing_resource_target"),"MISSING_TARGET_DIAGNOSTIC");
+    typed.push({case:kind,result:"REJECTED_AS_EXPECTED",j3:result.report.j3,diagnostics:result.report.diagnostics});
+  }
+  console.log(JSON.stringify({result:"PASS",repoGuard:pin,typed_negative:typed,positive:{
     base:goodBase,head:goodHead,j1:positive.report.j1,j2:positive.report.j2,
     diagnostics:positive.report.diagnostics.length},
     negative:{base:goodHead,head:badHead,diagnostics:negative.report.diagnostics}},null,2));

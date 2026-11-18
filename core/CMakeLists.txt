@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(fgm_core LANGUAGES CXX)
 
-find_package(nlohmann_json 3.12.0 EXACT CONFIG QUIET)
+find_package(nlohmann_json 3.12.0 EXACT CONFIG QUIET GLOBAL)
 if(NOT nlohmann_json_FOUND)
   include(FetchContent)
   FetchContent_Declare(nlohmann_json

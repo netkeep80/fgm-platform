@@ -15,12 +15,12 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/src/rvi-v02.hpp
+      path: raster/rvi-v02.hpp
   - predicates:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/src/rvi-v02.cpp
+      path: raster/rvi-v02.cpp
   - predicates:
       - verified_by
     target:

@@ -3,16 +3,16 @@ project(fgm_regenerator VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-include(FetchContent)
+include(CTest)
+# Семантический revision идентифицирует неизменённый контракт, не сетевой source pin.
 set(FGMR_CORE_REVISION ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b)
-FetchContent_Declare(fgm_core
-  GIT_REPOSITORY https://github.com/netkeep80/fgm-core.git
-  GIT_TAG ${FGMR_CORE_REVISION}
-)
-set(BUILD_TESTING OFF)
-# R07 использует тот же JSON-пакет, что и ядро. Установленная зависимость нужна в обеих областях видимости.
-find_package(nlohmann_json 3.12.0 EXACT CONFIG QUIET)
-FetchContent_MakeAvailable(fgm_core)
+if(NOT TARGET fgm::cpu)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../core" "${CMAKE_CURRENT_BINARY_DIR}/core")
+endif()
+if(NOT TARGET fgm::raster)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../raster" "${CMAKE_CURRENT_BINARY_DIR}/raster")
+endif()
+option(FGMR_BUILD_TESTS "Собирать предметные тесты Regenerator" "${BUILD_TESTING}")
 
 add_library(fgmr-occupancy STATIC src/model-occupancy.cpp)
 target_link_libraries(fgmr-occupancy PUBLIC fgm::cpu)
@@ -67,11 +67,7 @@ endif()
 if(MINGW)
   target_link_options(fgm-regenerator PRIVATE -municode)
 endif()
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-enable_testing()
-add_test(NAME r12-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_cli.py" "$<TARGET_FILE:fgm-regenerator>")
 
-add_test(NAME r01-free-corpus COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_corpus.py")
 
 add_executable(fgmr-r02 src/facts-main.cpp)
 target_link_libraries(fgmr-r02 PRIVATE fgmr-terrain)
@@ -80,7 +76,6 @@ if(MSVC)
 else()
   target_compile_options(fgmr-r02 PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
-add_test(NAME r02-map-mcd-facts COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_r02.py" "$<TARGET_FILE:fgmr-r02>")
 
 add_executable(fgmr-r03 src/loft-main.cpp)
 target_link_libraries(fgmr-r03 PRIVATE fgmr-terrain)
@@ -89,7 +84,6 @@ if(MSVC)
 else()
   target_compile_options(fgmr-r03 PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
-add_test(NAME r03-loft-voxels COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_r03.py" "$<TARGET_FILE:fgmr-r03>")
 
 add_executable(fgmr-r04 src/sprite-main.cpp)
 target_link_libraries(fgmr-r04 PRIVATE fgmr-terrain)
@@ -101,8 +95,8 @@ endif()
 if(MINGW)
   target_link_options(fgmr-r04 PRIVATE -municode)
 endif()
-add_test(NAME r04-sprite-facts COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_r04.py" "$<TARGET_FILE:fgmr-r04>")
 
+if(BUILD_TESTING AND FGMR_BUILD_TESTS)
 add_executable(fgmr-r05-test tests/test_r05.cpp)
 target_link_libraries(fgmr-r05-test PRIVATE fgmr-projection)
 foreach(target IN ITEMS fgmr-r05-test)
@@ -112,7 +106,8 @@ foreach(target IN ITEMS fgmr-r05-test)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
   endif()
 endforeach()
-add_test(NAME r05-projection COMMAND fgmr-r05-test)
+
+endif()
 
 add_executable(fgmr-r06-sample src/model-sample.cpp)
 target_link_libraries(fgmr-r06-sample PRIVATE fgmr-occupancy fgmr-projection)
@@ -124,13 +119,7 @@ endif()
 if(MINGW)
   target_link_options(fgmr-r06-sample PRIVATE -municode)
 endif()
-add_test(NAME r06-reconstruction COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_r06.py"
-  "${CMAKE_SOURCE_DIR}/scripts/reconstruct_r06.py" "$<TARGET_FILE:fgmr-r06-sample>"
-  "$<TARGET_FILE:fgmr-r03>" "$<TARGET_FILE:fgmr-r04>")
 
-add_test(NAME r06-entity-evidence COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_r06_evidence.py"
-  "${CMAKE_SOURCE_DIR}/scripts/build_r06_evidence.py" "$<TARGET_FILE:fgmr-r02>"
-  "${CMAKE_SOURCE_DIR}/scripts/verify_r06_membership.py")
 
 # R06-S2B2: independent C05 sampling of one whole-object FGM model.
 add_executable(fgmr-r06-multicell-sample src/multicell-sample.cpp)
@@ -140,8 +129,6 @@ if(MSVC)
 else()
   target_compile_options(fgmr-r06-multicell-sample PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
-add_test(NAME r06-whole-object COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_r06_multicell.py"
-  "${CMAKE_SOURCE_DIR}/scripts/assemble_r06_multicell.py" "$<TARGET_FILE:fgmr-r06-multicell-sample>")
 
 add_executable(fgmr-r06-whole-build src/whole-build-main.cpp)
 target_link_libraries(fgmr-r06-whole-build PRIVATE fgmr-whole-build)
@@ -153,33 +140,17 @@ endif()
 if(MINGW)
   target_link_options(fgmr-r06-whole-build PRIVATE -municode)
 endif()
-add_test(NAME r06-whole-build-native COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_whole_build.py"
-  "${CMAKE_SOURCE_DIR}/scripts/assemble_r06_multicell.py" "$<TARGET_FILE:fgmr-r06-multicell-sample>"
-  "$<TARGET_FILE:fgmr-r06-whole-build>")
 
-FetchContent_Declare(fgm_renderer
-  GIT_REPOSITORY https://github.com/netkeep80/fgm-renderer.git
-  GIT_TAG 5766004c3787609d78ade5d380ad57366de5cd43
-  SOURCE_SUBDIR cmake/r07-source-only
-)
-FetchContent_MakeAvailable(fgm_renderer)
-add_library(fgmr-v02 STATIC "${fgm_renderer_SOURCE_DIR}/src/rvi-v02.cpp")
-target_include_directories(fgmr-v02 PUBLIC "${fgm_renderer_SOURCE_DIR}/src")
 add_executable(fgmr-r07-fit src/panel-fit.cpp)
-target_link_libraries(fgmr-r07-fit PRIVATE fgmr-v02 fgm::cpu nlohmann_json::nlohmann_json)
+target_link_libraries(fgmr-r07-fit PRIVATE fgm::raster fgm::cpu nlohmann_json::nlohmann_json)
 if(MSVC)
   target_compile_options(fgmr-r07-fit PRIVATE /W4 /utf-8 /WX)
 else()
   target_compile_options(fgmr-r07-fit PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
-add_test(NAME r07-panel-fit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_r07.py"
-  "${CMAKE_SOURCE_DIR}/scripts/run_r07.py" "$<TARGET_FILE:fgmr-r07-fit>")
 
 # R07-EARLY-MVP S0: только локальная source-to-cell проверка и C05/R05 baseline.
 # Для CI — исключительно синтетические данные, нативный исполнитель без второго R04/R05.
-add_test(NAME r07-local-source-baseline COMMAND "${Python3_EXECUTABLE}"
-  "${CMAKE_SOURCE_DIR}/tests/test_r07_local_observation.py"
-  "${CMAKE_SOURCE_DIR}/scripts/r07_local_observation.py" "$<TARGET_FILE:fgmr-studio-native>")
 
 # R07-S1A: opt-in continuous-surface R05 ray observations, never replacing R05/LOFT.
 add_executable(fgmr-r07-surface src/r07-surface-main.cpp)
@@ -190,24 +161,11 @@ if(MSVC)
 else()
   target_compile_options(fgmr-r07-surface PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
-add_test(NAME r07-surface-observability COMMAND "${Python3_EXECUTABLE}"
-  "${CMAKE_SOURCE_DIR}/tests/test_r07_surface.py" "$<TARGET_FILE:fgmr-r07-surface>")
 
 # R07-S1B0: private/local source-bound R03 / R04 / R05 / C05 constrained fit pilot.
 # Public CI runs original synthetic fixtures only.
-add_test(NAME r07-local-constrained-fit COMMAND "${Python3_EXECUTABLE}"
-  "${CMAKE_SOURCE_DIR}/tests/test_r07_local_fit.py"
-  "${CMAKE_SOURCE_DIR}/scripts/r07_local_fit.py"
-  "$<TARGET_FILE:fgmr-studio-native>" "$<TARGET_FILE:fgmr-r03>"
-  "$<TARGET_FILE:fgmr-r07-surface>")
 
 # R07-S1B1A: independently pinned B1 membership ↔ exact local source ↔ native R03, no fitted whole object.
-add_test(NAME r07-whole-source-preflight COMMAND "${Python3_EXECUTABLE}"
-  "${CMAKE_SOURCE_DIR}/tests/test_r07_whole_source_preflight.py"
-  "${CMAKE_SOURCE_DIR}/scripts/r07_whole_source_preflight.py"
-  "$<TARGET_FILE:fgmr-studio-native>" "$<TARGET_FILE:fgmr-r03>"
-  "${CMAKE_SOURCE_DIR}/scripts/r07_whole_source_fit.py"
-  "$<TARGET_FILE:fgmr-r06-whole-build>" "$<TARGET_FILE:fgmr-r07-whole-surface>")
 
 # R07-S1B1B0: opt-in whole-FGM, strict joint C05 across 2..8 local cells,
 # then separately observed continuous R05 cell silhouettes in one FGM basis.
@@ -219,19 +177,72 @@ if(MSVC)
 else()
   target_compile_options(fgmr-r07-whole-surface PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
-add_test(NAME r07-whole-surface-observability COMMAND "${Python3_EXECUTABLE}"
-  "${CMAKE_SOURCE_DIR}/tests/test_r07_whole_surface.py"
-  "$<TARGET_FILE:fgmr-r07-whole-surface>")
 
 # R07-S1B1B1A: strictly synthetic multi-observation joint-fit of ONE whole FGM.
 # Native R07-S1B1B0 remains the only C05/raster evaluator.
-add_test(NAME r07-whole-joint-synthetic-fit COMMAND "${Python3_EXECUTABLE}"
-  "${CMAKE_SOURCE_DIR}/tests/test_r07_whole_joint_fit.py"
-  "${CMAKE_SOURCE_DIR}/scripts/r07_whole_joint_fit.py"
-  "$<TARGET_FILE:fgmr-r07-whole-surface>")
 
 # RV01: синтетическая диагностика и контракт локального просмотрщика без игровых ресурсов
-add_test(NAME rv01-reconstruction-viewer COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_rv01.py"
-  "${CMAKE_SOURCE_DIR}/scripts/export_rv01.py"
-  "${CMAKE_SOURCE_DIR}/scripts/run_r07.py"
-  "$<TARGET_FILE:fgmr-r07-fit>" "${CMAKE_SOURCE_DIR}/viewer/index.html")
+
+if(BUILD_TESTING AND FGMR_BUILD_TESTS)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  find_program(FGMR_NODE_EXECUTABLE NAMES node REQUIRED)
+  add_test(NAME r12-cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cli.py" "$<TARGET_FILE:fgm-regenerator>")
+  add_test(NAME r01-free-corpus COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_corpus.py")
+  add_test(NAME r02-map-mcd-facts COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r02.py" "$<TARGET_FILE:fgmr-r02>")
+  add_test(NAME r03-loft-voxels COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r03.py" "$<TARGET_FILE:fgmr-r03>")
+  add_test(NAME r04-sprite-facts COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r04.py" "$<TARGET_FILE:fgmr-r04>")
+  add_test(NAME r05-projection COMMAND fgmr-r05-test)
+  add_test(NAME r06-reconstruction COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r06.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/reconstruct_r06.py" "$<TARGET_FILE:fgmr-r06-sample>"
+    "$<TARGET_FILE:fgmr-r03>" "$<TARGET_FILE:fgmr-r04>")
+  add_test(NAME r06-entity-evidence COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r06_evidence.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build_r06_evidence.py" "$<TARGET_FILE:fgmr-r02>"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/verify_r06_membership.py")
+  add_test(NAME r06-whole-object COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r06_multicell.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/assemble_r06_multicell.py" "$<TARGET_FILE:fgmr-r06-multicell-sample>")
+  add_test(NAME r06-whole-build-native COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_whole_build.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/assemble_r06_multicell.py" "$<TARGET_FILE:fgmr-r06-multicell-sample>"
+    "$<TARGET_FILE:fgmr-r06-whole-build>")
+  add_test(NAME r07-panel-fit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_r07.py" "$<TARGET_FILE:fgmr-r07-fit>")
+  add_test(NAME r07-local-source-baseline COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_local_observation.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/r07_local_observation.py" "$<TARGET_FILE:fgmr-studio-native>")
+  add_test(NAME r07-surface-observability COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_surface.py" "$<TARGET_FILE:fgmr-r07-surface>")
+  add_test(NAME r07-local-constrained-fit COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_local_fit.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/r07_local_fit.py"
+    "$<TARGET_FILE:fgmr-studio-native>" "$<TARGET_FILE:fgmr-r03>"
+    "$<TARGET_FILE:fgmr-r07-surface>")
+  add_test(NAME r07-whole-source-preflight COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_whole_source_preflight.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/r07_whole_source_preflight.py"
+    "$<TARGET_FILE:fgmr-studio-native>" "$<TARGET_FILE:fgmr-r03>"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/r07_whole_source_fit.py"
+    "$<TARGET_FILE:fgmr-r06-whole-build>" "$<TARGET_FILE:fgmr-r07-whole-surface>")
+  add_test(NAME r07-whole-surface-observability COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_whole_surface.py"
+    "$<TARGET_FILE:fgmr-r07-whole-surface>")
+  add_test(NAME r07-whole-joint-synthetic-fit COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_whole_joint_fit.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/r07_whole_joint_fit.py"
+    "$<TARGET_FILE:fgmr-r07-whole-surface>")
+  add_test(NAME rv01-reconstruction-viewer COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rv01.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/export_rv01.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_r07.py"
+    "$<TARGET_FILE:fgmr-r07-fit>" "${CMAKE_CURRENT_SOURCE_DIR}/viewer/index.html")
+
+  add_test(NAME regenerator-studio-protocol COMMAND "${FGMR_NODE_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_studio.mjs" "$<TARGET_FILE:fgmr-studio-native>")
+  add_test(NAME regenerator-studio-cell COMMAND "${FGMR_NODE_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_studio_cell.mjs" "$<TARGET_FILE:fgmr-studio-native>")
+  add_test(NAME regenerator-studio-catalog COMMAND "${FGMR_NODE_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_studio_catalog.mjs" "$<TARGET_FILE:fgmr-studio-native>")
+  add_test(NAME regenerator-studio-whole COMMAND "${FGMR_NODE_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_studio_whole.mjs" "$<TARGET_FILE:fgmr-studio-native>"
+    "$<TARGET_FILE:fgmr-r06-multicell-sample>" --builder "$<TARGET_FILE:fgmr-r06-whole-build>")
+  set_tests_properties(regenerator-studio-protocol regenerator-studio-cell
+    regenerator-studio-catalog regenerator-studio-whole PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" ENVIRONMENT "PYTHON=${Python3_EXECUTABLE}" TIMEOUT 300)
+endif()

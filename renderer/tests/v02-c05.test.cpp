@@ -1,4 +1,4 @@
-#include "../src/rvi-v02.hpp"
+#include "rvi-v02.hpp"
 #include <fgm/evaluator.hpp>
 #include <nlohmann/json.hpp>
 

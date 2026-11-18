@@ -4,20 +4,21 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 
 await mkdir("build/v02", { recursive: true });
-execFileSync("g++", [
-  "-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", "-pedantic",
-  "src/rvi-v02.cpp", "tests/rvi-v02.test.cpp", "-o", "build/v02/v02-verify"
+const binary = process.argv[2] || "build/v02/v02-verify";
+if (!process.argv[2]) execFileSync("g++", [
+  "-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I../raster",
+  "../raster/rvi-v02.cpp", "tests/rvi-v02.test.cpp", "-o", "build/v02/v02-verify"
 ], { stdio: "inherit" });
 
 const inputs = await Promise.all([
   readFile("tests/fixtures/v02-scenes.txt"),
-  readFile("src/rvi-v02.cpp"),
+  readFile("../raster/rvi-v02.cpp"),
   readFile("tests/rvi-v02.test.cpp"),
 ]);
 const digest = data => createHash("sha256").update(data).digest("hex");
 let stdout;
 try {
-  stdout = execFileSync("build/v02/v02-verify", ["tests/fixtures/v02-scenes.txt", "build/v02/hits.csv"],
+  stdout = execFileSync(binary, ["tests/fixtures/v02-scenes.txt", "build/v02/hits.csv"],
     { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
 } catch (error) {
   stdout = error.stdout?.toString("utf8") ?? "";
@@ -33,7 +34,7 @@ report.input_digests = {
   oracle: digest(inputs[2]),
 };
 if (report.ok) {
-  const repeat = execFileSync("build/v02/v02-verify",
+  const repeat = execFileSync(binary,
     ["tests/fixtures/v02-scenes.txt", "build/v02/hits-repeat.csv"],
     { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
   const repeatedHits = await readFile("build/v02/hits-repeat.csv");
