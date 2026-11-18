@@ -229,6 +229,25 @@ def check_release_target(data: dict, revision: str, query=api) -> None:
     check_tag(revision, query, allow_missing=data["draft"])
 
 
+def release_snapshot(revision: str, query=api) -> dict | None:
+    """Read unpublished GitHub Draft by provider ID (tag lookup is 404 until publication)."""
+    listing = query("releases?per_page=100")
+    require(type(listing) is list and len(listing) < 100, "RELEASE_LIST")
+    matches = [r for r in listing if isinstance(r, dict) and r.get("tag_name") == release_tag(revision)]
+    require(len(matches) <= 1, "RELEASE_DUPLICATE")
+    if not matches:
+        return None
+    listed = matches[0]
+    release_id = listed.get("id")
+    require(type(release_id) is int and release_id > 0, "RELEASE_ID")
+    detail = query("releases/" + str(release_id))
+    require(isinstance(detail, dict) and detail.get("id") == release_id
+            and detail.get("tag_name") == release_tag(revision), "RELEASE_ID")
+    require(all(detail.get(k) == listed.get(k)
+                for k in ("target_commitish", "draft", "prerelease")), "RELEASE_DRIFT")
+    return detail
+
+
 def restore(revision: str, output: Path, *, repo: Path = PLATFORM, query=api, fetch=None) -> dict:
     check_repository(query(""))
     git(repo, "merge-base", "--is-ancestor", revision, "HEAD")
@@ -273,15 +292,16 @@ def retain(archive: Path, bundle: Path, revision: str, *, repo: Path = PLATFORM)
     with tempfile.TemporaryDirectory() as directory:
         info = unpack(archive.read_bytes(), Path(directory) / "checked", revision, repo=repo)
     tag = release_tag(revision)
-    releases = api("releases?per_page=100")
-    existing = next((r for r in releases if r.get("tag_name") == tag), None)
+    existing = release_snapshot(revision, api)
     if existing is None:
         check_tag(revision, api, allow_missing=True)
         gh("release", "create", tag, "--repo", REPOSITORY, "--target", revision, "--draft",
            "--title", "Platform Studio " + info["version"], "--notes",
            "Verified Platform Studio; source " + revision + ", TREE " + info["tree"] + ".",
            binary=True)
-        existing = api("releases/tags/" + tag)
+        existing = release_snapshot(revision, api)
+        require(existing is not None and existing.get("draft") is True, "RELEASE_CREATE")
+    require(existing is not None, "RELEASE")
     check_release_target(existing, revision, api)
     for path in (archive, bundle):
         asset = next((a for a in existing.get("assets", []) if a.get("name") == path.name), None)
@@ -289,8 +309,8 @@ def retain(archive: Path, bundle: Path, revision: str, *, repo: Path = PLATFORM)
             require(existing.get("draft") is True, "RELEASE_ASSETS")
             gh("release", "upload", tag, str(path), "--repo", REPOSITORY, binary=True)
     # Never clobber a prior accepted release; validate stored bytes/signature before making it current.
-    current = api("releases/tags/" + tag)
-    require(len(current.get("assets", [])) == 2
+    current = release_snapshot(revision, api)
+    require(current is not None and len(current.get("assets", [])) == 2
             and {a["name"] for a in current["assets"]} == {ARCHIVE, BUNDLE}, "RELEASE_ASSETS")
     with tempfile.TemporaryDirectory() as directory:
         directory = Path(directory)
@@ -299,7 +319,9 @@ def retain(archive: Path, bundle: Path, revision: str, *, repo: Path = PLATFORM)
         require(digest((directory / ARCHIVE).read_bytes()) == digest(archive.read_bytes()), "RELEASE_CONFLICT")
         verify_attestation(directory / ARCHIVE, directory / BUNDLE, revision)
     # Re-read after uploads/download/signature verification, before the public/latest transition.
-    check_release_target(api("releases/tags/" + tag), revision, api)
+    final_draft = release_snapshot(revision, api)
+    require(final_draft is not None, "RELEASE")
+    check_release_target(final_draft, revision, api)
     gh("release", "edit", tag, "--repo", REPOSITORY, "--draft=false", "--latest", binary=True)
     check_tag(revision, api)
     return info
