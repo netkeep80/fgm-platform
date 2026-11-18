@@ -20,7 +20,7 @@ from scripts.studio_pages import (
 from scripts.studio_release import (
     ARCHIVE, BUNDLE, INDEX, REPOSITORY, REPOSITORY_ID, REQUIRED_JOBS, WORKFLOW,
     api, archive_bytes, check_ci_origin, check_current_main, check_release, check_tag,
-    prepare_ci, previous, read_archive, restore, retain, seal, unpack, verify_attestation,
+    prepare_ci, previous, read_archive, release_snapshot, restore, retain, seal, unpack, verify_attestation,
 )
 
 
@@ -313,13 +313,18 @@ class ReleaseTests(unittest.TestCase):
     def test_retain_cannot_promote_existing_release_with_retargeted_tag(self):
         bundle = self.root / BUNDLE
         bundle.write_text("signature-fixture")
-        existing = {"tag_name": "studio-" + self.revision, "draft": False, "prerelease": False}
+        existing = {"id": 91, "tag_name": "studio-" + self.revision,
+                    "draft": False, "prerelease": False, "target_commitish": "main"}
         def query(p):
             if p == "":
                 return self.query("")
             if p.startswith("git/ref"):
                 return {"object": {"type": "commit", "sha": "e" * 40}}
-            return [existing]
+            if p == "releases?per_page=100":
+                return [existing]
+            if p == "releases/91":
+                return existing
+            self.fail("Unexpected API route " + p)
         with patch("scripts.studio_release.api", side_effect=query), \
                 patch("scripts.studio_release.verify_attestation"), \
                 patch("scripts.studio_release.gh") as command:
@@ -345,6 +350,10 @@ class ReleaseTests(unittest.TestCase):
             if path == "releases?per_page=100":
                 return [copy.deepcopy(state["release"])] if state["existing"] else []
             if path == "releases/tags/studio-" + self.revision:
+                if state["release"]["draft"]:
+                    raise ValueError("E_STUDIO_RELEASE_GITHUB_COMMAND")
+                return copy.deepcopy(state["release"])
+            if path == "releases/91":
                 return copy.deepcopy(state["release"])
             if path == "git/ref/tags/studio-" + self.revision:
                 return copy.deepcopy(state["tag"])
@@ -399,9 +408,12 @@ class ReleaseTests(unittest.TestCase):
                 result = retain(self.archive, bundle, self.revision, repo=self.repo)
                 self.assertEqual(result["archive_sha256"], checksum(self.data))
                 publish = next(i for i, c in enumerate(calls) if c[:3] == ("gh", "release", "edit"))
-                self.assertEqual(calls[publish - 2:publish], [
-                    ("api", "releases/tags/studio-" + self.revision),
+                self.assertEqual(calls[publish - 3:publish], [
+                    ("api", "releases?per_page=100"),
+                    ("api", "releases/91"),
                     ("api", "git/ref/tags/studio-" + self.revision)])
+                self.assertFalse(any(c == ("api", "releases/tags/studio-" + self.revision)
+                                     for c in calls))
                 self.assertEqual(calls[-1], ("api", "git/ref/tags/studio-" + self.revision))
                 self.assertFalse(state["release"]["draft"])
 
@@ -436,6 +448,46 @@ class ReleaseTests(unittest.TestCase):
             retain(self.archive, bundle, self.revision, repo=self.repo)
             self.assertFalse(any(c[:3] == ("gh", "release", "upload") for c in calls))
             self.assertTrue(any(c[:3] == ("gh", "release", "edit") for c in calls))
+
+
+    def test_real_draft_404_tag_lookup_does_not_block_id_based_retain(self):
+        with self.release_provider() as (state, calls, bundle):
+            result = retain(self.archive, bundle, self.revision, repo=self.repo)
+            self.assertEqual(result["archive_sha256"], checksum(self.data))
+            self.assertFalse(state["release"]["draft"])
+            self.assertTrue(any(c == ("api", "releases/91") for c in calls))
+            self.assertFalse(any(c == ("api", "releases/tags/studio-" + self.revision)
+                                 for c in calls))
+            self.assertEqual(len([c for c in calls if c[:3] == ("gh", "release", "upload")]), 2)
+
+    def test_partial_draft_with_no_tag_resumes_without_create(self):
+        with self.release_provider() as (state, calls, bundle):
+            retain(self.archive, bundle, self.revision, repo=self.repo)
+            self.assertFalse(any(c[:3] == ("gh", "release", "create") for c in calls))
+            self.assertTrue(any(c[:3] == ("gh", "release", "edit") for c in calls))
+            self.assertEqual({a["name"] for a in state["release"]["assets"]}, {ARCHIVE, BUNDLE})
+
+    def test_release_snapshot_rejects_ambiguous_or_invalid_provider_draft(self):
+        correct = {"id": 91, "tag_name": "studio-" + self.revision,
+                   "draft": True, "prerelease": False, "target_commitish": self.revision}
+        for listing in ([correct, correct], [{**correct, "id": 0}],
+                        [{**correct, "id": "91"}], [correct] * 100):
+            with self.subTest(listing=listing):
+                with self.assertRaisesRegex(ValueError, "RELEASE_DUPLICATE|RELEASE_ID|RELEASE_LIST"):
+                    release_snapshot(self.revision, lambda p: copy.deepcopy(listing))
+
+    def test_release_snapshot_rejects_stale_provider_id_or_target(self):
+        correct = {"id": 91, "tag_name": "studio-" + self.revision,
+                   "draft": True, "prerelease": False, "target_commitish": self.revision}
+        for changed in ({"id": 92}, {"tag_name": "studio-" + "e" * 40},
+                        {"target_commitish": "e" * 40}, {"draft": False}):
+            def query(path):
+                if path == "releases?per_page=100":
+                    return [copy.deepcopy(correct)]
+                self.assertEqual(path, "releases/91")
+                return {**correct, **changed}
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "RELEASE_ID|RELEASE_DRIFT"):
+                release_snapshot(self.revision, query)
 
     def test_only_exact_studio_tag_404_is_optional_and_api_errors_fail_closed(self):
         path = "git/ref/tags/studio-" + self.revision
