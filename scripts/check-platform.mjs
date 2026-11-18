@@ -218,13 +218,13 @@ const PINS={
   },
   "renderer/scripts/studio_release.py": {
     "mode": "100644",
-    "blob": "53f8720d52f3f74fc2bf72d9d3c21abb4c5a0901",
-    "sha256": "e17e338a87c505dc101809a810dee137bb7363e21f8f5178c73d69a7527887d3"
+    "blob": "bb8a031fd904089e133745c4f4932847943e2ebf",
+    "sha256": "7230ad7f752240d1f7fd0348368b13fcc0ac1c4976a694e77388d6646ec8354a"
   },
   "renderer/tests/test_studio_release.py": {
     "mode": "100644",
-    "blob": "8c6eb5435ce5f476d0089f0661a0d79e2adc4b2a",
-    "sha256": "a0aa5cf0338f49b3981ccdf66121ca20f99b46626a0a588fad4c742d23b10414"
+    "blob": "e5cab557c0fb4b006c01d00d62e143a1fce8b6d5",
+    "sha256": "9e700f3f940c68fe073c13bc3358c918165c808a8ad42f40d6909c17d7c8bd32"
   },
   "requirements/FGMP-RELEASE-001.rg.yaml": {
     "mode": "100644",
