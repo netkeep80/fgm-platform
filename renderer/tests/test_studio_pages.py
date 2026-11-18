@@ -97,7 +97,7 @@ class StudioPagesTests(unittest.TestCase):
         second = prepare_studio(self.bundle, self.root / "updated-site", another_revision, "1.1", repo=self.repo)
         changed = {name for name in first if first[name] != second[name]}
         self.assertEqual(changed, {"index.html", "studio-manifest.json"})
-        self.assertIn("Версия 1.1", (self.root / "updated-site/index.html").read_text())
+        self.assertIn("Версия 1.1", (self.root / "updated-site/index.html").read_text(encoding="utf-8"))
 
     def test_rejects_invalid_revision(self):
         self.write_bundle()

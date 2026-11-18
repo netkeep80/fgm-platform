@@ -12,7 +12,7 @@ const requiredPaths = [
   "LICENSE",
   "requirements/FGMP-PRODUCT-000.rg.yaml",
   "requirements/FGMP-PROJECT-000.rg.yaml",
-  ".github/workflows/repo-guard.yml",
+  ".github/workflows/platform.yml",
   "scripts/check-bootstrap.mjs",
   "tests/bootstrap.test.mjs",
   "scripts/verify-repoguard-transition.mjs",
@@ -72,20 +72,40 @@ function checkWorkflowGate(workflow) {
     seq.items.forEach((v,i)=>must(eq(v,want[i])));
   };
 
-  const root=map(doc.contents,["name","on","permissions","jobs"]);
-  must(eq(node(root,"name"),"FGM Platform — RepoGuard v6.0.1 exact BASE/HEAD"));
-  const on=map(node(root,"on"),["pull_request"]);
+  const root=map(doc.contents,["name","on","permissions","env","defaults","jobs"]);
+  must(eq(node(root,"name"),"FGM Platform — verify, publish and rollback"));
+  const on=map(node(root,"on"),["pull_request","push","workflow_dispatch"]);
   const pr=map(node(on,"pull_request"),["types","branches"]);
   strings(node(pr,"types"),["opened","reopened","synchronize","ready_for_review"]);
   strings(node(pr,"branches"),["main"]);
+  const push=map(node(on,"push"),["branches"]);strings(node(push,"branches"),["main"]);
   const perms=map(node(root,"permissions"),["contents"]);
   must(eq(node(perms,"contents"),"read"));
-  const jobs=map(node(root,"jobs"),["repo-guard"]);
-  const job=map(node(jobs,"repo-guard"),["name","runs-on","steps"]);
-  must(eq(node(job,"name"),"RepoGuard exact BASE/HEAD") &&
-       eq(node(job,"runs-on"),"ubuntu-24.04"));
+  const environment=map(node(root,"env"),["SOURCE_REV"]);
+  must(eq(node(environment,"SOURCE_REV"),"$"+"{{ github.event.pull_request.head.sha || github.sha }}"));
+  const defaults=map(node(root,"defaults"),["run"]);
+  const runDefaults=map(node(defaults,"run"),["shell"]);
+  must(eq(node(runDefaults,"shell"),"bash"));
+  const jobs=map(node(root,"jobs"),["repo-guard","platform-policy","core","wasm-browser","release"]);
+  const verification="github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'";
+  const expectedNames={"repo-guard":"RepoGuard exact BASE/HEAD","platform-policy":"Platform policy / $"+"{{ matrix.os }}",
+    core:"Native Platform / $"+"{{ matrix.os }}","wasm-browser":"Local WASM, WebGPU and Chromium / ubuntu-24.04"};
+  for(const [id,name]of Object.entries(expectedNames)){
+    const j=node(jobs,id);must(isMap(j)&&eq(node(j,"name"),name)&&eq(node(j,"if"),verification));
+    must(!j.has("continue-on-error")&&!j.has("permissions"));
+  }
+  const release=node(jobs,"release");must(isMap(release));
+  must(eq(node(release,"if"),"always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback') || (needs.repo-guard.result == 'success' && needs.platform-policy.result == 'success' && needs.core.result == 'success' && needs.wasm-browser.result == 'success'))"));
+  strings(node(release,"needs"),["repo-guard","platform-policy","core","wasm-browser"]);
+  const releasePermissions=map(node(release,"permissions"),["contents","actions","pages","id-token","attestations"]);
+  for(const [name,value]of Object.entries({contents:"write",actions:"read",pages:"write","id-token":"write",attestations:"write"}))
+    must(eq(node(releasePermissions,name),value));
+  const concurrency=map(node(release,"concurrency"),["group","cancel-in-progress"]);
+  must(eq(node(concurrency,"group"),"fgm-platform-pages")&&eq(node(concurrency,"cancel-in-progress"),false));
+  const job=map(node(jobs,"repo-guard"),["name","runs-on","steps","if"]);
+  must(eq(node(job,"name"),"RepoGuard exact BASE/HEAD")&&eq(node(job,"runs-on"),"ubuntu-24.04"));
   const steps=node(job,"steps");
-  must(isSeq(steps) && steps.items.length===9);
+  must(isSeq(steps) && steps.items.length===10);
   const step=(index,name,keys)=>{
     const s=map(steps.items[index],["name",...keys]);
     must(eq(node(s,"name"),name));
@@ -101,9 +121,9 @@ function checkWorkflowGate(workflow) {
   const pinned="74db97791e6da8a75287164f0d0b41579108f114";
   const eventSha=dim=>"$"+"{{ github.event.pull_request."+dim+".sha }}";
 
-  const source=step(0,"Checkout exact PR HEAD",["uses","with"]);
+  const source=step(0,"Checkout exact source",["uses","with"]);
   must(eq(node(source,"uses"),checkout));
-  withOptions(source,{ref:eventSha("head"),"fetch-depth":0,"persist-credentials":false});
+  withOptions(source,{ref:"$"+"{{ env.SOURCE_REV }}","fetch-depth":0,"persist-credentials":false});
   const setup=step(1,"Set up Node.js 24",["uses","with"]);
   must(eq(node(setup,"uses"),setupNode));
   withOptions(setup,{"node-version":"24"});
@@ -126,22 +146,30 @@ function checkWorkflowGate(workflow) {
     "(cd .rg-transition && npm install --omit=dev --silent)\n"+
     "node scripts/verify-repoguard-transition.mjs\n"));
 
-  const required=step(5,"RepoGuard exact immutable snapshot",["id","uses","with"]);
-  must(eq(node(required,"id"),"required_guard") &&
-       eq(node(required,"uses"),"netkeep80/repo-guard@"+pinned));
-  withOptions(required,{base:eventSha("base"),head:eventSha("head"),"node-version":"24"});
+  const transition=step(5,"Determine exact transition BASE",["id","env","run"]);
+  must(eq(node(transition,"id"),"transition"));
+  const event=map(node(transition,"env"),["EVENT_BASE"]);
+  must(eq(node(event,"EVENT_BASE"),"$"+"{{ github.event.pull_request.base.sha || github.event.before }}"));
+  must(eq(node(transition,"run"),[
+    'base="'+"$"+'{EVENT_BASE:-'+"$"+'(git rev-parse HEAD^1)}"',
+    '[[ "'+"$"+'base" =~ ^[0-9a-f]{40}$ ]]',
+    'git cat-file -e "'+"$"+'base^{commit}"',
+    "printf 'base=%s\\n' \""+"$"+"base\" >> \""+"$"+"GITHUB_OUTPUT\"", ""].join("\n")));
+  const required=step(6,"RepoGuard exact immutable snapshot",["id","uses","with"]);
+  must(eq(node(required,"id"),"required_guard")&&eq(node(required,"uses"),"netkeep80/repo-guard@"+pinned));
+  withOptions(required,{base:"$"+"{{ steps.transition.outputs.base }}",head:"$"+"{{ env.SOURCE_REV }}","node-version":"24"});
 
-  const diagCheckout=step(6,"Checkout exact diagnostic compiler after a failed gate",["if","uses","with"]);
+  const diagCheckout=step(7,"Checkout exact diagnostic compiler after a failed gate",["if","uses","with"]);
   must(eq(node(diagCheckout,"if"),"failure()") &&
        eq(node(diagCheckout,"uses"),checkout));
   withOptions(diagCheckout,{repository:"netkeep80/repo-guard",ref:pinned,
     path:".rg-diagnostics","persist-credentials":false});
 
-  const diag=step(7,"Print exact typed RepoGuard findings (gate remains failed)",["if","run"]);
+  const diag=step(8,"Print exact typed RepoGuard findings (gate remains failed)",["if","run"]);
   must(eq(node(diag,"if"),"failure()") && isScalar(node(diag,"run")) &&
        typeof node(diag,"run").value==="string");
 
-  const summary=step(8,"Show exact RepoGuard diagnostics without bypassing failure",["if","env","run"]);
+  const summary=step(9,"Show exact RepoGuard diagnostics without bypassing failure",["if","env","run"]);
   must(eq(node(summary,"if"),"always()"));
   const env=map(node(summary,"env"),["RG_STEP","RG_RESULT","RG_SUMMARY"]);
   must(eq(node(env,"RG_STEP"),"$"+"{{ steps.required_guard.outcome }}") &&
@@ -153,7 +181,7 @@ function checkWorkflowGate(workflow) {
 
 export function checkBootstrap(base=root) {
   for (const p of requiredPaths) source(base,p);
-  const workflow=source(base,".github/workflows/repo-guard.yml");
+  const workflow=source(base,".github/workflows/platform.yml");
   checkWorkflowGate(workflow);
   for(const [file,id] of [
     ["requirements/FGMP-PRODUCT-000.rg.yaml","FGMP-PRODUCT-000"],

@@ -19,7 +19,7 @@ ctest --test-dir build/native -C Release --output-on-failure --verbose --no-test
 
 Scene oracle независимо сравнивает все 16384 поля synthetic sphere с аналитической формулой, требует заполненные и пустые точки, побайтово повторяемый результат и отказ на неверном пакете. Это ограниченный corpus, а не универсальное доказательство всех FGM.
 
-`FGMV_BUILD_GPU_DEMO=ON` включает прежний `fgm_boot` с явным `WGPU_ROOT` (wgpu-native v29.0.1.1). По умолчанию SDK не требуется для CPU scene/camera. GPU и Emscripten ветви сохранены для отдельной проверки S06B; успешный CPU CTest не доказывает GPU/browser parity.
+`FGMV_BUILD_GPU_DEMO=ON` включает прежний `fgm_boot` с явным `WGPU_ROOT` (wgpu-native v29.0.1.1). По умолчанию SDK не требуется для CPU scene/camera. Ubuntu WASM/WebGPU/Chromium проверяется отдельным предметным job; успешный CPU CTest сам по себе не доказывает GPU/browser parity.
 
 ## Владельцы и направления
 
@@ -40,9 +40,9 @@ flowchart TD
 
 ## Текущая защита и WASM/browser
 
-`check-platform.mjs` развивается тем же файлом в policy/4: scope S06B→S07A, fixed reviewed verifier bytes и один явный новый verifier edge в FGMV-PUB-003. Все 81 нормативных текста, ID, lifecycle и 22 execution constraints сохраняются. Исторические архивы/replay и наличие старых source commits не являются текущим CI gate; временные baseline rules удаляются на S08 после функциональной замены.
+`check-platform.mjs` развивается тем же файлом в policy/5: scope S07A→S07B, fixed reviewed verifier bytes и перевод CI relations на один platform.yml. Все прежние 81 нормативных текста, ID, lifecycle и 22 execution constraints сохраняются. Новый FGMP-RELEASE-001 с false/false/false задаёт текущий release trust контракт и один дополнительный execution constraint. Исторические архивы/replay и наличие старых source commits не являются текущим CI gate; временные baseline rules удаляются на S08 после функциональной замены.
 
-Существующие root native Ubuntu/Windows и RepoGuard сохранены. Один дополнительный Ubuntu job в том же native workflow заменяет старые Regenerator/Renderer verification workflows: обе WASM-библиотеки, native GPU frame, Worker parity, реальный Chromium/depth/holes/4K/cancel/negative, RV01, package validators и RVI source mutations. Он проверяет сборку при заблокированных Git URL трёх старых repos. Browser network guard разрешает только локальные синтетические запросы; собственный отрицательный тест доказывает блокировку реальных Chromium запросов к старым repos.
+Один root workflow .github/workflows/platform.yml объединяет прежние RepoGuard, policy Ubuntu/Windows, native Ubuntu/Windows и Ubuntu WASM/browser — шесть verification jobs без новой сборочной копии. WASM job выполняет обе WASM-библиотеки, native GPU frame, Worker parity, реальный Chromium/depth/holes/4K/cancel/negative, RV01, package validators и RVI source mutations. Он проверяет сборку при заблокированных Git URL трёх старых repos. Browser network guard разрешает только проверенные синтетические запросы; собственный отрицательный тест доказывает блокировку реальных Chromium запросов к старым repos.
 
 Четыре aliases, десять дополнительных старых verified_by и временный Node invocation удалены; Raster и общий language suite вызываются напрямую. Старые workflow удаляются после подтверждения root replacement CI. Единственный оставшийся nested Pages workflow dormant до S07.
 
@@ -57,14 +57,14 @@ node renderer/scripts/build-studio-s2a.mjs build/wasm
 
 CMake записывает Platform revision/TREE в `build/wasm/platform-build.json`; producer сверяет их с чистым текущим checkout и отбирает девять фиксированных активов. `engine-lock.json` задаёт только действующий protocol/whole-build/core semantic contract, не источник Git. Манифест пакета хранит один Platform revision/TREE и hashes. `core` — инертный идентификатор математической семантики из runtime, не network pin. Чужая ревизия/TREE, dirty tracked source, empty/неверный WASM или небезопасный output path отвергаются.
 
-Обычный review artifact этой CI предназначен для проверки текущего пакета, не для архивирования старой истории. Пакет ещё не публикуется: единый Pages/release/rollback, live smoke и визуальная авторская приёмка — S07. Private Stage A, browser R07 fit и универсальное доказательство всех моделей FGM не заявляются.
+Обычный review artifact этой CI предназначен для проверки текущего пакета, не для архивирования старой истории. Main release job публикует этот же пакет после verification gate; фактические live publish/rollback и визуальная авторская приёмка подтверждаются отдельно в S07. Private Stage A, browser R07 fit и универсальное доказательство всех моделей FGM не заявляются.
 
 ## Проверка release и rollback пакета
 
 Существующий Python publisher независимо связывает bundle и готовый сайт с настоящим Git revision/TREE,
 engine contract и A.M. Verify и byte-preserving rollback используют один строгий validator. Текущий publisher
 больше не импортирует старый V03 promoter/snapshot verifier и не поддерживает rollback-v03.
-Rollback требует independently trusted hashes всего ранее проверенного Platform пакета, включая manifest.
+Низкоуровневый rollback требует independently trusted hashes всего ранее проверенного Platform пакета, включая manifest; production adapter получает их из аутентифицированного release.
 Подробные текущие команды и границы — [подготовка Platform Studio](../renderer/docs/studio-pages.md).
 
 Тот же HTTP/Chromium checker проверяет локальный review сайт и будущий Platform HTTPS URL, без старых
@@ -72,9 +72,14 @@ Renderer URL/schema. Он сопоставляет manifest TREE с Git и hashe
 network boundary проверяет каждый фактически загружаемый HTTP ресурс до исполнения и блокирует внешние запросы.
 Native Ubuntu/Windows выполняют Git/rollback и реальные HTTP negative suites; существующий Ubuntu browser
 job дополнительно исполняет настоящий WASM и отвергает подмену ответа после первоначального HTTP scan.
-Новых targets, jobs или release workflows в S07A нет. Последний dormant Pages workflow остаётся до действующей
-замены S07B. Доверенное происхождение и сохранение release artifacts, фактическая публикация/откат и public smoke
-ещё не доказаны: это следующий срез, а не следствие локального admission PASS.
+Доверенный service adapter studio_release.py не пересобирает пакет: он связывает immutable CI artifact ID/digest
+с точным main run/workflow/attempt и шестью успешными проверками, затем повторно вызывает этот же validator.
+Единственный main release job имеет права публикации; PR jobs имеют только read permissions. После реального
+public smoke ZIP и подписанный provenance bundle сохраняются как обычный продуктовый GitHub Release для rollback.
+Восстановление проверяет подпись ожидаемого workflow/main source SHA, target Git TREE и полный hash index.
+Подробные команды, automatic fallback и границы live-подтверждения — в инструкции Studio.
+Последний dormant Pages workflow пока остаётся до фактической live-проверки и следующего retirement PR.
+Наличие подготовленного workflow и зелёного PR CI не означает успешной production publication/rollback.
 
 ## Финальная цель
 

@@ -5,12 +5,12 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseDocument} from 'yaml';
 export const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-export const POLICY='fgm-platform-policy/4';
-export const SCOPE='S06B-to-S07A-current-Platform-package-admission';
-export const BASE='37e4fcc18f5526e2c872c316bfcd014799a8c94a';
-export const BASE_TREE='6e66cc7cb0531e355b3a617a31b96d11b5b7dc06';
-const RETIRED=Object.freeze([]);
-const FORBIDDEN=Object.freeze([
+export const POLICY='fgm-platform-policy/5';
+export const SCOPE='S07A-to-S07B-unified-CI-trusted-release-and-rollback';
+export const BASE='a8eb0bdbb1ac844c3d4b9ad1c1a83a1a529eedcd';
+export const BASE_TREE='257f81b1517f098c86a17bd586a15ce7fc55f564';
+const RETIRED=Object.freeze(['.github/workflows/repo-guard.yml','.github/workflows/core-ci.yml','.github/workflows/platform-policy.yml']);
+const FORBIDDEN=Object.freeze([...RETIRED,
   "core/tests/document-language.test.mjs",
   "regenerator/tests/document-language.test.mjs",
   "renderer/tests/document-language.test.mjs",
@@ -31,7 +31,7 @@ const FORBIDDEN=Object.freeze([
   "renderer/src/rvi-v02.cpp",
   "renderer/src/rvi-v02.hpp"
 ]);
-const ADDED=Object.freeze(["renderer/tests/studio-pages-live.test.mjs"]);
+const ADDED=Object.freeze(['.github/workflows/platform.yml','renderer/scripts/studio_release.py','renderer/tests/test_studio_release.py','requirements/FGMP-RELEASE-001.rg.yaml']);
 const EDITED=Object.freeze(["docs/platform.md", "renderer/docs/studio-pages.md",
   "scripts/check-platform.mjs", "tests/platform-policy.test.mjs"]);
 // BEGIN REVIEWED PINS
@@ -61,21 +61,6 @@ const PINS={
     "blob": "eaa2e3b25a773b03a4587e3a95a6630b007907bc",
     "sha256": "ca0cc076a2b6eaef6d1f8ef528c7569f67d0ecd3175cf1553bee7b0b00ad614a"
   },
-  ".github/workflows/core-ci.yml": {
-    "mode": "100644",
-    "blob": "e5e3a4c1bf9aba89f7dc3a915e6a840fb9137a83",
-    "sha256": "3c3af5560aadd35f95186adae1e820973c721cbf11c4e325fd75fcc67f799f3a"
-  },
-  ".github/workflows/platform-policy.yml": {
-    "mode": "100644",
-    "blob": "be9290b6f8c8bea1b2697cab1815b626b9c41b88",
-    "sha256": "848c68dcad0f04010e568bdc67d446748bba48b1ce0650d35bb2c1d3a023fc88"
-  },
-  ".github/workflows/repo-guard.yml": {
-    "mode": "100644",
-    "blob": "29d18bdeb1390b86ac944e892d5e530e654693f7",
-    "sha256": "c0fdf706f7e7ae1430a52596c0994098a0868828f06b1a698aaad4cede88eed4"
-  },
   "scripts/check-ctest.mjs": {
     "mode": "100644",
     "blob": "65998be432454b0412baada81f325e5bf7455bb2",
@@ -88,13 +73,13 @@ const PINS={
   },
   "scripts/check-bootstrap.mjs": {
     "mode": "100644",
-    "blob": "efbd0bee11af846667fe4b178b3defb2560cf23d",
-    "sha256": "ffebbfc82a83a1ff4441edb68eb28fa7f15ce51fe5658a86514e982ae7662f82"
+    "blob": "45ba4fbc196d40b9b471579d951a152de8a0f147",
+    "sha256": "845fea50381fa610202116b6382fcabdb7f3d56b540baf253c232312d4f3db89"
   },
   "tests/bootstrap.test.mjs": {
     "mode": "100644",
-    "blob": "856309851afab01b3ca669051fbc9459f5a4c13f",
-    "sha256": "a14f6abe3d83aef27db225f46bb690f9467d5d1228c373fca34da5deb2b3dd74"
+    "blob": "e055488fde5b0212772b470b31a270ab6ef0ec1d",
+    "sha256": "dc80ffb22c1ab997e636b799d35ca01036f7f0fc0a644c4476c5e547b4da7c21"
   },
   "tests/ctest-gate.test.mjs": {
     "mode": "100644",
@@ -103,13 +88,13 @@ const PINS={
   },
   "tests/platform-policy.test.mjs": {
     "mode": "100644",
-    "blob": "d0eeed2ea29bbd6d64e527e0681fcdbfe2c0a5a5",
-    "sha256": "66ce6f31c557b58a872fa3d6f29b51d195edc7f4ca0a463fa91dbc67166742de"
+    "blob": "cc4964fea25ac485302d5867ed7a3b4ae64207bb",
+    "sha256": "40951a5d547784f71e56bad22ea489bc056f9dd5da72171473e470e1a6aae26e"
   },
   "requirements/FGMP-WASM-001.rg.yaml": {
     "mode": "100644",
-    "blob": "ac7481eb7a66dc5ad9db3355610bd6d6cc192ee9",
-    "sha256": "d4066198d79f4b3ec3a282631fd91b465f058f320630807ee72ed682bf72749f"
+    "blob": "ea0fe875eb543b1f8ac459fc629ea5c8296fa14d",
+    "sha256": "a56294b918a49a850c8eaa2fc55c8d263a192c48749c296cf7594bf4515a945c"
   },
   "package.json": {
     "mode": "100644",
@@ -213,8 +198,8 @@ const PINS={
   },
   "renderer/tests/test_studio_pages.py": {
     "mode": "100644",
-    "blob": "1c8c77f2cbb3acb036467788e88b3cb833d210c2",
-    "sha256": "d682c03fbc945da1327c3e14d70cfce69e97693dd24d4560974525751ad9621d"
+    "blob": "2363a2e834f3ad409501bdacb3cfcee00ba5948c",
+    "sha256": "11bd11e92aab32dc09bfc53da2336df36f6a4a646fb5597b10c490cd2d4446cd"
   },
   "renderer/tests/studio-pages.live.mjs": {
     "mode": "100644",
@@ -225,6 +210,26 @@ const PINS={
     "mode": "100644",
     "blob": "40287bdfa373701d98687ec056e37a9a771713ea",
     "sha256": "48a0c51936cdf3f2d6d63d6fb8b0fcd168159303a014f90293e422cd91df55c9"
+  },
+  ".github/workflows/platform.yml": {
+    "mode": "100644",
+    "blob": "84c3d6b52c436b8667274c0bb393a1e054df160f",
+    "sha256": "a5fc29f04734127def487b98df85d1efd8848d9b4d8fc015f88c6f2ecf951797"
+  },
+  "renderer/scripts/studio_release.py": {
+    "mode": "100644",
+    "blob": "4ade86746d651acda7be25277d092c18dc49b3ba",
+    "sha256": "809909b3b10349b70d4222cfbb0b6ebdc0a325493a942122d54248d60faf76f4"
+  },
+  "renderer/tests/test_studio_release.py": {
+    "mode": "100644",
+    "blob": "06c0bd8d27d4d2c5d7f146053d4f80cc1505ca1c",
+    "sha256": "aaf11dc4a5544245a325122d9c8d27484c440e16dfa76b9bf22e2af8e24196aa"
+  },
+  "requirements/FGMP-RELEASE-001.rg.yaml": {
+    "mode": "100644",
+    "blob": "9f4792f4df7e2468ed4a4dc11540d292d929b678",
+    "sha256": "a08a3d0fd1d47c3ad8772830391e0adb7a7e559d14040faf6d6e75e2de919b63"
   }
 };
 // END REVIEWED PINS
@@ -255,12 +260,15 @@ function contents(repo,requests){
 }
 export function requirement(source){
   const out=structuredClone(source);
-  if(out.id==='FGMV-PUB-003'){
-    const at=out.relations.findIndex(r=>r.target?.path==='renderer/tests/studio-pages.live.mjs');
-    ensure(at>=0,'BASE_PUBLICATION_VERIFIER');
-    out.relations.splice(at+1,0,{predicates:['verified_by'],
-      target:{kind:'artifact',path:'renderer/tests/studio-pages-live.test.mjs'}});
-  }
+  const oldCI=['.github/workflows/repo-guard.yml','.github/workflows/core-ci.yml','.github/workflows/platform-policy.yml'];
+  const walk=value=>{
+    if(!value||typeof value!=='object')return;
+    if(value.kind==='artifact'&&(oldCI.includes(value.path)||out.id==='FGMV-PUB-003'&&value.path==='renderer/.github/workflows/studio-pages.yml'))
+      value.path='.github/workflows/platform.yml';
+    for(const v of Object.values(value))walk(v);
+  };
+  walk(out);const seen=new Set();
+  out.relations=out.relations.filter(r=>{const key=stable(r);if(seen.has(key))return false;seen.add(key);return true;});
   return out;
 }
 export function checkPlatform(repo=root,head='HEAD'){
@@ -288,15 +296,16 @@ export function checkPlatform(repo=root,head='HEAD'){
     equal(parse(raw.get(head+':'+path)),requirement(parse(raw.get(BASE+':'+path))),'REQUIREMENT_DRIFT:'+path);
     equal(after.get(path)?.split(' ')[0],before.get(path).split(' ')[0],'REQUIREMENT_MODE:'+path);
   }
-  ensure([...after.keys()].filter(p=>/^requirements\/.*\.rg\.yaml$/.test(p)).length===81,'REQUIREMENT_COUNT');
+  ensure([...after.keys()].filter(p=>/^requirements\/.*\.rg\.yaml$/.test(p)).length===82,'REQUIREMENT_COUNT');
   return {result:'PASS',policy:POLICY,scope:SCOPE,base:BASE,head,tree:git(repo,'rev-parse',head+'^{tree}'),
     critical_content_pins:critical.length,normative_values_preserved:81,normative_updates:[],
-    existing_ids_lifecycle_preserved:81,canonical_requirements:81,required_native_tests:30,
+    existing_ids_lifecycle_preserved:81,canonical_requirements:82,required_native_tests:30,
     internal_git_fetchcontent:0,raster_implementations:1,language_implementations:1,npm_locks:1,
     temporary_verifier_aliases:0,nested_legacy_workflows:1,historical_replay_required:false,
-    publication_admission:'Git revision/TREE and independently expected complete package hashes',
-    production_deployment:'NOT_IN_S07A_SCOPE',
-    temporary_policy_owner:'S07A #10; remove baseline rules after current replacement S08 #14; no archive gate'};
+    execution_constraints_preserved:22,execution_constraints_added:1,root_ci_workflows:1,
+    publication_admission:'Immutable current main CI origin/provider digest and signed retained Platform release',
+    production_deployment:'REQUIRES_ACCEPTED_MAIN_AND_REAL_POSTMERGE_EVIDENCE',
+    temporary_policy_owner:'S07B #10; remove baseline rules after current replacement S08 #14; no archive gate'};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{console.log(JSON.stringify(checkPlatform(root,process.argv[2]||'HEAD'),null,2));}

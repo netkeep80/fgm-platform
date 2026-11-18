@@ -1,61 +1,57 @@
 format: repo-guard/requirement-v1
 id: FGMP-RENDERER-001
 normative: "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. RVI implementation, tests и fixtures принадлежат Raster без forwarding alias. Прежние camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета входят в точный enabled CTest inventory на Linux и Windows вместе с Core/Regenerator/Raster tests. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одна общая проверка языка и её отрицательные тесты выполняются до RepoGuard. Удаление заменённых workflow сохраняет уникальные предметные проверки. Версия текущей policy явно закрепляет область перехода и критические verifiers, сохраняет ID, lifecycle и действующие ограничения; нормативные изменения по авторскому решению перечисляются отдельно. Историческое архивирование и вечный replay не требуются; временные migration rules удаляются на S08 после функциональной замены. Native acceptance остаётся отдельным доказательством от реальных WASM/GPU/Chromium tests, полного S06, Stage A и публикации Studio."
-lifecycle: {accepted: false, current: false, published: false}
+lifecycle: { accepted: false, current: false, published: false }
 relations:
-  - predicates: [derives_from]
-    target: {kind: requirement, id: FGMP-PROJECT-000}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMP-BUILD-001}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMV-PORT-001}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMV-CAM-001}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMV-CAM-003}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMV-SESSION-002}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: CMakeLists.txt}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: renderer/CMakeLists.txt}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: raster/CMakeLists.txt}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: package.json}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: package-lock.json}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: renderer/package.json}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: scripts/check-platform.mjs}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: scripts/check-bootstrap.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/scene.test.cpp}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/scripts/test-v03.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/scripts/test-v03-map.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/renderer-session.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/studio-r05.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/studio-ufo-catalog.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: tests/platform-policy.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: tests/ctest-gate.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: tests/bootstrap.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: .github/workflows/core-ci.yml}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: .github/workflows/platform-policy.yml}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: .github/workflows/repo-guard.yml}
-  - predicates: [documents]
-    target: {kind: artifact, path: docs/platform.md}
-  - predicates: [documents]
-    target: {kind: artifact, path: docs/requirements-hierarchy.md}
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: FGMP-PROJECT-000 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMP-BUILD-001 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMV-PORT-001 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMV-CAM-001 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMV-CAM-003 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMV-SESSION-002 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: CMakeLists.txt }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: renderer/CMakeLists.txt }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: raster/CMakeLists.txt }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: package.json }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: package-lock.json }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: renderer/package.json }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: scripts/check-platform.mjs }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: scripts/check-bootstrap.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/scene.test.cpp }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/scripts/test-v03.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/scripts/test-v03-map.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/renderer-session.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/studio-r05.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/studio-ufo-catalog.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: tests/platform-policy.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: tests/ctest-gate.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: tests/bootstrap.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: .github/workflows/platform.yml }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: docs/platform.md }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: docs/requirements-hierarchy.md }

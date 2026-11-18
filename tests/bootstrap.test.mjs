@@ -3,13 +3,15 @@ import { strict as assert } from "node:assert";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import {spawnSync} from "node:child_process";
 import { root, checkBootstrap, PIN } from "../scripts/check-bootstrap.mjs";
+import {parse,stringify} from "yaml";
 
 const paths=[
   "README.md","docs/requirements-hierarchy.md","LICENSE",
   "requirements/FGMP-PRODUCT-000.rg.yaml",
   "requirements/FGMP-PROJECT-000.rg.yaml",
-  ".github/workflows/repo-guard.yml",
+  ".github/workflows/platform.yml",
   "scripts/check-bootstrap.mjs","tests/bootstrap.test.mjs",
   "scripts/verify-repoguard-transition.mjs",
   "package.json","package-lock.json",
@@ -27,8 +29,18 @@ function temporary(operate) {
 test("positive: exact frozen RepoGuard revision, roots and artifact links",()=>
   assert.deepEqual(checkBootstrap(),{ok:true,roots:2,repoGuard:PIN})
 );
+test("negative: every run step must use a fail-fast shell on Windows and Ubuntu",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/platform.yml"),v=parse(readFileSync(p,"utf8"));
+  v.defaults.run.shell="pwsh";writeFileSync(p,stringify(v));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+test("real shell: a failed native command stops before the next successful command",()=>{
+  const r=spawnSync("bash",["--noprofile","--norc","-e","-o","pipefail","-c",
+    'node -e "process.exit(7)"\nnode -e \'console.log("SHOULD_NOT_RUN")\''],{encoding:"utf8"});
+  assert.equal(r.status,7,r.stderr);assert.doesNotMatch(r.stdout,/SHOULD_NOT_RUN/);
+});
 test("negative: replaced RepoGuard SHA fails closed",()=>temporary(tmp=>{
-  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const p=join(tmp,".github/workflows/platform.yml");
   writeFileSync(p,readFileSync(p,"utf8").replace(
     "uses: netkeep80/repo-guard@"+PIN,
     "uses: netkeep80/repo-guard@0000000000000000000000000000000000000000"));
@@ -46,19 +58,19 @@ test("negative: candidate root lifecycle cannot masquerade as accepted bootstrap
 }));
 
 test("negative: CI cannot skip real synthetic transition regression",()=>temporary(tmp=>{
-  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const p=join(tmp,".github/workflows/platform.yml");
   writeFileSync(p,readFileSync(p,"utf8").replace("node scripts/verify-repoguard-transition.mjs","echo ignored"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
 }));
 test("negative: CI cannot continue on a failed RepoGuard action",()=>temporary(tmp=>{
-  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const p=join(tmp,".github/workflows/platform.yml");
   writeFileSync(p,readFileSync(p,"utf8").replace("id: required_guard","id: required_guard\n        continue-on-error: true"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
 }));
 
 
 test("negative: commented RepoGuard uses plus fake run cannot pass",()=>temporary(tmp=>{
-  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const p=join(tmp,".github/workflows/platform.yml");
   const w=readFileSync(p,"utf8");
   const needle="        uses: netkeep80/repo-guard@"+PIN+"\n        with:\n";
   assert.ok(w.includes(needle));
@@ -67,7 +79,7 @@ test("negative: commented RepoGuard uses plus fake run cannot pass",()=>temporar
 }));
 
 test("negative: commented oracle invocation plus echo cannot pass",()=>temporary(tmp=>{
-  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const p=join(tmp,".github/workflows/platform.yml");
   const w=readFileSync(p,"utf8");
   const needle="          node scripts/verify-repoguard-transition.mjs";
   assert.ok(w.includes(needle));
@@ -76,7 +88,7 @@ test("negative: commented oracle invocation plus echo cannot pass",()=>temporary
 }));
 
 test("negative: conditional RepoGuard action cannot be skipped",()=>temporary(tmp=>{
-  const p=join(tmp,".github/workflows/repo-guard.yml");
+  const p=join(tmp,".github/workflows/platform.yml");
   const w=readFileSync(p,"utf8");
   writeFileSync(p,w.replace("        id: required_guard","        id: required_guard\n        if: false"));
   assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
@@ -85,7 +97,7 @@ test("negative: conditional RepoGuard action cannot be skipped",()=>temporary(tm
 
 function workflowMutation(label, needle, replacement) {
   test("negative YAML semantics: "+label,()=>temporary(tmp=>{
-    const p=join(tmp,".github/workflows/repo-guard.yml");
+    const p=join(tmp,".github/workflows/platform.yml");
     const w=readFileSync(p,"utf8");
     assert.ok(w.includes(needle),"missing mutation anchor");
     writeFileSync(p,w.replace(needle,replacement));
@@ -117,3 +129,15 @@ workflowMutation("quoted continue-on-error job key",
 workflowMutation("block scalar action uses cannot impersonate pinned uses",
   "        uses: netkeep80/repo-guard@"+PIN,
   "        run: |\n          uses: netkeep80/repo-guard@"+PIN);
+
+for(const [name,mutate]of [
+  ["release cannot run on PR",w=>{w.jobs.release.if="true";}],
+  ["release requires all verification roles",w=>{w.jobs.release.needs.pop();}],
+  ["global permissions cannot publish",w=>{w.permissions.contents="write";}],
+  ["verification job cannot mint tokens",w=>{w.jobs.core.permissions={"id-token":"write"};}],
+  ["a different approved job cannot impersonate RepoGuard",w=>{w.jobs.core.name="RepoGuard exact BASE/HEAD";}],
+])test("negative publication authority: "+name,()=>temporary(tmp=>{
+  const path=join(tmp,".github/workflows/platform.yml"),w=parse(readFileSync(path,"utf8"));
+  mutate(w);writeFileSync(path,stringify(w));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));

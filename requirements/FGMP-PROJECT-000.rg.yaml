@@ -6,43 +6,43 @@ lifecycle:
   current: true
   published: false
 relations:
-  - predicates: [requires]
+  - predicates: [ requires ]
     target:
       kind: requirement
       id: FGMP-PRODUCT-000
-  - predicates: [documents]
+  - predicates: [ documents ]
     target:
       kind: artifact
       path: "README.md"
-  - predicates: [documents]
+  - predicates: [ documents ]
     target:
       kind: artifact
       path: "docs/requirements-hierarchy.md"
-  - predicates: [documents]
+  - predicates: [ documents ]
     target:
       kind: artifact
       path: "LICENSE"
-  - predicates: [implemented_by]
+  - predicates: [ implemented_by ]
     target:
       kind: artifact
-      path: ".github/workflows/repo-guard.yml"
-  - predicates: [implemented_by]
+      path: ".github/workflows/platform.yml"
+  - predicates: [ implemented_by ]
     target:
       kind: artifact
       path: "scripts/check-bootstrap.mjs"
-  - predicates: [verified_by]
+  - predicates: [ verified_by ]
     target:
       kind: artifact
       path: "tests/bootstrap.test.mjs"
-  - predicates: [verified_by]
+  - predicates: [ verified_by ]
     target:
       kind: artifact
       path: "scripts/verify-repoguard-transition.mjs"
-  - predicates: [implemented_by]
+  - predicates: [ implemented_by ]
     target:
       kind: artifact
       path: "package.json"
-  - predicates: [implemented_by]
+  - predicates: [ implemented_by ]
     target:
       kind: artifact
       path: "package-lock.json"

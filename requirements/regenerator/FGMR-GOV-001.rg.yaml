@@ -15,7 +15,7 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: .github/workflows/repo-guard.yml
+      path: .github/workflows/platform.yml
   - predicates:
       - documents
     target:

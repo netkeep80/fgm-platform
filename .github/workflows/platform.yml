@@ -1,0 +1,477 @@
+name: FGM Platform — verify, publish and rollback
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Publish current accepted main or restore a retained Platform release
+        type: choice
+        required: true
+        options:
+          - publish
+          - rollback
+      expected_main:
+        description: Exact full SHA of current accepted main
+        type: string
+        required: true
+      release_revision:
+        description: Full original Platform release SHA (rollback only)
+        type: string
+        required: false
+        default: ""
+permissions:
+  contents: read
+env:
+  SOURCE_REV: ${{ github.event.pull_request.head.sha || github.sha }}
+defaults:
+  run:
+    shell: bash
+jobs:
+  repo-guard:
+    name: RepoGuard exact BASE/HEAD
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.SOURCE_REV }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Independent positive and negative bootstrap checks
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test tests/bootstrap.test.mjs
+          node scripts/check-bootstrap.mjs
+          node --test tests/document-language.test.mjs
+          node scripts/check-document-language.mjs
+      - name: Checkout immutable RepoGuard for independent synthetic transition tests
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: netkeep80/repo-guard
+          ref: 74db97791e6da8a75287164f0d0b41579108f114
+          path: .rg-transition
+          persist-credentials: false
+      - name: Verify real RepoGuard positive and orphan-negative transitions
+        run: |
+          (cd .rg-transition && npm install --omit=dev --silent)
+          node scripts/verify-repoguard-transition.mjs
+      - name: Determine exact transition BASE
+        id: transition
+        env:
+          EVENT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="${EVENT_BASE:-$(git rev-parse HEAD^1)}"
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$base^{commit}"
+          printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
+      - name: RepoGuard exact immutable snapshot
+        id: required_guard
+        uses: netkeep80/repo-guard@74db97791e6da8a75287164f0d0b41579108f114
+        with:
+          base: ${{ steps.transition.outputs.base }}
+          head: ${{ env.SOURCE_REV }}
+          node-version: "24"
+      - name: Checkout exact diagnostic compiler after a failed gate
+        if: failure()
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: netkeep80/repo-guard
+          ref: 74db97791e6da8a75287164f0d0b41579108f114
+          path: .rg-diagnostics
+          persist-credentials: false
+      - name: Print exact typed RepoGuard findings (gate remains failed)
+        if: failure()
+        run: |
+          (cd .rg-diagnostics && npm install --omit=dev --silent)
+          node .rg-diagnostics/dist/repo-guard.mjs --repo-root "$PWD" check --base "${{ steps.transition.outputs.base }}" --head "${{ env.SOURCE_REV }}" --format json > "$RUNNER_TEMP/fgmp-rg-report.json" || true
+          node --input-type=module - "$RUNNER_TEMP/fgmp-rg-report.json" <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const r=JSON.parse(readFileSync(process.argv[2],'utf8'));
+          console.log(JSON.stringify({ok:r.ok,base:r.base,head:r.head,j1:r.j1,j2:r.j2,j3:r.j3,diagnostics:r.diagnostics},null,2));
+          NODE
+      - name: Show exact RepoGuard diagnostics without bypassing failure
+        if: always()
+        env:
+          RG_STEP: ${{ steps.required_guard.outcome }}
+          RG_RESULT: ${{ steps.required_guard.outputs.result }}
+          RG_SUMMARY: ${{ steps.required_guard.outputs.summary }}
+        run: |
+          printf 'RG_STEP=%s\nRG_RESULT=%s\nRG_SUMMARY=%s\n' "$RG_STEP" "$RG_RESULT" "$RG_SUMMARY"
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'
+  platform-policy:
+    name: Platform policy / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - windows-2025
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.SOURCE_REV }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Validate current policy and successful no-op mutations
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test tests/platform-policy.test.mjs
+          node scripts/check-platform.mjs "${{ env.SOURCE_REV }}"
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'
+  core:
+    name: Native Platform / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - windows-2025
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.SOURCE_REV }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Reject empty and incomplete CTest suites
+        run: node --test tests/ctest-gate.test.mjs
+      - name: Install the root workspace and verify Core and Renderer contracts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test --test-name-pattern="real shell:" tests/bootstrap.test.mjs
+          node --test core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
+          npm run test:node --workspace renderer
+          node --test renderer/tests/studio-bundle.test.mjs
+      - name: Verify Platform publication and rollback admission on both systems
+        working-directory: renderer
+        run: |
+          python -m unittest discover -s tests -p test_studio_pages.py -v
+          node --test tests/studio-pages-live.test.mjs
+          python -m unittest discover -s tests -p test_studio_release.py -v
+      - name: Configure Platform from the monorepo root
+        run: cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build Core, Raster, Regenerator and Renderer native targets
+        run: cmake --build build/native --config Release --parallel 2
+      - name: Require exact enabled native CTest inventory
+        run: node scripts/check-ctest.mjs build/native --suite platform --config Release
+      - name: Run native/Python R01-R07, Studio contracts, RVI and C05 parity
+        run: ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'
+  wasm-browser:
+    name: Local WASM, WebGPU and Chromium / ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.SOURCE_REV }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Install one workspace and real Chromium
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          echo "STUDIO_CHROMIUM=$(node --input-type=module -e 'import {chromium} from "playwright";console.log(chromium.executablePath())')" >> "$GITHUB_ENV"
+      - name: Deny all three legacy Git repositories before building
+        run: |
+          for repo in fgm-core fgm-regenerator fgm-renderer; do
+            git config --global "url.http://127.0.0.1:9/blocked/$repo.insteadOf" "https://github.com/netkeep80/$repo"
+            if git ls-remote "https://github.com/netkeep80/$repo"; then
+              echo "Legacy repository was unexpectedly reachable: $repo"; exit 1
+            fi
+          done
+          echo OLD_REPO_GIT_DENY_PASS
+      - name: Install pinned third-party WebGPU and Emscripten toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+          curl -fLsS --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v29.0.1.1/wgpu-linux-x86_64-release.zip -o "$RUNNER_TEMP/wgpu.zip"
+          echo "95a4d90c071005a98d03eab348beaa6b07e16eb00d1dcdb9f8348f75eb97ec5a  $RUNNER_TEMP/wgpu.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/wgpu.zip" -d "$RUNNER_TEMP/wgpu"
+          git clone --depth 1 --branch 4.0.21 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          test "$(git -C "$RUNNER_TEMP/emsdk" rev-parse HEAD)" = b2436aafa7351ee1b581f15841f1b45ed716a279
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.21
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.21
+      - name: Build native GPU frame and local Regenerator consumers
+        run: |
+          cmake -S . -B build/gpu -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DFGMV_BUILD_GPU_DEMO=ON -DWGPU_ROOT="$RUNNER_TEMP/wgpu"
+          cmake --build build/gpu --config Release --parallel 2 --target fgm_boot fgmr-studio-native fgmr-r06-multicell-sample fgmr-r06-whole-build fgmr-r06-sample fgmr-r03 fgmr-r04 fgmr-r07-fit
+          mkdir -p renderer/build/native "$RUNNER_TEMP/fgm-runtime"
+          chmod 700 "$RUNNER_TEMP/fgm-runtime"
+          XDG_RUNTIME_DIR="$RUNNER_TEMP/fgm-runtime" build/gpu/renderer/fgm_boot renderer/web/sphere.fgm.json renderer/web/scene.wgsl renderer/build/native/sphere.ppm
+      - name: Build both WASM engines from the same root checkout
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build/wasm -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build build/wasm --parallel 2
+          npm run build --workspace renderer
+          npm run test:node --workspace renderer
+          node renderer/scripts/build-studio-s2a.mjs build/wasm
+      - name: Run native, Node Worker and Chromium protocol/cell/catalog/whole parity
+        working-directory: regenerator
+        run: |
+          native="$GITHUB_WORKSPACE/build/gpu/regenerator"
+          worker="$GITHUB_WORKSPACE/build/wasm/regenerator/worker.mjs"
+          node tests/test_studio.mjs "$native/fgmr-studio-native" "$worker"
+          node tests/test_studio_cell.mjs "$native/fgmr-studio-native" "$worker"
+          node tests/test_studio_catalog.mjs "$native/fgmr-studio-native" "$worker"
+          node tests/test_studio_whole.mjs "$native/fgmr-studio-native" "$native/fgmr-r06-multicell-sample" "$worker" --builder "$native/fgmr-r06-whole-build"
+          python scripts/smoke_rv01.py --html viewer/index.html --browser-script viewer/rv01-browser-smoke.js --cdp-script scripts/rv01-cdp.mjs --r06-script scripts/reconstruct_r06.py --r06-test tests/test_r06.py --sampler "$native/fgmr-r06-sample" --loft "$native/fgmr-r03" --sprite "$native/fgmr-r04" --r07-script scripts/run_r07.py --export scripts/export_rv01.py --fit "$native/fgmr-r07-fit"
+      - name: Verify current package allowlist, hashes, version and negative cases
+        working-directory: renderer
+        run: |
+          python -m unittest discover -s tests -p 'test_*pages*.py' -v
+          preview=()
+          if [[ -n "$PREVIEW_BASE" ]]; then preview=(--preview-base "$PREVIEW_BASE"); fi
+          python -m scripts.studio_pages studio build/studio build/pages-studio --revision "$SOURCE_REV" "${preview[@]}" > build/pages-hashes.json
+          python -m scripts.studio_pages verify build/pages-studio --revision "$SOURCE_REV" "${preview[@]}" --hashes build/pages-hashes.json
+          python -m scripts.studio_pages studio build/studio build/rollback-source --revision "$SOURCE_REV" > build/rollback-hashes.json
+          python -m scripts.studio_pages rollback build/rollback-source build/rollback-check --revision "$SOURCE_REV" --hashes build/rollback-hashes.json
+          python -m scripts.studio_pages verify build/rollback-check --revision "$SOURCE_REV" --hashes build/rollback-hashes.json
+        env:
+          PREVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+      - name: Run real Chromium Renderer, Worker, depth and privacy contracts
+        working-directory: renderer
+        run: |
+          node --test tests/local-browser.test.mjs tests/browser.test.mjs tests/renderer-session.browser.mjs
+          node tests/renderer-session-wasm.browser.mjs build/pages-studio
+          node tests/renderer-depth-oracle.browser.mjs
+          node tests/studio-s2a.browser.mjs build/pages-studio --catalog
+          STUDIO_REVIEW_SITE=build/pages-studio node --test tests/studio-pages-live.test.mjs
+      - name: Kill every real RVI source mutant
+        working-directory: raster
+        run: node scripts/mutate-v02.mjs
+      - name: Save current review bundle and actual test outputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: platform-browser-review
+          path: |
+            renderer/build/pages-studio/
+            renderer/build/native/sphere.ppm
+            renderer/build/renderer-session-browser.png
+            renderer/build/studio-http-smoke.png
+            renderer/build/pages-hashes.json
+            renderer/build/rollback-hashes.json
+            raster/build/v02/mutations.json
+          if-no-files-found: error
+      - name: Install pinned release verifier
+        run: |
+          curl -fLsS --retry 3 https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_amd64.tar.gz -o "$RUNNER_TEMP/gh.tar.gz"
+          echo "79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f  $RUNNER_TEMP/gh.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/fgmp-gh"
+          tar -xzf "$RUNNER_TEMP/gh.tar.gz" -C "$RUNNER_TEMP/fgmp-gh" --strip-components=1
+          echo "$RUNNER_TEMP/fgmp-gh/bin" >> "$GITHUB_PATH"
+      - name: Verify release origin, archive and real unsigned-attestation rejection
+        working-directory: renderer
+        env:
+          STUDIO_REAL_GH_VERIFY: "1"
+        run: |
+          gh attestation verify --help > build/attestation-verifier-help.txt
+          python -m unittest discover -s tests -p test_studio_release.py -v
+      - name: Seal the same verified Studio without rebuilding
+        id: seal
+        working-directory: renderer
+        env:
+          PREVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          preview=()
+          if [[ -n "$PREVIEW_BASE" ]]; then preview=(--preview-base "$PREVIEW_BASE"); fi
+          python -m scripts.studio_release seal --input build/pages-studio --output build/release/studio.zip --revision "$SOURCE_REV" "${preview[@]}"
+      - name: Store immutable current Studio artifact
+        id: studio_artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: platform-studio-${{ env.SOURCE_REV }}-${{ github.run_attempt }}
+          path: renderer/build/release/studio.zip
+          if-no-files-found: error
+          retention-days: 30
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'
+    outputs:
+      artifact-id: ${{ steps.studio_artifact.outputs.artifact-id }}
+  release:
+    name: Publish or restore verified Platform Studio
+    needs:
+      - repo-guard
+      - platform-policy
+      - core
+      - wasm-browser
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback') || (needs.repo-guard.result == 'success' && needs.platform-policy.result == 'success' && needs.core.result == 'success' && needs.wasm-browser.result == 'success'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+      pages: write
+      id-token: write
+      attestations: write
+    concurrency:
+      group: fgm-platform-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MODE: ${{ inputs.mode || 'publish' }}
+      EXPECTED_MAIN: ${{ inputs.expected_main || github.sha }}
+      TARGET_RELEASE: ${{ inputs.release_revision }}
+    steps:
+      - name: Checkout current release tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Install pinned release verifier
+        run: |
+          curl -fLsS --retry 3 https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_amd64.tar.gz -o "$RUNNER_TEMP/gh.tar.gz"
+          echo "79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f  $RUNNER_TEMP/gh.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/fgmp-gh"
+          tar -xzf "$RUNNER_TEMP/gh.tar.gz" -C "$RUNNER_TEMP/fgmp-gh" --strip-components=1
+          echo "$RUNNER_TEMP/fgmp-gh/bin" >> "$GITHUB_PATH"
+      - name: Require current main and explicit dispatch identity
+        working-directory: renderer
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$EXPECTED_MAIN" = "$GITHUB_SHA"
+          [[ "$MODE" == publish || "$MODE" == rollback ]]
+          python -m scripts.studio_release current --revision "$GITHUB_SHA"
+      - name: Find and authenticate the prior live release
+        id: previous
+        working-directory: renderer
+        run: |
+          mkdir -p build
+          python -m scripts.studio_release previous > build/previous.json
+          previous="$(python -c 'import json; print(json.load(open("build/previous.json"))["revision"])')"
+          if [[ -n "$previous" ]]; then
+            python -m scripts.studio_release restore --revision "$previous" --output build/previous/site
+          fi
+      - name: Admit only verified CI bytes or an authenticated retained release
+        id: prepare
+        working-directory: renderer
+        env:
+          ARTIFACT_ID: ${{ needs.wasm-browser.outputs.artifact-id }}
+        run: |
+          if [[ "$MODE" == rollback ]]; then
+            python -m scripts.studio_release restore --revision "$TARGET_RELEASE" --output build/selected/site
+          else
+            python -m scripts.studio_release prepare --output build/selected/site --revision "$GITHUB_SHA" --artifact-id "$ARTIFACT_ID" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+          fi
+      - name: Install one workspace and published-browser verifier
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps chromium
+        env:
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+      - name: Configure Platform Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
+        with:
+          enablement: true
+      - name: Recheck stale main at the publication boundary
+        working-directory: renderer
+        run: |
+          python -m scripts.studio_release current --revision "$GITHUB_SHA"
+      - name: Upload exactly the admitted site
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
+        with:
+          path: renderer/build/selected/site
+          name: github-pages
+      - name: Deploy admitted Platform site
+        id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+      - name: Confirm public HTTP hashes and real WASM Studio
+        id: smoke
+        working-directory: renderer
+        env:
+          PAGES_REVISION: ${{ steps.prepare.outputs.revision }}
+          PAGES_VERSION: ${{ steps.prepare.outputs.version }}
+          PAGES_HASHES: ${{ steps.prepare.outputs.hashes }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if env -u GH_TOKEN -u GITHUB_TOKEN node tests/studio-pages.live.mjs; then exit 0; fi
+            if [[ "$attempt" != 5 ]]; then sleep 15; fi
+          done
+          exit 1
+      - name: Attest only the publicly confirmed Platform bytes
+        id: attest
+        if: success() && env.MODE == 'publish'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: renderer/build/selected/studio.zip
+          create-storage-record: false
+      - name: Retain authenticated current and previous product releases
+        id: retain
+        working-directory: renderer
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          if [[ "$MODE" == publish ]]; then
+            cp "$BUNDLE_PATH" build/selected/studio.sigstore.json
+            python -m scripts.studio_release retain --input build/selected/studio.zip --bundle build/selected/studio.sigstore.json --revision "$GITHUB_SHA"
+          else
+            gh release edit "studio-$TARGET_RELEASE" --repo netkeep80/fgm-platform --latest
+          fi
+      - name: Save actual public Studio evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: platform-pages-published-smoke
+          path: renderer/build/studio-http-smoke.png
+          if-no-files-found: error
+      - name: Upload authenticated fallback after failed publication
+        if: failure() && (steps.deploy.outcome == 'success' || steps.deploy.outcome == 'failure') && steps.previous.outputs.revision != '' && steps.previous.outputs.revision != steps.prepare.outputs.revision
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
+        with:
+          path: renderer/build/previous/site
+          name: github-pages-fallback
+      - name: Restore the prior verified Platform site
+        id: fallback
+        if: failure() && (steps.deploy.outcome == 'success' || steps.deploy.outcome == 'failure') && steps.previous.outputs.revision != '' && steps.previous.outputs.revision != steps.prepare.outputs.revision
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+        with:
+          artifact_name: github-pages-fallback
+      - name: Confirm fallback without hiding the original failure
+        if: failure() && steps.fallback.outcome == 'success'
+        working-directory: renderer
+        env:
+          PAGES_REVISION: ${{ steps.previous.outputs.revision }}
+          PAGES_VERSION: ${{ steps.previous.outputs.version }}
+          PAGES_HASHES: ${{ steps.previous.outputs.hashes }}
+        run: |
+          env -u GH_TOKEN -u GITHUB_TOKEN node tests/studio-pages.live.mjs
+          gh release edit "studio-$PAGES_REVISION" --repo netkeep80/fgm-platform --latest
+          echo PLATFORM_FALLBACK_CONFIRMED_ORIGINAL_GATE_REMAINS_FAILED
