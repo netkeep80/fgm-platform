@@ -1,31 +1,80 @@
-## Текущий Platform-контур
+# Подготовка и проверка Platform Studio
 
-Сборка и provenance пакета берутся из единого Platform checkout: `docs/platform.md`. Старые инструкции отдельных source repos ниже являются исходным контекстом и не описывают текущую сборку; source-pinned workflow не запускается в Platform. Реальный текущий браузерный пакет проверяется root CI, публикация переносится отдельно на S07. На S08 устаревшие инструкции удаляются; архив истории не требуется.
+Текущий срез проверяет пакет до публикации. Production Pages ещё не подключён к Platform.
+Исходники и WASM собираются из одного checkout по [корневой инструкции](../../docs/platform.md).
+Последний dormant Pages workflow заменяется следующим срезом S07; его старые команды не являются текущей процедурой.
 
-# Выпуск Studio на GitHub Pages
+## Один пакет и точная ревизия
 
-Каждое обновление ветки `main`, включая слияние PR, запускает `.github/workflows/studio-pages.yml`. Workflow извлекает точный коммит события, пересобирает Studio и WASM и проверяет синтетический сценарий каталога в Chromium. Успешная проверка передаёт пакет на GitHub Pages. Запуски публикации и отката идут в общей очереди. Перед публикацией автоматической или ручной сборки Studio workflow сверяет её SHA с текущим `main`. Если ветка уже продвинулась, устаревшая сборка пропускает публикацию.
+После root WASM build запустите из корня:
 
-В шапке [Reconstruction Studio](https://netkeep80.github.io/fgm-renderer/) видна версия `A.M`. Полный SHA сборки доступен в подсказке и в `studio-manifest.json`.
+    node renderer/scripts/build-studio-s2a.mjs build/wasm
+    cd renderer
+    python -m scripts.studio_pages studio build/studio build/pages-studio --revision FULL_PLATFORM_SHA > build/pages-hashes.json
+    python -m scripts.studio_pages verify build/pages-studio --revision FULL_PLATFORM_SHA --hashes build/pages-hashes.json
 
-- `A` — номер архитектуры из `studio/architecture-version.txt` в точном коммите сборки. Текущая архитектура принята за `1`. При несовместимом изменении архитектуры Studio увеличивайте `A` на единицу в том же PR.
-- `M` — число merge-коммитов по первой родительской линии `main` до коммита сборки включительно. Слияния внутри рабочих веток исключены из подсчёта. Прямые коммиты, squash и rebase без merge-коммита сохраняют `M`. При смене архитектуры `M` продолжает расти по той же истории.
-- Предпросмотр PR использует `A` из HEAD PR и `M` его базы плюс один, то есть версию для обычного merge-коммита. Публичная сборка вычисляет `M` заново по фактическому SHA `main` и полной истории Git. Повторная сборка того же SHA даёт ту же версию.
+FULL_PLATFORM_SHA — полный SHA коммита текущей Platform. Producer проверяет чистый tracked checkout
+и build metadata. Publisher независимо получает настоящий Git TREE указанного коммита, его engine contract
+и версию A.M. Другой TREE отвергается, даже если это корректная 40-hex строка и все активы заново хэшированы.
+Входной манифест имеет schema fgmp-studio-bundle/1, готовый сайт — fgmp-studio-pages/1.
 
-## Проверка пакета
+A хранится в renderer/studio/architecture-version.txt в самом коммите. M — число merge-коммитов
+по первым родителям до этой ревизии. Для review можно явно указать --preview-base FULL_BASE_SHA:
+тогда M равен числу merge-коммитов BASE плюс один. Такой preview не подходит для rollback релиза.
+SHA и TREE находятся в публичном manifest и подсказке версии.
 
-- Для Studio допуск к публикации включает RepoGuard на том же коммите, из которого собран пакет. При обновлении `main` проверяется переход от предыдущего SHA из события `push` к новому. Для PR используется SHA базы PR, для ручного выпуска берётся первый родитель коммита сборки.
-- Ревизия рендерера берётся из коммита события. [`studio/engine-lock.json`](../studio/engine-lock.json) закрепляет принятые ревизии регенератора, ядра и протокол Worker. Workflow проверяет оба Git-снимка и собирает WASM с Emscripten 4.0.21. Пакет использует девять разрешённых ресурсов, включая Worker, WASM, каталог UFO, синтетический пример и интерфейс целого объекта. При принятии STUDIO-S3-S1 публичный Chromium дополнительно проверяет whole-object reconstruction.
-- Сборка сверяет исходный манифест с закреплёнными версиями, список файлов и контрольные суммы. Публичный манифест `fgmv-studio-pages/3` содержит полную ревизию рендерера, видимую версию, параметры из `engine-lock.json` и контрольные суммы файлов.
-- В Chromium проверяются текущий одноклеточный сценарий и `r06-whole-build/1` из подготовленного пакета Pages. Протокол из закреплённого регенератора сверяет файлы синтетических многоклеточных объектов с native CLI и Python B2, проверяет C05, чтение результатов порциями и отказ при неверной контрольной сумме.
-- PR использует тот же путь сборки и Chromium и сохраняет проверочный пакет. Оригинальные ресурсы UFO остаются в браузере пользователя при локальном импорте.
-- Для отката используется неизменяемый Git-снимок `29d9ed509c5ef50e3a92b8bb72db10eb7903069f`, дерево `5cfaed61445bd4cd460d974cbcea7aea7ad07c75`. Скрипт проверяет снимок V03 и копирует разрешённые файлы.
+Проверяются девять фиксированных активов и manifest: имена, обычный тип файла, отсутствие symlink,
+ограничение общего размера 16 MiB, WASM magic, точный engine, version badge и SHA-256.
+Verify повторно проверяет уже готовый сайт. Если передан --hashes, требуется совпадение всех десяти
+хэшей, включая сам manifest. Наличие хэшей рядом с пакетом само по себе не удостоверяет его происхождение.
 
-## Подтверждение публикации и ручной запуск
+## Побайтовый Platform rollback
 
-1. Откройте [Actions](https://github.com/netkeep80/fgm-renderer/actions/workflows/studio-pages.yml) и найдите запуск по нужному коммиту `main`. Для Pages должен быть выбран источник GitHub Actions. Задание публикации проверяет эту настройку.
-2. Дождитесь `DEPLOYED_STUDIO`. Chromium проверяет HTTP 200, SHA-256 публичных файлов и соответствие версии коммиту. Затем он запускает синтетический пример и реконструкцию двери из набора `BARN` на карте `CULTA00`. Для обоих запусков проверяются 6144 вокселя. Снимок экрана сохраняется в Actions.
-3. Для повторной сборки и публикации можно вручную запустить тот же workflow на `main` с `mode=studio`. Укажите полный SHA актуального коммита в `release_sha`. Ручной запуск проверяет совпадение SHA с коммитом запуска.
-4. Для восстановления V03 выберите `mode=rollback-v03` и укажите полный SHA коммита `main` с workflow. `ROLLBACK_RESTORED` подтверждается публичными SHA-256 и загрузкой страницы камеры. Восстановление действует до следующей успешной публикации Studio, в том числе автоматической после обновления `main`. Запишите результат выпуска или отката в [Issue #27](https://github.com/netkeep80/fgm-renderer/issues/27).
+Откат использует ранее проверенный Platform сайт. Пересборка, старый V03, исходные репозитории и старый Pages не нужны.
 
-Подготовка и проверка выполняются с правами чтения. Права `pages:write` и `id-token:write` доступны заданию публикации в окружении `github-pages`.
+    python -m scripts.studio_pages rollback VERIFIED_PLATFORM_SITE build/pages-restored --revision FULL_RELEASE_SHA --hashes TRUSTED_RELEASE_HASHES.json
+    python -m scripts.studio_pages verify build/pages-restored --revision FULL_RELEASE_SHA --hashes TRUSTED_RELEASE_HASHES.json
+
+TRUSTED_RELEASE_HASHES.json должен быть независимо получен от разрешённого ранее проверенного выпуска,
+а не вычислен из потенциально повреждённого входа. Не допускаются неполные hashes или отсутствующий manifest hash.
+Исходный Git commit должен присутствовать в Platform checkout: engine/version/TREE читаются из него,
+даже если текущий HEAD уже продвинулся. Содержимое всех десяти файлов копируется без изменения.
+Непустой output и пересечение output/input отвергаются до записи.
+
+Эта команда проверяет admission. Она не подтверждает авторскую приёмку, успешный прежний deployment
+или происхождение произвольно переданного файла hashes. Следующий срез S07 обязан связать rollback
+с доверенным CI release artifact, сохранить необходимые текущие release материалы и реально проверить
+развёртывание/откат без доступности старых репозиториев. Полный архив истории для этого не требуется.
+
+## HTTP и настоящий WASM smoke
+
+renderer/tests/studio-pages.live.mjs использует ту же проверку для будущего адреса
+https://netkeep80.github.io/fgm-platform/ и локального review сервера по loopback HTTP.
+Ему передаются PAGES_REVISION, PAGES_VERSION и PAGES_HASHES из независимо проверенного выпуска;
+PAGES_URL задаёт локальный review URL. В production разрешён только указанный Platform HTTPS URL.
+
+Checker получает каждый из десяти ресурсов без redirect, сверяет ожидаемые hashes, schema, engine,
+точный Git revision/TREE и version badge. Chromium затем повторно проверяет hash каждого загружаемого
+ресурса до исполнения. Подмена ответа после HTTP scan блокируется. Общая browser network boundary
+разрешает только GET к данному сайту и локальные blob/data; внешний запрос отклоняется.
+
+Настоящий WASM проверяет synthetic example, каталог из локальной синтетической папки BARN/CULTA00
+и whole object на четыре клетки/24576 центров. Screenshot сохраняется как review evidence.
+Успешный локальный HTTP smoke не означает PUBLISHED или визуальную авторскую приёмку.
+
+## Проверки и оставшийся S07
+
+Из renderer:
+
+    python -m unittest discover -s tests -p test_studio_pages.py -v
+    node --test tests/studio-pages-live.test.mjs
+
+Native Ubuntu/Windows выполняют Git/TREE/rollback и реальные HTTP negatives.
+Существующий Ubuntu WASM/browser job дополнительно передаёт STUDIO_REVIEW_SITE=build/pages-studio
+тому же HTTP suite и выполняет настоящий Chromium smoke и подмену ответа после scan.
+Нового workflow/job или CMake target нет.
+
+S07 остаётся открытым до одной цепи accepted main → native/WASM → проверенный artifact → Pages,
+доверенного rollback, public HTTP/browser smoke, удаления последнего legacy Pages workflow и отдельной
+визуальной авторской приёмки. Несовместимые UI/API изменения требуют отдельной авторской приёмки.
+Stage A, browser R07 fit, физические GPU/Windows WebGPU и финальные четыре PASS этим срезом не принимаются.

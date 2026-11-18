@@ -58,7 +58,8 @@ test('current Platform integrity, ownership and no-op resistance',async t=>{
       'renderer/scripts/build-studio-s2a.mjs','renderer/tests/studio-bundle.test.mjs',
       'renderer/tests/local-browser.mjs','renderer/tests/local-browser.test.mjs',
       'renderer/tests/browser.test.mjs','renderer/tests/renderer-session-wasm.browser.mjs',
-      'renderer/tests/renderer-depth-oracle.browser.mjs'])
+      'renderer/tests/renderer-depth-oracle.browser.mjs','renderer/tests/studio-pages.live.mjs',
+      'renderer/tests/studio-pages-live.test.mjs'])
       cases.push(['successful no-op '+path,()=>{
         writeFileSync(join(temp,path),'console.log("PASS");\n');
         const r=spawnSync(process.execPath,[join(temp,path)],{encoding:'utf8'});
@@ -78,6 +79,16 @@ test('current Platform integrity, ownership and no-op resistance',async t=>{
       ['scene verifier successful no-op',()=>writeFileSync(join(temp,'renderer/tests/scene.test.cpp'),'int main(){return 0;}\n'),'CRITICAL_CONTENT'],
     );
     cases.push(
+      ['publisher independently derived TREE check weakened',()=>{
+        const path=join(temp,'renderer/scripts/studio_pages.py'),source=readFileSync(path,'utf8');
+        const mutated=source.replace('manifest.get("platform") == identity(repo, revision)', 'bool(manifest.get("platform"))');
+        assert.notEqual(mutated,source);writeFileSync(path,mutated);
+      },'CRITICAL_CONTENT'],
+      ['native publication admission step disabled',()=>{
+        const path=join(temp,'.github/workflows/core-ci.yml'),value=parse(readFileSync(path));
+        const step=value.jobs.core.steps.find(s=>s.name==='Verify Platform publication and rollback admission on both systems');
+        assert.ok(step);step.if='false';writeFileSync(path,stringify(value));
+      },'CRITICAL_CONTENT'],
       ['legacy source pin returned',()=>edit('renderer/studio/engine-lock.json',r=>{r.regenerator='0'.repeat(40);}),'CRITICAL_CONTENT'],
       ['WASM browser job disabled',()=>{
         const path=join(temp,'.github/workflows/core-ci.yml'),value=parse(readFileSync(path));
@@ -85,6 +96,12 @@ test('current Platform integrity, ownership and no-op resistance',async t=>{
       },'CRITICAL_CONTENT'],
       ['source-native preserved while bundle stage no-ops',()=>writeFileSync(join(temp,'renderer/scripts/stage-web.mjs'),'console.log("PASS");\n'),'CRITICAL_CONTENT'],
     );
+    for(const path of ['renderer/scripts/studio_pages.py','renderer/tests/test_studio_pages.py'])
+      cases.push(['successful Python no-op '+path,()=>{
+        writeFileSync(join(temp,path),'print("PASS")\n');
+        const r=spawnSync('python',[join(temp,path)],{encoding:'utf8'});
+        assert.equal(r.status,0);assert.match(r.stdout,/PASS/);
+      },'CRITICAL_CONTENT']);
     cases.push(['no-op plus historical manifest rewritten',()=>{
       writeFileSync(join(temp,'tests/core-parity.test.mjs'),'console.log("PASS");\n');
       writeFileSync(join(temp,'docs/core-integration.json'),'{}\n');

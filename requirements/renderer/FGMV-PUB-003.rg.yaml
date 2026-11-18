@@ -45,6 +45,11 @@ relations:
       - verified_by
     target:
       kind: artifact
+      path: renderer/tests/studio-pages-live.test.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
       path: renderer/tests/studio-s2a.browser.mjs
   - predicates:
       - requires
