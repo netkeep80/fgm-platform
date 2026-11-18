@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
 project(fgm_boot LANGUAGES CXX)
 
-include(FetchContent)
-FetchContent_Declare(fgm_core
-  GIT_REPOSITORY https://github.com/netkeep80/fgm-core.git
-  GIT_TAG ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b
-)
-set(BUILD_TESTING OFF)
-FetchContent_MakeAvailable(fgm_core)
+if(NOT TARGET fgm::cpu)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../core" "${CMAKE_CURRENT_BINARY_DIR}/core")
+endif()
+if(NOT TARGET fgm::raster)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../raster" "${CMAKE_CURRENT_BINARY_DIR}/raster")
+endif()
 
 set(BOOT_SIZE 128)
 configure_file(src/scene-size.hpp.in generated/scene-size.hpp @ONLY)
@@ -38,10 +37,10 @@ else()
   else()
     find_library(WGPU_LIBRARY NAMES wgpu_native PATHS "${WGPU_ROOT}/lib" REQUIRED NO_DEFAULT_PATH)
   endif()
-  # Pin the semantic oracle to the accepted C05 interpreter already fetched above.
-  add_executable(fgm_v02_semantic tests/v02-c05.test.cpp src/rvi-v02.cpp)
+  # Независимый semantic oracle использует локальный evaluator и одну Raster реализацию.
+  add_executable(fgm_v02_semantic tests/v02-c05.test.cpp)
   target_compile_features(fgm_v02_semantic PRIVATE cxx_std_20)
-  target_link_libraries(fgm_v02_semantic PRIVATE fgm::cpu nlohmann_json::nlohmann_json)
+  target_link_libraries(fgm_v02_semantic PRIVATE fgm::raster fgm::cpu nlohmann_json::nlohmann_json)
   add_executable(fgm_boot src/native.cpp)
   target_include_directories(fgm_boot PRIVATE "${WGPU_INCLUDE}")
   target_link_libraries(fgm_boot PRIVATE boot_scene "${WGPU_LIBRARY}")

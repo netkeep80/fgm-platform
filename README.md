@@ -1,28 +1,29 @@
 # FGM Platform — единая платформа Fractal Generative Models
 
-Статус: **S03 ACCEPTED · S04 CANDIDATE**. Принятые PR #30/#31 перенесли исходные файлы и 73 нормативных требования в монорепозиторий. Текущий срез подключает локальный Core к корневому CMake, активному Linux/Windows CI и проверке native/reference C05. Интеграция Regenerator/Renderer и выпуск общей Studio остаются следующими этапами.
+Локальная native-сборка объединяет Core, общую CPU Raster реализацию и Regenerator. Текущее состояние принятия и следующий этап находятся в [Issue #1](https://github.com/netkeep80/fgm-platform/issues/1); README описывает устройство и команды Platform.
 
 **Единственная точка восстановления проекта после окончания чата:** [CONTROL Issue #1](https://github.com/netkeep80/fgm-platform/issues/1). [Протокол журнала и контрольных точек #2](https://github.com/netkeep80/fgm-platform/issues/2). [Начальный этап RepoGuard #3](https://github.com/netkeep80/fgm-platform/issues/3). [Покрытие старой истории/roadmap #15](https://github.com/netkeep80/fgm-platform/issues/15).
 
 ## Назначение и границы
 
 - `core/`: FGM-0, каноническая модель, математическая семантика, C04/C05.
+- `raster/`: единая CPU RVI реализация для R07 и Renderer oracle.
 - `regenerator/`: R01–R07, исходные наблюдения, происхождение данных, whole-object fit.
 - `renderer/`: RendererSession, WebGPU и производная геометрия.
 - `studio/` (будущий): общий Native/WASM интерфейс, локальный эксперимент и проверенный автоматический Pages release.
 
 `netkeep80/ufo-fractal` остаётся отдельным игровым GPLv3-продуктом. Оригинальные данные UFO/TFTD и производные игровые ресурсы остаются в приватном контуре; **никаких** MAP/MCD/LOFT/PCK/TAB/game images/derived FGM в публичном GitHub, Issues, CI или Pages.
 
-## Сборка Core
+## Native-сборка Platform
 
 ```sh
-cmake -S . -B build/core -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
-cmake --build build/core --config Release --parallel 2
-node scripts/check-ctest.mjs build/core --config Release
-ctest --test-dir build/core -C Release --output-on-failure --verbose --no-tests=error
+cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build/native --config Release --parallel 2
+node scripts/check-ctest.mjs build/native --suite platform --config Release
+ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
 ```
 
-[Интеграция и контракт потребителя](docs/core-integration.md) описывают локальный `fgm::cpu`, независимый внешний CMake-проект и проверку 6144 центров C05. Принятые S02/S03 проверяются на исторических коммитах; текущий S04 имеет отдельный [реестр](docs/core-integration.json) и checker. Отдельная авторская приёмка этого Draft среза ещё требуется.
+[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 27 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; историческое evidence воспроизводится отдельно по immutable refs.
 
 ## Управление принятием
 
@@ -34,6 +35,6 @@ RepoGuard v6.0.1 закреплён на `74db97791e6da8a75287164f0d0b41579108f1
 
 [S00 RepoGuard](https://github.com/netkeep80/fgm-platform/issues/3) → [S01 source lock](https://github.com/netkeep80/fgm-platform/issues/4) → [S02 снимки файлов](https://github.com/netkeep80/fgm-platform/issues/5) → [S03 requirement migration](https://github.com/netkeep80/fgm-platform/issues/6) → [S04 Core](https://github.com/netkeep80/fgm-platform/issues/7) → [S05 Regenerator](https://github.com/netkeep80/fgm-platform/issues/8) → [S06 Renderer](https://github.com/netkeep80/fgm-platform/issues/9) → [S07 Live Studio](https://github.com/netkeep80/fgm-platform/issues/10) → [S08 cutover](https://github.com/netkeep80/fgm-platform/issues/14).
 
-**Прежние проекты сохраняют исторические Requirements, Issues, PR и свидетельства. Интегрированные сборки и новый live Studio в Platform ещё не приняты. Текущий Pages-сайт прежнего Renderer продолжает работать.**
+**Прежние проекты сохраняют исторические Requirements, Issues, PR и свидетельства. Интегрированные сборки и новый live Studio в Platform ещё не приняты. Текущий Pages-сайт прежнего Renderer продолжает работать; его переключение требует отдельного принятия.**
 
 Защита `main` [отложена по явному решению автора](https://github.com/netkeep80/fgm-platform/issues/27#issuecomment-6962327932) и не входит в текущие условия merge. Сохраняются независимый аудит exact HEAD/TREE, авторская приёмка, свежий RepoGuard и слияние с проверкой ожидаемого SHA.

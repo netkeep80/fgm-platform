@@ -45,7 +45,7 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: regenerator/.github/workflows/importer-ci.yml
+      path: .github/workflows/core-ci.yml
   - predicates:
       - verified_by
     target:

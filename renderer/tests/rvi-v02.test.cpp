@@ -1,4 +1,4 @@
-#include "../src/rvi-v02.hpp"
+#include "rvi-v02.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>

@@ -1,0 +1,39 @@
+format: repo-guard/requirement-v1
+id: FGMP-BUILD-001
+normative: "### FGMP-BUILD-001 — Platform должна собирать Core, общую CPU RVI реализацию и все native Regenerator targets из одного корневого CMake-графа, используя локальный fgm::cpu без внутренних Git FetchContent и без глобального отключения тестов. Единственная реализация RVI должна обслуживать R07 и проверяемых Renderer consumers; целочисленная R05-проекция сохраняет отдельный предметный контракт. Native/Python R01–R07, CLI, package/hash, deterministic receipts, отрицательные проверки, исходные Core/C05 и public consumer должны реально выполняться на Linux и Windows с точным enabled CTest inventory и --no-tests=error. Текущая версионированная policy должна закреплять область разрешённых изменений и содержимое критических verifiers независимо от проверяемого manifest, сохранять нормативные значения, ID, lifecycle, execution constraints и проверять происхождение перемещённой реализации. Исторические S02–S04 доказательства должны сохраняться на immutable SHA с отдельным воспроизводимым replay, не создавая растущий каскад исторических проверок в обычном PR CI. Временные правила перехода имеют владельца S05 и retirement на S08 после проверки архивной сохранности и эквивалентной текущей защиты. Упрощение оценивается по зависимостям, независимым реализациям, владельцам, исключениям и процедурам сборки; зелёный CI не заменяет независимый архитектурный аудит и авторскую приёмку. WASM/browser fit, Stage A и Studio release не входят в этот native срез."
+lifecycle: {accepted: false, current: false, published: false}
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: FGMP-PROJECT-000}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMC-EVAL-001}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMR-FIT-001}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMV-RVI-001}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: core/CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: regenerator/CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: renderer/CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: raster/CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: scripts/check-platform.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/platform-policy.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: .github/workflows/core-ci.yml}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: .github/workflows/source-snapshots.yml}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: scripts/check-ctest.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/ctest-gate.test.mjs}
+  - predicates: [documents]
+    target: {kind: artifact, path: docs/platform.md}
+  - predicates: [documents]
+    target: {kind: artifact, path: regenerator/.github/workflows/importer-ci.yml}

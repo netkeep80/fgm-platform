@@ -8,6 +8,8 @@ endif()
 
 # Единственный локальный владелец CPU-семантики; внешняя копия Core не загружается.
 add_subdirectory(core)
+add_subdirectory(raster)
+add_subdirectory(regenerator)
 
 if(BUILD_TESTING)
   find_program(FGMP_NODE_EXECUTABLE NAMES node REQUIRED)

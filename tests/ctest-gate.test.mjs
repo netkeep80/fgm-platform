@@ -4,12 +4,24 @@ import {execFileSync,spawnSync} from 'node:child_process';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {assertCTestSuite,checkCTestSuite} from '../scripts/check-ctest.mjs';
+import {assertCTestSuite,checkCTestSuite,REQUIRED_SUITES} from '../scripts/check-ctest.mjs';
 
 const cmake=process.env.FGMP_CMAKE||'cmake',ctest=process.env.FGMP_CTEST||'ctest';
 const names=['core-c05-parity','core-external-consumer','fgm_cpu'];
 const report=(ns=names)=>({kind:'ctestInfo',version:{major:1,minor:0},
   tests:ns.map(name=>({name,command:['synthetic-command'],properties:[]}))});
+
+test('Platform requires all 27 tests and rejects omissions and disabled subjects',()=>{
+  const all=REQUIRED_SUITES.platform;
+  assert.equal(all.length,27);
+  assert.equal(assertCTestSuite(report(all),'platform').length,27);
+  for(const name of all){
+    assert.throws(()=>assertCTestSuite(report(all.filter(n=>n!==name)),'platform'),/CTEST_SUITE_MISMATCH/);
+    const r=report(all);r.tests.find(t=>t.name===name).properties=[{name:'DISABLED',value:true}];
+    assert.throws(()=>assertCTestSuite(r,'platform'),/CTEST_DISABLED/);
+  }
+  assert.throws(()=>assertCTestSuite(report(names),'platform'),/CTEST_SUITE_MISMATCH/);
+});
 
 test('exact enabled core and consumer inventories',()=>{
   assert.deepEqual(assertCTestSuite(report()),names);
