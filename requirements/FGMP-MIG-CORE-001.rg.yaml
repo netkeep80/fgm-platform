@@ -24,7 +24,7 @@ relations:
   - predicates: [verified_by]
     target: {kind: artifact, path: .github/workflows/core-ci.yml}
   - predicates: [documents]
-    target: {kind: artifact, path: core/.github/workflows/repo-guard.yml}
+    target: {kind: artifact, path: .github/workflows/core-ci.yml}
   - predicates: [documents]
     target: {kind: artifact, path: docs/core-integration.json}
   - predicates: [documents]

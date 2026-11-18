@@ -25,27 +25,29 @@ relations:
       - verified_by
     target:
       kind: artifact
-      path: renderer/tests/rvi-v02.test.cpp
+      path: raster/tests/rvi-v02.test.cpp
   - predicates:
       - verified_by
     target:
       kind: artifact
-      path: renderer/tests/fixtures/v02-scenes.txt
+      path: raster/tests/fixtures/v02-scenes.txt
   - predicates:
       - verified_by
     target:
       kind: artifact
-      path: renderer/scripts/test-v02.mjs
+      path: raster/scripts/test-v02.mjs
   - predicates:
       - verified_by
     target:
       kind: artifact
-      path: renderer/scripts/mutate-v02.mjs
+      path: raster/scripts/mutate-v02.mjs
   - predicates:
       - documents
     target:
       kind: artifact
       path: renderer/docs/v02-cpu.md
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/scripts/test-v02.mjs}
 constraints:
   - id: fgm_rvi_004_cpu_evidence
     activation: scoped_change
@@ -55,7 +57,7 @@ constraints:
         - verified_by
     evidence:
       class: execution
-      key: execution:renderer/scripts/test-v02.mjs
+      key: execution:raster/scripts/test-v02.mjs
       verifier:
         kind: artifact
-        path: renderer/scripts/test-v02.mjs
+        path: raster/scripts/test-v02.mjs

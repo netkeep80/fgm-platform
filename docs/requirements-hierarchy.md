@@ -41,3 +41,7 @@ S03 checker с count 77 и frozen 232 module files сохраняется для
 ## Единая native-сборка
 
 `FGMP-BUILD-001` связывает локальные Core/Raster/Regenerator targets, current policy и предметные проверки. Архитектура и историческое воспроизведение описаны в [Platform](platform.md).
+
+## Native-интеграция Renderer
+
+`FGMP-RENDERER-001` — candidate-контракт корневой native-сборки Renderer, владения Raster tests, общей проверки языка и npm workspace. Требование имеет lifecycle false/false/false; GPU/WASM/browser и публикация Studio принимаются отдельно.

@@ -30,7 +30,7 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/package-lock.json
+      path: package-lock.json
   - predicates:
       - implemented_by
     target:

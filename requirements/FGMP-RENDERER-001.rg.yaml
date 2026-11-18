@@ -1,0 +1,61 @@
+format: repo-guard/requirement-v1
+id: FGMP-RENDERER-001
+normative: "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. Математические реализации сохраняются, RVI tests и fixtures имеют единственного владельца Raster. Два существующих camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета должны входить в точный enabled CTest inventory на Linux и Windows вместе с прежними Core/Regenerator/Raster тестами. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одинаковые проверки языка объединяются, их отрицательные тесты и аудит документов выполняются до RepoGuard; удаление заменённых workflow не уменьшает уникальное покрытие. Версия текущей policy явно закрепляет область native-перехода и критические verifiers, сохраняет нормативные значения, ID, lifecycle и ограничения существующих требований. Историческое evidence S02–S05 сохраняется по immutable SHA, его replay отделён от обычного CI. Временные правила принадлежат S06 и подлежат retirement на S08. Этот срез не утверждает выполнение GPU/WASM/Chromium, завершение S06, Stage A или публикацию Studio; они требуют отдельных доказательств и авторской приёмки."
+lifecycle: {accepted: false, current: false, published: false}
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: FGMP-PROJECT-000}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMP-BUILD-001}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMV-PORT-001}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMV-CAM-001}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMV-CAM-003}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMV-SESSION-002}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: renderer/CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: raster/CMakeLists.txt}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: package.json}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: package-lock.json}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: renderer/package.json}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: scripts/check-platform.mjs}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: scripts/check-bootstrap.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/scene.test.cpp}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/scripts/test-v03.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/scripts/test-v03-map.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/renderer-session.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/studio-r05.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/studio-ufo-catalog.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/platform-policy.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/ctest-gate.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/bootstrap.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: .github/workflows/core-ci.yml}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: .github/workflows/source-snapshots.yml}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: .github/workflows/repo-guard.yml}
+  - predicates: [documents]
+    target: {kind: artifact, path: docs/platform.md}
+  - predicates: [documents]
+    target: {kind: artifact, path: docs/requirements-hierarchy.md}

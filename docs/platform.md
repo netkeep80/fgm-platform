@@ -1,19 +1,25 @@
-# Локальная native Platform
+# Локальная Platform
 
 ## Сборка и проверка
 
-Нужны CMake ≥3.24, C++20 compiler, Python 3 и Node.js 24.
+Нужны CMake ≥3.24, C++20 compiler, Python 3 и Node.js 24. Одна установка npm обслуживает Platform и Renderer; отдельный Renderer lock удалён с сохранением versions/resolved/integrity всех зависимостей.
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run test:node --workspace renderer
 cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build/native --config Release --parallel 2
 node scripts/check-ctest.mjs build/native --suite platform --config Release
 ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
 ```
 
-Одна процедура собирает Core, Raster и все native Regenerator CLI. Внешний JSON dependency закреплён версией/хешем; CMake также поддерживает установленный `nlohmann_json` 3.12.0. Внутренние FGM-репозитории из сети не загружаются. `BUILD_TESTING=OFF` выключает регистрацию тестов без отключения библиотек/CLI; `FGMC_BUILD_TESTS` и `FGMR_BUILD_TESTS` управляют внутренними suites независимо. Standalone entry points модулей используют соседние локальные targets, а не старые Git repos.
+Одна процедура собирает Core, Raster, все native Regenerator CLI и scene/camera Renderer. Внешний JSON dependency закреплён версией/хешем; CMake также поддерживает установленный `nlohmann_json` 3.12.0. Внутренние FGM-репозитории из сети не загружаются. `BUILD_TESTING=OFF` выключает регистрацию тестов без отключения библиотек/CLI; `FGMC_BUILD_TESTS`, `FGMR_BUILD_TESTS` и `FGMV_BUILD_TESTS` управляют внутренними suites. Standalone модули используют соседние локальные targets.
 
-27 обязательных root CTests: три Core, 18 прежних Regenerator R12/R01–R07/RV01, четыре native Studio JS contracts и два существующих Renderer RVI/C05 oracle. Отдельный Core public API consumer имеет свою точную suite 1/1. Проверяющий inventory отвергает пропущенный тест, пустую команду, duplicate, disabled/skip/WILL_FAIL; `ctest --no-tests=error` обязателен.
+30 обязательных root CTests: три Core, 18 Regenerator R12/R01–R07/RV01, четыре native Studio JS contracts, два Raster RVI/C05 oracle, две камеры Renderer и один scene oracle. Отдельный Core public API consumer имеет suite 1/1. Inventory отвергает пропущенный тест, пустую команду, duplicate, disabled/skip/WILL_FAIL; `ctest --no-tests=error` обязателен. Камеры исполняют прежние математические тесты и JS assertions на CMake-built binaries, включая Windows без отдельного g++.
+
+Scene oracle независимо сравнивает все 16384 поля synthetic sphere с аналитической формулой, требует заполненные и пустые точки, побайтово повторяемый результат и отказ на неверном пакете. Это ограниченный corpus, а не универсальное доказательство всех FGM.
+
+`FGMV_BUILD_GPU_DEMO=ON` включает прежний `fgm_boot` с явным `WGPU_ROOT` (wgpu-native v29.0.1.1). По умолчанию SDK не требуется для CPU scene/camera. GPU и Emscripten ветви сохранены для отдельной проверки S06B; успешный CPU CTest не доказывает GPU/browser parity.
 
 ## Владельцы и направления
 
@@ -22,54 +28,53 @@ flowchart TD
   P[Platform CMake] --> C[Core fgm::cpu]
   P --> R[Raster fgm::raster]
   P --> G[Regenerator targets]
+  P --> V[Renderer fgm::renderer]
   G --> C
   G --> R
-  V[Renderer RVI tests] --> R
   V --> C
 ```
 
-`fgm::cpu` — единственный FGM evaluator. `fgm::raster` заменяет прежний `fgmr-v02`: это те же байты CPU analytic renderer `rvi-v02`, а не новая реализация. Два реальных потребителя — R07 panel fit и Renderer RVI/C05 oracle. Namespace `rvi` и математическая семантика сохранены. GPU и Regenerator CLI не являются зависимостями Raster. Regenerator и Renderer не зависят друг от друга.
+`fgm::cpu` — единственный production FGM evaluator. `fgm::raster` — одна CPU RVI реализация, используемая R07 и собственными RVI/C05 tests. Код, tests, fixture и основные test/mutation scripts принадлежат `raster/`; математических копий в Renderer нет. Namespace `rvi` и математическая семантика сохранены. `fgm::renderer` — alias существующего `boot_scene`, объединяющего прежние scene и camera исходники, без новой математической реализации. Regenerator и Renderer не зависят друг от друга.
 
-`regenerator/src/projection.*` остаётся владельцем integer R05 tile/LOFT/sprite mathematics. RVI continuous rays и integer source projection имеют разные контракты и единицы. Их механическое объединение изменило бы семантику. Аналитическая occupancy в RVI служит независимым oracle C05, а не альтернативным production FGM interpreter.
-
-Значение `coreRevision=ba91a5e...` в прежнем native протоколе обозначает сохранённую семантическую реализацию. Оно не запускает Git fetch и не выдаётся за текущий Platform HEAD. Policy подтверждает неизменность исходников evaluator, Regenerator алгоритмов и Python orchestration относительно принятого baseline.
+`regenerator/src/projection.*` сохраняет integer R05 tile/LOFT/sprite mathematics. RVI continuous rays и integer source projection имеют разные контракты. Аналитическая occupancy RVI служит независимым C05 oracle. Значение `coreRevision=ba91a5e...` в прежнем протоколе обозначает сохранённую семантику, не network dependency и не текущий Platform HEAD.
 
 ## Текущая защита
 
-`scripts/check-platform.mjs` — единственная current Platform policy, версия `fgm-platform-policy/1`, область `S04-to-S05-native-core-raster-regenerator`. Она проверяет exact baseline/history trees, разрешённые изменения путей/связей, единственное происхождение перенесённого RVI, сохранение 78 существовавших normative/ID/lifecycle/constraints и 79 canonical Requirements. Critical CMake/CI/verifier bytes имеют фиксированные mode/blob/SHA-256. Ожидания не читаются из migration manifest. Сам checker и новые constants требуют независимого аудита exact HEAD; самоподписывающаяся защита не заявляется.
+`scripts/check-platform.mjs` — единственная current policy, `fgm-platform-policy/2`, область `S05-to-S06A-native-renderer-raster-ownership-shared-quality`. Exact baseline, immutable history trees, разрешённые path/verification transforms, сохранение 79 прежних нормативных субъектов и 80 canonical Requirements проверяются независимо от manifest. Critical CMake/CI/verifier bytes имеют фиксированные mode/blob/SHA-256. Сам checker и constants требуют независимого аудита exact HEAD; самоподписывающаяся защита не заявляется.
 
-Две обычные root CI-проверки на каждой ОС: native предметные tests и current policy mutations. Отдельный RepoGuard job проверяет J1/J2/J3, bootstrap и реальные positive/orphan/missing-verifier/missing-target transitions. Существующие S02/S03/S04 checker-файлы не вызываются на текущем HEAD.
+Один общий `scripts/check-document-language.mjs` и suite из пяти тестов заменяют три идентичные копии. Три DOC requirement ID сохраняют свою нормативную область и ссылаются на общий verifier. Проверка выполняется перед RepoGuard. Core Node запускает 59 уникальных domain tests; Renderer TS/Node — 11 trust/lifecycle/Studio tests. Дублирующиеся language tests не выдаются за дополнительные предметные проверки.
 
-Baseline-specific allowlists/фиксированная карта текущего перехода — временная часть policy. Owner: S05 / Issue #8. На S06 политика развивается одной версией, не импортируя каскад старых checker. На S08 / Issue #14 временные правила должны быть заменены устойчивыми current invariants, а одноразовые manifests/checkers выведены из активного дерева после архивной проверки. RepoGuard, предметные negative tests и строгий CTest остаются.
+Две root CI-проверки на каждой ОС: native/Node и current policy mutations. Отдельный RepoGuard job проверяет J1/J2/J3, bootstrap и реальные typed negatives. Две заменённые nested guard workflow Core/Regenerator удалены; все их уникальные проверки выполняются корневыми jobs. Старые источники и точные workflow blobs сохранены в принятом S05 HEAD.
+
+Baseline-specific правила policy временные: owner S06 / Issue #9; S08 / Issue #14 заменяет их устойчивыми current invariants после архивной проверки. Нового stage-checker/manifest и ежедневного каскада нет. Предметные negatives, RepoGuard и строгий CTest сохраняются.
 
 ## Исторические доказательства
-
-Исторические accepted snapshots доступны по immutable Git objects:
 
 | Этап | HEAD | TREE |
 | --- | --- | --- |
 | S02 | `faff85c3683a7dd87026796bf33ad11ac6d22b33` | `de224a85b0957ca1de1e26d593a3c1ee099f85e2` |
 | S03 | `4c46d0f3aa2176a8d63448c01df55614ce169956` | `e0f16e7dcbbb66f713f9e3a529291e2e632f78bb` |
 | S04 | `5f5971eae131b2b5c79992203d2f27281d217a75` | `0410d0f6dd49247c53ee0f43a0426f8d82539543` |
+| S05 | `0ed4c333cfed939b13180029871043900b372520` | `6abd50abcc801f44ead655cdf60a1f96edcad193` |
 
-[S04 postmerge receipt](https://github.com/netkeep80/fgm-platform/issues/7#issuecomment-6974835910) содержит независимый аудит, приёмку, пять свежих Ubuntu/Windows CI jobs и проверку merge. Сохранность исторического oracle проверяется на старом checkout, а не по новому manifest.
-
-On-demand replay предусмотрен через `workflow_dispatch` в `source-snapshots.yml`: checkout **точного S04 HEAD**, исходные S02/S03/S04 suites, старые verifiers/manifests и закреплённый compiler для typed mutations. Этот job не входит в ordinary PR CI. Пока candidate workflow не смержен в default branch, его dispatch ещё недоступен; локальное frozen-replay и исходные immutable primary CI receipts служат проверяемым доказательством перед аудитом замены.
-
-Локальное воспроизведение (нужны Node/yaml dependencies из исходного package-lock):
+[Новый S04 frozen replay](https://github.com/netkeep80/fgm-platform/issues/8#issuecomment-6979806869) подтвердил S02/S03/S04 integrity и typed negatives на Ubuntu/Windows. [S05 принятие и postmerge](https://github.com/netkeep80/fgm-platform/issues/8#issuecomment-6978339609) сохраняет первичные native/policy CI. Через `workflow_dispatch` в `source-snapshots.yml` отдельно воспроизводятся frozen S04 и S05 policies/tests; ordinary PR не исполняет этот исторический каскад.
 
 ```sh
-git worktree add --detach ../fgm-proof 5f5971eae131b2b5c79992203d2f27281d217a75
+git worktree add --detach ../fgm-proof 0ed4c333cfed939b13180029871043900b372520
 cd ../fgm-proof
 npm ci --ignore-scripts --no-audit --no-fund
-python -m unittest discover -s tests -p test_source_snapshots.py -v
-node --test tests/requirements-migration.test.mjs tests/core-integration.test.mjs tests/ctest-gate.test.mjs
-node scripts/check-requirements-migration.mjs 4c46d0f3aa2176a8d63448c01df55614ce169956
-node scripts/check-core-integration.mjs 5f5971eae131b2b5c79992203d2f27281d217a75
+node --test tests/platform-policy.test.mjs tests/ctest-gate.test.mjs
+node scripts/check-platform.mjs 0ed4c333cfed939b13180029871043900b372520
 ```
 
-## Границы и оставшееся упрощение
+## Оставшиеся gates
 
-В этом native срезе не заявляются выполнение WASM/Chromium suites, browser R07 fit, private Stage A или Studio release. Их исходники/fixtures и прежний nested workflow сохранены до замены на S06/S07. Пять dormant nested workflow, дубликаты language checks и документации классифицируются по Issue #33; их наличие не означает запуск в root CI. Физический retirement migration-support и внешняя архивная проверка относятся к S08. Итоговые `MIGRATION_PASS` и `SIMPLIFICATION_PASS` принимаются раздельно.
+S06A — native Renderer/ownership/shared quality. S06B обязан выполнить реальные GPU/WASM/Chromium worker/depth/occlusion/holes suites на локальных исходниках и заменить две оставшиеся verification workflow. S07 заменяет отдельный legacy Pages pipeline после release hashes/rollback и визуальной авторской приёмки. Три dormant nested workflow пока сохраняют неперенесённое покрытие; их наличие не означает запуск в Platform CI.
 
-Разработка и тесты используют только public synthetic fixtures. Приватные UFO assets, производные модели и пути не публикуются.
+Физический retirement исторических manifests/checkers и внешняя архивная проверка — S08. Итоговые `MIGRATION_PASS` и `SIMPLIFICATION_PASS` принимаются раздельно. Private Stage A, browser R07 fit и обновление production Studio здесь не заявляются. Используются только public synthetic fixtures; приватные UFO assets, производные модели и пути не публикуются.
+
+## Временная совместимость execution-связей
+
+RepoGuard v6.0.1 проверяет ограничения из AUTHORITY/BASE/HEAD и требует наличия старого verifier в HEAD. Поэтому этот переход сохраняет четыре минимальных alias: три `*/tests/document-language.test.mjs` импортируют одну общую suite, `renderer/scripts/test-v02.mjs` запускает Raster oracle. Их точное содержимое закреплено policy; прежние `verified_by` связи сохранены дополнительно к новым, а constraints уже указывают на новые пути. Это не отдельные реализации или обход J3. Language aliases исполняются в одном Node процессе с общим import cache: пять тестов выполняются один раз. Raster CTest проходит через старый alias к новой единственной реализации.
+
+Owner — S06/#9. Условие удаления на S06B: принятый BASE содержит новые execution paths; убрать четыре alias, дополнительные прежние verification связи и временный режим Node одновременно, сохранив прямые suites и RepoGuard J3. Исторический immutable S05 verifier не изменён. Срез не объявляет эти временные entrypoints окончательной архитектурой.

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/stage-web.mjs",
-    "test:browser": "node --test tests/browser.test.mjs"
+    "test:browser": "node --test tests/browser.test.mjs",
+    "test:node": "tsc -p contracts/tsconfig.json && tsc -p runtime/tsconfig.json && node --test tests/renderer-session.test.mjs tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs"
   },
   "devDependencies": {
     "@webgpu/types": "0.1.69",

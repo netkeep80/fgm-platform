@@ -12,7 +12,7 @@ export const REQUIRED_SUITES=Object.freeze({
     'r07-surface-observability','r07-local-constrained-fit','r07-whole-source-preflight',
     'r07-whole-surface-observability','r07-whole-joint-synthetic-fit','rv01-reconstruction-viewer',
     'regenerator-studio-protocol','regenerator-studio-cell','regenerator-studio-catalog',
-    'regenerator-studio-whole']),
+    'regenerator-studio-whole','renderer-camera','renderer-map-camera','renderer-scene']),
   core:Object.freeze(['core-c05-parity','core-external-consumer','fgm_cpu']),
   consumer:Object.freeze(['consumer-public-api']),
 });

@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const original = await readFile("../raster/rvi-v02.cpp", "utf8");
+const original = await readFile("rvi-v02.cpp", "utf8");
 const oracle = "tests/rvi-v02.test.cpp";
 const dir = "build/v02/mutants";
 await mkdir(dir, { recursive: true });
@@ -55,7 +55,7 @@ for (const { name, originalText, replacement } of mutations) {
   await writeFile(filename, source);
   const build = spawnSync("g++", [
     "-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", "-pedantic",
-    "-I../raster", filename, oracle, "-o", binary,
+    "-I.", filename, oracle, "-o", binary,
   ], { encoding: "utf8", maxBuffer: 1024 * 1024 * 8 });
   if (build.error || build.status !== 0) {
     throw new Error("Не удалось собрать мутацию " + name + ": " + (build.stderr ?? build.error));

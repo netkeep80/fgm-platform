@@ -25,17 +25,19 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: regenerator/scripts/check-document-language.mjs
+      path: scripts/check-document-language.mjs
   - predicates:
       - implemented_by
     target:
       kind: artifact
-      path: regenerator/.github/workflows/repo-guard.yml
+      path: .github/workflows/repo-guard.yml
   - predicates:
       - verified_by
     target:
       kind: artifact
-      path: regenerator/tests/document-language.test.mjs
+      path: tests/document-language.test.mjs
+  - predicates: [verified_by]
+    target: {kind: artifact, path: regenerator/tests/document-language.test.mjs}
 constraints:
   - id: russian_documentation_execution
     activation: scoped_change
@@ -46,7 +48,7 @@ constraints:
         - verified_by
     evidence:
       class: execution
-      key: execution:regenerator/tests/document-language.test.mjs
+      key: execution:tests/document-language.test.mjs
       verifier:
         kind: artifact
-        path: regenerator/tests/document-language.test.mjs
+        path: tests/document-language.test.mjs
