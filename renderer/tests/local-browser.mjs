@@ -14,8 +14,11 @@ export async function localBrowserContext(browser,site=null,hashes=null){
       if(Object.hasOwn(hashes,name)){
         try{
           const response=await route.fetch({maxRedirects:0,timeout:15000}),bytes=await response.body();
-          if(response.status()===200&&createHash('sha256').update(bytes).digest('hex')===hashes[name])
-            return route.fulfill({response,body:bytes});
+          if(response.status()===200&&createHash('sha256').update(bytes).digest('hex')===hashes[name]){
+            // APIResponse.body() is decoded; preserve MIME/security headers without obsolete wire encoding/length.
+            const headers=response.headers();delete headers['content-encoding'];delete headers['content-length'];
+            return route.fulfill({status:response.status(),headers,body:bytes});
+          }
         }catch{}
       }
     }

@@ -57,6 +57,8 @@ Checker получает каждый из десяти ресурсов без 
 точный Git revision/TREE и version badge. Chromium затем повторно проверяет hash каждого загружаемого
 ресурса до исполнения. Подмена ответа после HTTP scan блокируется. Общая browser network boundary
 разрешает только GET к данному сайту и локальные blob/data; внешний запрос отклоняется.
+Gzip-ответы сравниваются по распакованным байтам пакета; при передаче проверенных байтов Chromium
+сохраняет MIME/security headers и получает корректные encoding/length.
 
 Настоящий WASM проверяет synthetic example, каталог из локальной синтетической папки BARN/CULTA00
 и whole object на четыре клетки/24576 центров. Screenshot сохраняется как review evidence.

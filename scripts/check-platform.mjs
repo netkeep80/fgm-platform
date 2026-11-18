@@ -178,8 +178,8 @@ const PINS={
   },
   "renderer/tests/local-browser.mjs": {
     "mode": "100644",
-    "blob": "1316b954343d61aa48a2eee4671dfd32d03bbe35",
-    "sha256": "fe9b75facc868e1f6c70809ec8e7543c8805b3365459e5d822ef8a01058e5eac"
+    "blob": "992138d5606d651882f9f2c4af96cb9825c9309f",
+    "sha256": "34600398edb36fbd1c1dcc5f036e4a553c85066a5dc1acd219e43026fae51730"
   },
   "renderer/tests/local-browser.test.mjs": {
     "mode": "100644",
@@ -223,8 +223,8 @@ const PINS={
   },
   "renderer/tests/studio-pages-live.test.mjs": {
     "mode": "100644",
-    "blob": "8990fb11bb065521aa2f730e4f186d59e9fbd65e",
-    "sha256": "1c99bf346ce3284622ff8221fa77452c1b2b4eaa5a3aebf43db77bf68ab757a3"
+    "blob": "40287bdfa373701d98687ec056e37a9a771713ea",
+    "sha256": "48a0c51936cdf3f2d6d63d6fb8b0fcd168159303a014f90293e422cd91df55c9"
   }
 };
 // END REVIEWED PINS

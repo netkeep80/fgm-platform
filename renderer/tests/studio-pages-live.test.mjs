@@ -7,6 +7,7 @@ import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {test} from 'node:test';
+import {gzipSync} from 'node:zlib';
 import {chromium} from 'playwright';
 import {ASSETS, MANIFEST, PLATFORM, siteURL, verifyPublishedAssets, smokeStudio} from './studio-pages.live.mjs';
 import {localBrowserContext} from './local-browser.mjs';
@@ -27,7 +28,9 @@ async function serve(files, special = {}) {
     if (!bytes || req.method !== 'GET') { res.writeHead(404).end(); return; }
     const type = name.endsWith('.mjs') ? 'text/javascript' : name.endsWith('.wasm') ?
       'application/wasm' : name.endsWith('.json') ? 'application/json' : 'text/html; charset=utf-8';
-    res.writeHead(200, {'Content-Type':type, 'Cache-Control':'no-store'}).end(bytes);
+    const payload=special.gzip?gzipSync(bytes):bytes;
+    res.writeHead(200, {'Content-Type':type, 'Cache-Control':'no-store', 'Content-Length':payload.length,
+      ...(special.gzip?{'Content-Encoding':'gzip'}:{})}).end(payload);
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -70,6 +73,7 @@ test('HTTP admission binds actual responses to independently expected hashes and
       } finally {await server.close();}
     };
     await t.test('correct actual HTTP package passes', () => check(() => {}));
+    await t.test('gzip wire bytes decode to the same expected artifact hashes', () => check(() => {}, null, {gzip:true}));
     await t.test('well-formed wrong TREE and rewritten manifest are rejected', () => check(files => {
       changeManifest(files, m => {m.platform.tree = 'e'.repeat(40);});
     }, 'SOURCE_TREE'));
@@ -127,7 +131,7 @@ test('HTTP admission binds actual responses to independently expected hashes and
 if (process.env.STUDIO_REVIEW_SITE) test('prepared Platform package executes the same HTTP/WASM smoke used for release', {timeout:120000}, async () => {
   const directory = resolve(process.env.STUDIO_REVIEW_SITE);
   const files = new Map(await Promise.all([...ASSETS, MANIFEST].map(async name => [name, await readFile(join(directory, name))])));
-  const manifest = JSON.parse(files.get(MANIFEST)), hashes = hashesOf(files), server = await serve(files);
+  const manifest = JSON.parse(files.get(MANIFEST)), hashes = hashesOf(files), server = await serve(files, {gzip:true});
   try {
     const revision = git(PLATFORM, 'rev-parse', 'HEAD');
     const verified = await verifyPublishedAssets({site:server.site, hashes, revision, version:manifest.version});
