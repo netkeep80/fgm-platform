@@ -1,65 +1,63 @@
 format: repo-guard/requirement-v1
 id: FGMP-WASM-001
 normative: "### FGMP-WASM-001 — Platform должна собирать Regenerator Worker и Renderer scene/camera через одну root Emscripten config из того же текущего checkout, что native consumers. Пакет Studio должен связывать SHA/TREE Platform, protocol/whole-build/core semantic contracts и SHA-256 разрешённых активов; другая ревизия, TREE, изменённый источник, некорректный WASM или состав пакета отвергаются. Старые Core/Regenerator/Renderer repos не используются при сборке и исполнении; проверка блокирует доступ к ним. Реальные Native/Node Worker/Chromium suites сохраняют protocol/cell/catalog/whole package/C05 parity, Renderer WASM/native frame parity, восстановление/отказ GPU, независимый depth/occlusion/holes oracle, ограниченный readback, cancellation/epoch и отрицательные контракты. Browser tests используют только локальные синтетические активы и отвергают внешние запросы. Полезные проверки legacy workflow переносятся в текущую root CI до удаления копий; forwarding aliases и исторический replay не становятся постоянной зависимостью. Python и текущие native Linux/Windows tests сохраняются. Исторический архив не требуется; до финального удаления старых repos актуальные незавершённые требования и решения должны самостоятельно существовать в Platform. Пакет этого среза предназначен для локального тестирования и ревью; production Pages, работающий rollback, визуальная приёмка S07, Stage A и browser R07 fit принимаются отдельно. Все новые нормативные субъекты сохраняют false/false/false до отдельного lifecycle решения."
-lifecycle: {accepted: false, current: false, published: false}
+lifecycle: { accepted: false, current: false, published: false }
 relations:
-  - predicates: [derives_from]
-    target: {kind: requirement, id: FGMP-PROJECT-000}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMP-RENDERER-001}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMV-SESSION-006}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMV-DEPTH-001}
-  - predicates: [depends_on]
-    target: {kind: requirement, id: FGMV-PUB-003}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: CMakeLists.txt}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: renderer/CMakeLists.txt}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: regenerator/CMakeLists.txt}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: renderer/scripts/build-studio-s2a.mjs}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: renderer/scripts/stage-web.mjs}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: renderer/scripts/studio_pages.py}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: renderer/studio/engine-lock.json}
-  - predicates: [implemented_by]
-    target: {kind: artifact, path: scripts/check-platform.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: .github/workflows/core-ci.yml}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: .github/workflows/platform-policy.yml}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/studio-bundle.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/local-browser.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/local-browser.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/browser.test.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/renderer-session.browser.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/renderer-session-wasm.browser.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/renderer-depth-oracle.browser.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/studio-s2a.browser.mjs}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/tests/test_studio_pages.py}
-  - predicates: [verified_by]
-    target: {kind: artifact, path: tests/platform-policy.test.mjs}
-  - predicates: [documents]
-    target: {kind: artifact, path: docs/platform.md}
-  - predicates: [documents]
-    target: {kind: artifact, path: docs/requirements-hierarchy.md}
-  - predicates: [documents]
-    target: {kind: artifact, path: renderer/docs/studio-pages.md}
-  - predicates: [documents]
-    target: {kind: artifact, path: renderer/docs/studio-ufo-catalog.md}
-  - predicates: [documents]
-    target: {kind: artifact, path: renderer/docs/renderer-session-s3-s2b.md}
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: FGMP-PROJECT-000 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMP-RENDERER-001 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMV-SESSION-006 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMV-DEPTH-001 }
+  - predicates: [ depends_on ]
+    target: { kind: requirement, id: FGMV-PUB-003 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: CMakeLists.txt }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: renderer/CMakeLists.txt }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: regenerator/CMakeLists.txt }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: renderer/scripts/build-studio-s2a.mjs }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: renderer/scripts/stage-web.mjs }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: renderer/scripts/studio_pages.py }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: renderer/studio/engine-lock.json }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: scripts/check-platform.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: .github/workflows/platform.yml }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/studio-bundle.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/local-browser.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/local-browser.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/browser.test.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/renderer-session.browser.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/renderer-session-wasm.browser.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/renderer-depth-oracle.browser.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/studio-s2a.browser.mjs }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: renderer/tests/test_studio_pages.py }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: tests/platform-policy.test.mjs }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: docs/platform.md }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: docs/requirements-hierarchy.md }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: renderer/docs/studio-pages.md }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: renderer/docs/studio-ufo-catalog.md }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: renderer/docs/renderer-session-s3-s2b.md }

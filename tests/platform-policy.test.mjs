@@ -17,7 +17,7 @@ test('current Platform integrity, ownership and no-op resistance',async t=>{
     const edit=(path,fn)=>{const p=join(temp,path),value=parse(readFileSync(p));fn(value);writeFileSync(p,stringify(value));};
     await t.test('current audited transition passes',()=>{
       const r=checkPlatform(temp,head);assert.equal(r.required_native_tests,30);
-      assert.equal(r.canonical_requirements,81);assert.equal(r.internal_git_fetchcontent,0);
+      assert.equal(r.canonical_requirements,82);assert.equal(r.internal_git_fetchcontent,0);
     });
     const req='requirements/regenerator/FGMR-FIT-001.rg.yaml';
     const cases=[
@@ -29,14 +29,14 @@ test('current Platform integrity, ownership and no-op resistance',async t=>{
       ['external Core consumer CMake','tests/core/consumer/CMakeLists.txt','PRESERVED_RESOURCE'],
       ['weakened historical S04 checker','scripts/check-core-integration.mjs','PRESERVED_RESOURCE'],
       ['historical snapshot manifest','docs/source-snapshots.json','PRESERVED_RESOURCE'],
-      ['ordinary CI replaced with echo PASS','.github/workflows/core-ci.yml','CRITICAL_CONTENT'],
+      ['ordinary CI replaced with echo PASS','.github/workflows/platform.yml','CRITICAL_CONTENT'],
       ['scene mathematical implementation drift','renderer/src/scene.cpp','PRESERVED_RESOURCE'],
       ['camera mathematical implementation drift','renderer/src/v03-camera.cpp','PRESERVED_RESOURCE'],
       ['Renderer contracts no-op','renderer/package.json','CRITICAL_CONTENT'],
-      ['weakened root guard','.github/workflows/repo-guard.yml','CRITICAL_CONTENT'],
+      ['weakened unified root guard','.github/workflows/platform.yml','CRITICAL_CONTENT'],
       ['weakened root bootstrap checker','scripts/check-bootstrap.mjs','CRITICAL_CONTENT'],
       ['workspace lock drift','package-lock.json','CRITICAL_CONTENT'],
-      ['current policy workflow weakened','.github/workflows/platform-policy.yml','CRITICAL_CONTENT'],
+      ['unified CI authority weakened','.github/workflows/platform.yml','CRITICAL_CONTENT'],
     ].map(([name,path,code])=>[name,()=>writeFileSync(join(temp,path),'synthetic successful bypass\n'),code]);
     cases.push(
       ['duplicate old ray implementation',()=>writeFileSync(join(temp,'renderer/src/rvi-v02.cpp'),'copy\n'),'RETIRED_RESOURCE'],
@@ -85,23 +85,30 @@ test('current Platform integrity, ownership and no-op resistance',async t=>{
         assert.notEqual(mutated,source);writeFileSync(path,mutated);
       },'CRITICAL_CONTENT'],
       ['native publication admission step disabled',()=>{
-        const path=join(temp,'.github/workflows/core-ci.yml'),value=parse(readFileSync(path));
+        const path=join(temp,'.github/workflows/platform.yml'),value=parse(readFileSync(path));
         const step=value.jobs.core.steps.find(s=>s.name==='Verify Platform publication and rollback admission on both systems');
         assert.ok(step);step.if='false';writeFileSync(path,stringify(value));
       },'CRITICAL_CONTENT'],
       ['legacy source pin returned',()=>edit('renderer/studio/engine-lock.json',r=>{r.regenerator='0'.repeat(40);}),'CRITICAL_CONTENT'],
       ['WASM browser job disabled',()=>{
-        const path=join(temp,'.github/workflows/core-ci.yml'),value=parse(readFileSync(path));
+        const path=join(temp,'.github/workflows/platform.yml'),value=parse(readFileSync(path));
         value.jobs['wasm-browser'].if='false';writeFileSync(path,stringify(value));
       },'CRITICAL_CONTENT'],
       ['source-native preserved while bundle stage no-ops',()=>writeFileSync(join(temp,'renderer/scripts/stage-web.mjs'),'console.log("PASS");\n'),'CRITICAL_CONTENT'],
     );
-    for(const path of ['renderer/scripts/studio_pages.py','renderer/tests/test_studio_pages.py'])
+    for(const path of ['renderer/scripts/studio_pages.py','renderer/tests/test_studio_pages.py','renderer/scripts/studio_release.py','renderer/tests/test_studio_release.py'])
       cases.push(['successful Python no-op '+path,()=>{
         writeFileSync(join(temp,path),'print("PASS")\n');
         const r=spawnSync('python',[join(temp,path)],{encoding:'utf8'});
         assert.equal(r.status,0);assert.match(r.stdout,/PASS/);
       },'CRITICAL_CONTENT']);
+    for(const path of ['.github/workflows/repo-guard.yml','.github/workflows/core-ci.yml','.github/workflows/platform-policy.yml'])
+      cases.push(['obsolete root CI resurrected '+path,()=>writeFileSync(join(temp,path),'name: bypass\n'),'RETIRED_RESOURCE']);
+    cases.push(['PR publication enabled',()=>{
+      const path=join(temp,'.github/workflows/platform.yml'),value=parse(readFileSync(path));
+      value.jobs.release.if='true';writeFileSync(path,stringify(value));
+    },'CRITICAL_CONTENT']);
+    cases.push(['new release lifecycle promoted',()=>edit('requirements/FGMP-RELEASE-001.rg.yaml',r=>{r.lifecycle.current=true;}),'CRITICAL_CONTENT']);
     cases.push(['no-op plus historical manifest rewritten',()=>{
       writeFileSync(join(temp,'tests/core-parity.test.mjs'),'console.log("PASS");\n');
       writeFileSync(join(temp,'docs/core-integration.json'),'{}\n');

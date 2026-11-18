@@ -55,7 +55,7 @@ relations:
       - verified_by
     target:
       kind: artifact
-      path: .github/workflows/core-ci.yml
+      path: .github/workflows/platform.yml
   - predicates:
       - verified_by
     target:

@@ -1,8 +1,10 @@
-# Подготовка и проверка Platform Studio
+# Выпуск и проверка Platform Studio
 
-Текущий срез проверяет пакет до публикации. Production Pages ещё не подключён к Platform.
-Исходники и WASM собираются из одного checkout по [корневой инструкции](../../docs/platform.md).
-Последний dormant Pages workflow заменяется следующим срезом S07; его старые команды не являются текущей процедурой.
+Один root workflow `.github/workflows/platform.yml` проверяет Platform и публикует тот же готовый пакет.
+Шесть verification jobs сохранены; единственный дополнительный release job работает только на main.
+PR получает read permissions и review artifact. Наличие этого workflow не доказывает успешной live-публикации:
+первая публикация и реальный rollback проверяются после принятия exact HEAD/TREE и merge.
+[Корневая инструкция](../../docs/platform.md) содержит одну процедуру native/WASM сборки.
 
 ## Один пакет и точная ревизия
 
@@ -13,70 +15,94 @@
     python -m scripts.studio_pages studio build/studio build/pages-studio --revision FULL_PLATFORM_SHA > build/pages-hashes.json
     python -m scripts.studio_pages verify build/pages-studio --revision FULL_PLATFORM_SHA --hashes build/pages-hashes.json
 
-FULL_PLATFORM_SHA — полный SHA коммита текущей Platform. Producer проверяет чистый tracked checkout
+FULL_PLATFORM_SHA — полный SHA текущего Platform коммита. Producer проверяет чистый tracked checkout
 и build metadata. Publisher независимо получает настоящий Git TREE указанного коммита, его engine contract
-и версию A.M. Другой TREE отвергается, даже если это корректная 40-hex строка и все активы заново хэшированы.
-Входной манифест имеет schema fgmp-studio-bundle/1, готовый сайт — fgmp-studio-pages/1.
+и версию A.M. Другой TREE отвергается, даже если все активы заново хэшированы.
+Входной schema — fgmp-studio-bundle/1, готовый сайт — fgmp-studio-pages/1.
 
-A хранится в renderer/studio/architecture-version.txt в самом коммите. M — число merge-коммитов
-по первым родителям до этой ревизии. Для review можно явно указать --preview-base FULL_BASE_SHA:
-тогда M равен числу merge-коммитов BASE плюс один. Такой preview не подходит для rollback релиза.
+A хранится в renderer/studio/architecture-version.txt в целевом коммите. M — число merge-коммитов
+по первым родителям до этой ревизии. Для PR review явно передаётся --preview-base FULL_BASE_SHA:
+M равен числу merge-коммитов BASE плюс один. Preview не допускается как release/rollback.
 SHA и TREE находятся в публичном manifest и подсказке версии.
 
-Проверяются девять фиксированных активов и manifest: имена, обычный тип файла, отсутствие symlink,
-ограничение общего размера 16 MiB, WASM magic, точный engine, version badge и SHA-256.
-Verify повторно проверяет уже готовый сайт. Если передан --hashes, требуется совпадение всех десяти
-хэшей, включая сам manifest. Наличие хэшей рядом с пакетом само по себе не удостоверяет его происхождение.
+Validator проверяет девять активов и manifest: точные имена, обычные файлы, отсутствие symlink,
+суммарный размер до 16 MiB, WASM magic, engine, version badge и SHA-256.
+Переданные --hashes должны охватывать все десять файлов, включая manifest.
+Локальный файл hashes подтверждает соответствие байтам; production admission получает ожидания из CI.
 
-## Побайтовый Platform rollback
+## Доверенное происхождение и публикация
 
-Откат использует ранее проверенный Platform сайт. Пересборка, старый V03, исходные репозитории и старый Pages не нужны.
+WASM/browser job упаковывает уже проверенный сайт в deterministic studio.zip с release.json:
+полный hash index, repository ID, source SHA/TREE, версия. Этот ZIP загружается один раз как
+immutable Actions artifact с именем platform-studio-FULL_SHA-ATTEMPT.
+Release job получает его по точному artifact ID текущего run/attempt, независимо сверяет provider digest,
+repository ID, main ref, source SHA, workflow path и шесть успешных обязательных jobs этого же attempt.
+Только после этого ZIP раскрывается через существующий validator. Другая сборка ради публикации не нужна.
 
-    python -m scripts.studio_pages rollback VERIFIED_PLATFORM_SITE build/pages-restored --revision FULL_RELEASE_SHA --hashes TRUSTED_RELEASE_HASHES.json
-    python -m scripts.studio_pages verify build/pages-restored --revision FULL_RELEASE_SHA --hashes TRUSTED_RELEASE_HASHES.json
+Push принятого main запускает проверки и публикацию. Для явного повторного выпуска используется
+workflow_dispatch на main: mode=publish, expected_main=FULL_CURRENT_MAIN_SHA.
+Текущий main проверяется через GitHub API при входе и перед заменой Pages; stale запуск отвергается.
+Привилегии contents/pages/attestations/id-token ограничены release job, общая concurrency не прерывает
+уже идущую публикацию. Перед заменой сайта предыдущий release скачивается и аутентифицируется для fallback.
 
-TRUSTED_RELEASE_HASHES.json должен быть независимо получен от разрешённого ранее проверенного выпуска,
-а не вычислен из потенциально повреждённого входа. Не допускаются неполные hashes или отсутствующий manifest hash.
-Исходный Git commit должен присутствовать в Platform checkout: engine/version/TREE читаются из него,
-даже если текущий HEAD уже продвинулся. Содержимое всех десяти файлов копируется без изменения.
-Непустой output и пересечение output/input отвергаются до записи.
+После Pages deploy общий HTTP/Chromium checker должен подтвердить именно загруженные байты и настоящий WASM.
+Лишь затем actions/attest подписывает ZIP, а закреплённый gh CLI проверяет подпись и сохраняет ZIP вместе с
+studio.sigstore.json в обычный GitHub Release studio-FULL_SOURCE_SHA. Release становится latest только после
+проверки сохранённых байтов. Существующие принятые assets не перезаписываются.
+Текущий и предыдущий продуктовые releases остаются доступны; полный исторический архив не требуется.
 
-Эта команда проверяет admission. Она не подтверждает авторскую приёмку, успешный прежний deployment
-или происхождение произвольно переданного файла hashes. Следующий срез S07 обязан связать rollback
-с доверенным CI release artifact, сохранить необходимые текущие release материалы и реально проверить
-развёртывание/откат без доступности старых репозиториев. Полный архив истории для этого не требуется.
+## Откат и автоматическое восстановление
+
+Для production rollback запускается тот же workflow на main: mode=rollback,
+Параметры: expected_main=FULL_CURRENT_MAIN_SHA, release_revision=FULL_PREVIOUS_RELEASE_SHA.
+Сборка пропускается: используются десять исходных файлов сохранённого продукта без изменения.
+Тот же adapter можно применить для независимого admission без публикации, из renderer:
+
+    python -m scripts.studio_release restore --revision FULL_RELEASE_SHA --output build/checked-release/site
+
+Нужны authenticated gh, закреплённый CI verifier gh 2.105.0 и полный Platform checkout.
+CLI берёт release только из netkeep80/fgm-platform с фиксированным repository ID, требует stable release,
+точный lightweight tag→commit, provider digests обоих assets и подписанный ZIP.
+Подпись проверяется для ожидаемого repository/workflow, refs/heads/main, source/signer SHA и GitHub-hosted runner;
+verified statement обязан содержать SHA-256 именно данного ZIP. Затем validator сверяет Git TREE/engine/version
+и все десять hashes. Непроверенный архив не записывается в output, произвольный файл --hashes не даёт допуска.
+После rollback public smoke повторяется, а восстановленный release становится latest.
+
+Если новая публикация, public smoke или сохранение release завершается ошибкой после попытки deploy,
+pipeline восстанавливает заранее аутентифицированный предыдущий сайт и повторяет public smoke.
+Исходный job остаётся RED. Для первой публикации предыдущего Platform release ещё нет;
+ошибка не превращается в успех и требует разбора фактического Pages состояния.
 
 ## HTTP и настоящий WASM smoke
 
-renderer/tests/studio-pages.live.mjs использует ту же проверку для будущего адреса
-https://netkeep80.github.io/fgm-platform/ и локального review сервера по loopback HTTP.
-Ему передаются PAGES_REVISION, PAGES_VERSION и PAGES_HASHES из независимо проверенного выпуска;
-PAGES_URL задаёт локальный review URL. В production разрешён только указанный Platform HTTPS URL.
+renderer/tests/studio-pages.live.mjs проверяет https://netkeep80.github.io/fgm-platform/
+и локальный review сервер по loopback HTTP. PAGES_REVISION, PAGES_VERSION и PAGES_HASHES поступают
+из независимо допущенного пакета; PAGES_URL разрешает локальный review URL.
+Production адрес ограничен указанным Platform HTTPS URL.
 
-Checker получает каждый из десяти ресурсов без redirect, сверяет ожидаемые hashes, schema, engine,
-точный Git revision/TREE и version badge. Chromium затем повторно проверяет hash каждого загружаемого
-ресурса до исполнения. Подмена ответа после HTTP scan блокируется. Общая browser network boundary
-разрешает только GET к данному сайту и локальные blob/data; внешний запрос отклоняется.
-Gzip-ответы сравниваются по распакованным байтам пакета; при передаче проверенных байтов Chromium
-сохраняет MIME/security headers и получает корректные encoding/length.
+Checker получает каждый ресурс без redirect, сверяет hashes, schema, engine, настоящий Git SHA/TREE и badge.
+Chromium повторно проверяет каждый HTTP ресурс до исполнения; подмена после scan блокируется.
+Browser network boundary разрешает только GET к данному сайту и локальные blob/data.
+Gzip сравнивается по распакованным байтам; при передаче Chromium сохраняются корректные MIME/security headers.
+Настоящий WASM проверяет synthetic example, локальный синтетический BARN/CULTA00 catalog
+и whole object на четыре клетки/24576 центров. Screenshot сохраняется для визуальной приёмки.
 
-Настоящий WASM проверяет synthetic example, каталог из локальной синтетической папки BARN/CULTA00
-и whole object на четыре клетки/24576 центров. Screenshot сохраняется как review evidence.
-Успешный локальный HTTP smoke не означает PUBLISHED или визуальную авторскую приёмку.
-
-## Проверки и оставшийся S07
+## Проверки и границы приёмки
 
 Из renderer:
 
     python -m unittest discover -s tests -p test_studio_pages.py -v
+    python -m unittest discover -s tests -p test_studio_release.py -v
     node --test tests/studio-pages-live.test.mjs
 
-Native Ubuntu/Windows выполняют Git/TREE/rollback и реальные HTTP negatives.
-Существующий Ubuntu WASM/browser job дополнительно передаёт STUDIO_REVIEW_SITE=build/pages-studio
-тому же HTTP suite и выполняет настоящий Chromium smoke и подмену ответа после scan.
-Нового workflow/job или CMake target нет.
+Native Ubuntu/Windows исполняют publisher, origin/ZIP/rollback и HTTP negatives.
+Ubuntu WASM job дополнительно запускает настоящий закреплённый gh attestation verifier против unsigned bundle,
+Chromium smoke и подмену ответа после scan. Тестовые verifier fixtures проверяют policy/control flow;
+они не доказывают положительную криптографическую проверку будущего Platform release.
+Реальное подписание main, сохранение и проверка bundle, public publish/rollback фиксируются отдельно после merge.
 
-S07 остаётся открытым до одной цепи accepted main → native/WASM → проверенный artifact → Pages,
-доверенного rollback, public HTTP/browser smoke, удаления последнего legacy Pages workflow и отдельной
-визуальной авторской приёмки. Несовместимые UI/API изменения требуют отдельной авторской приёмки.
-Stage A, browser R07 fit, физические GPU/Windows WebGPU и финальные четыре PASS этим срезом не принимаются.
+S07 остаётся открытым до live-доказательства, отдельной визуальной авторской приёмки и удаления последнего
+renderer/.github/workflows/studio-pages.yml следующим последовательным retirement PR.
+Пока этот dormant файл сохранён побайтно; он не является текущим Platform release workflow.
+Зелёный PR CI не означает PUBLISHED. Stage A, browser R07 fit, физические GPU/Windows WebGPU,
+универсальная корректность всех FGM моделей и финальные четыре PASS этим срезом не принимаются.

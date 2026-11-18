@@ -25,7 +25,7 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/.github/workflows/studio-pages.yml
+      path: .github/workflows/platform.yml
   - predicates:
       - implemented_by
     target:

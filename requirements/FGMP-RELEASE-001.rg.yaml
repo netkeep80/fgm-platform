@@ -1,0 +1,38 @@
+format: repo-guard/requirement-v1
+id: FGMP-RELEASE-001
+normative: "### FGMP-RELEASE-001 — Platform должна иметь одну цепь проверки, выпуска Studio и отката без повторной независимой сборки и без зависимости от старых FGM-репозиториев. Публикация использует только точный принятый main SHA/TREE и неизменяемый CI artifact с проверенными repository/run/attempt/workflow/source identity, provider SHA-256 и успехом всех шести обязательных проверяющих jobs. Полный hash index включает manifest и все разрешённые активы; чужой PR artifact, другой workflow/ref/SHA, неполные или неуспешные jobs и подмена ZIP/index отвергаются. Перед заменой Pages проверяется актуальность main. После развёртывания обязательны public HTTP hashes и настоящий синтетический WASM/Chromium smoke. Только подтверждённый пакет сохраняется для дальнейшего rollback в Platform GitHub Release вместе с подписанным provenance bundle. Откат принимает только сохранённый пакет с действительной подписью ожидаемого repository/workflow/main ref/source SHA и hosted runner, с повторной проверкой target Git TREE/engine/version/allowlist и полных hashes до записи. Нужные current и previous подтверждённые продуктовые пакеты сохраняются независимо от срока жизни CI logs/artifacts; полный исторический архив не требуется. Проверки PR не получают permissions публикации. Единственный привилегированный main job сериализует публикацию и rollback; при отказе после замены сайта восстанавливается заранее аутентифицированный предыдущий пакет, если он существует, без сокрытия исходного отказа. Первая live publication, успешный rollback и визуальная авторская приёмка подтверждаются отдельными фактическими свидетельствами и не выводятся из локальных tests или зелёного PR CI."
+lifecycle: {accepted: false, current: false, published: false}
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: FGMP-PROJECT-000}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMV-PUB-003}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMP-WASM-001}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: .github/workflows/platform.yml}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: renderer/scripts/studio_release.py}
+  - predicates: [requires]
+    target: {kind: artifact, path: renderer/scripts/studio_pages.py}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/test_studio_release.py}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/studio-pages.live.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: scripts/check-bootstrap.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/bootstrap.test.mjs}
+  - predicates: [documents]
+    target: {kind: artifact, path: renderer/docs/studio-pages.md}
+  - predicates: [documents]
+    target: {kind: artifact, path: docs/platform.md}
+constraints:
+  - id: fgmp_release_execution
+    activation: scoped_change
+    scope:
+      relations: [implemented_by, verified_by]
+    evidence:
+      class: execution
+      key: execution:renderer/tests/test_studio_release.py
+      verifier: {kind: artifact, path: renderer/tests/test_studio_release.py}
