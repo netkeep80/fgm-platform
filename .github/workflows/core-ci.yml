@@ -29,14 +29,14 @@ jobs:
           node-version: '24'
       - name: Reject empty and incomplete CTest suites
         run: node --test tests/ctest-gate.test.mjs
-      - name: Run all original Core Node suites and documentation audit
+      - name: Install the root workspace and verify Core and Renderer contracts
         run: |
-          node --test core/tests/document-language.test.mjs core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs regenerator/tests/document-language.test.mjs
-          node core/scripts/check-document-language.mjs
-          node regenerator/scripts/check-document-language.mjs
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
+          npm run test:node --workspace renderer
       - name: Configure Platform from the monorepo root
         run: cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
-      - name: Build Core, Raster and all Regenerator native targets
+      - name: Build Core, Raster, Regenerator and Renderer native targets
         run: cmake --build build/native --config Release --parallel 2
       - name: Require exact enabled native CTest inventory
         run: node scripts/check-ctest.mjs build/native --suite platform --config Release

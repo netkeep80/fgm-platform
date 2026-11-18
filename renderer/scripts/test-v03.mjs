@@ -4,11 +4,12 @@ import {createHash} from "node:crypto";
 import {mkdir,readFile,writeFile} from "node:fs/promises";
 
 await mkdir("build/v03",{recursive:true});
-execFileSync("g++",[
+const binary=process.argv[2]||"build/v03/v03-verify";
+if(!process.argv[2]) execFileSync("g++",[
   "-std=c++20","-O2","-Wall","-Wextra","-Werror","-pedantic",
   "src/v03-camera.cpp","tests/v03-camera.test.cpp","-o","build/v03/v03-verify",
 ],{stdio:"inherit"});
-const run=()=>execFileSync("build/v03/v03-verify",[],{
+const run=()=>execFileSync(binary,[],{
   encoding:"utf8",stdio:["ignore","pipe","inherit"],
 });
 const a=run(),b=run();

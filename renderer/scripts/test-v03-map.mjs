@@ -4,11 +4,11 @@ import {createHash} from "node:crypto";
 import {mkdir,readFile,writeFile} from "node:fs/promises";
 
 const directory = "build/v03-map";
-const binary = directory + "/verify";
+const binary = process.argv[2] || directory + "/verify";
 const compiled = ["src/v03-camera.cpp","src/v03-map-camera.cpp","tests/v03-map-camera.test.cpp"];
 const sources = [...compiled,"src/v03-camera.hpp","src/v03-map-camera.hpp","scripts/test-v03-map.mjs"];
 await mkdir(directory,{recursive:true});
-execFileSync("g++",["-std=c++20","-O2","-Wall","-Wextra","-Werror","-pedantic",
+if(!process.argv[2]) execFileSync("g++",["-std=c++20","-O2","-Wall","-Wextra","-Werror","-pedantic",
   ...compiled,"-o",binary],{stdio:"inherit"});
 const run = () => execFileSync(binary,[],{stdio:["ignore","pipe","inherit"]});
 const first = run();

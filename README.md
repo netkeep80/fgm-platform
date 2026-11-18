@@ -1,6 +1,6 @@
 # FGM Platform — единая платформа Fractal Generative Models
 
-Локальная native-сборка объединяет Core, общую CPU Raster реализацию и Regenerator. Текущее состояние принятия и следующий этап находятся в [Issue #1](https://github.com/netkeep80/fgm-platform/issues/1); README описывает устройство и команды Platform.
+Локальная native-сборка объединяет Core, общую CPU Raster реализацию и Regenerator, а также native scene/camera Renderer. Текущее состояние принятия и следующий этап находятся в [Issue #1](https://github.com/netkeep80/fgm-platform/issues/1); README описывает устройство и команды Platform.
 
 **Единственная точка восстановления проекта после окончания чата:** [CONTROL Issue #1](https://github.com/netkeep80/fgm-platform/issues/1). [Протокол журнала и контрольных точек #2](https://github.com/netkeep80/fgm-platform/issues/2). [Начальный этап RepoGuard #3](https://github.com/netkeep80/fgm-platform/issues/3). [Покрытие старой истории/roadmap #15](https://github.com/netkeep80/fgm-platform/issues/15).
 
@@ -17,13 +17,15 @@
 ## Native-сборка Platform
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run test:node --workspace renderer
 cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build/native --config Release --parallel 2
 node scripts/check-ctest.mjs build/native --suite platform --config Release
 ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
 ```
 
-[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 27 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; историческое evidence воспроизводится отдельно по immutable refs.
+[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 30 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; историческое evidence воспроизводится отдельно по immutable refs.
 
 ## Управление принятием
 

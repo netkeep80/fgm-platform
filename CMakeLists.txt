@@ -10,6 +10,7 @@ endif()
 add_subdirectory(core)
 add_subdirectory(raster)
 add_subdirectory(regenerator)
+add_subdirectory(renderer)
 
 if(BUILD_TESTING)
   find_program(FGMP_NODE_EXECUTABLE NAMES node REQUIRED)
