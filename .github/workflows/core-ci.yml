@@ -34,6 +34,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           node --test core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
           npm run test:node --workspace renderer
+          node --test renderer/tests/studio-bundle.test.mjs
       - name: Configure Platform from the monorepo root
         run: cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Build Core, Raster, Regenerator and Renderer native targets
@@ -97,7 +98,6 @@ jobs:
           cmake --build build/wasm --parallel 2
           npm run build --workspace renderer
           npm run test:node --workspace renderer
-          node --test renderer/tests/studio-bundle.test.mjs
           node renderer/scripts/build-studio-s2a.mjs build/wasm
       - name: Run native, Node Worker and Chromium protocol/cell/catalog/whole parity
         working-directory: regenerator

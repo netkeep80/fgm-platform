@@ -1,17 +1,19 @@
 // Один пакет Studio из текущего Platform checkout и его root WASM build.
 import {createHash} from 'node:crypto';
 import {mkdir,readFile,writeFile,rm,lstat} from 'node:fs/promises';
-import {join,resolve,dirname} from 'node:path';
+import {join,resolve,dirname,relative,isAbsolute,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 const repo=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const git=(...args)=>execFileSync('git',['-C',repo,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const ensure=(value,code)=>{if(!value)throw Error(code)};
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+const contains=(parent,path)=>{const rel=relative(parent,path);return rel===''||
+  rel!=='..'&&!rel.startsWith('..'+sep)&&!isAbsolute(rel);};
 export async function buildStudio(wasmDirectory,outputDirectory=resolve(repo,'renderer/build/studio')){
   const src=resolve(wasmDirectory),dest=resolve(outputDirectory);
-  ensure(dest!==src&&!src.startsWith(dest+'/')&&dest!==repo&&!repo.startsWith(dest+'/')&&
-    (!dest.startsWith(repo+'/')||dest.startsWith(repo+'/renderer/build/')),'E_STUDIO_OUTPUT_DIRECTORY');
+  ensure(!contains(dest,src)&&!contains(dest,repo)&&
+    (!contains(repo,dest)||contains(join(repo,'renderer/build'),dest)),'E_STUDIO_OUTPUT_DIRECTORY');
   const directory=await lstat(src);ensure(directory.isDirectory()&&!directory.isSymbolicLink(),'E_STUDIO_ASSET_TYPE');
   ensure(git('diff','--name-only','HEAD','--')==='','E_STUDIO_DIRTY_SOURCE');
   const revision=git('rev-parse','HEAD'),tree=git('rev-parse','HEAD^{tree}');

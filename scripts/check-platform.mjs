@@ -111,8 +111,8 @@ const PINS={
   },
   ".github/workflows/core-ci.yml": {
     "mode": "100644",
-    "blob": "7a9569fbaaee4ccd9e34904e6edeaf33f0cd4805",
-    "sha256": "173cb1541846abc6c3991bcd286f76b622f40c0c9c52f51dee29da2fb6c9f958"
+    "blob": "815c830c700f4135cb6880e8b28be45cd9ad1213",
+    "sha256": "febd762c7156997c49e2f8d6d6a5e7bd437842c76591c58f6ef37301fc617c9c"
   },
   ".github/workflows/platform-policy.yml": {
     "mode": "100644",
@@ -201,8 +201,8 @@ const PINS={
   },
   "renderer/scripts/build-studio-s2a.mjs": {
     "mode": "100644",
-    "blob": "36b6d4deb82205c97b0e46908aea3774a8ae4038",
-    "sha256": "4fdb5a523ba189098ca057edd7d77231cef33ac9be1544ca77385eab4e4dd32b"
+    "blob": "43a5bc098a31ffe9382086019e97ebbb2be693c5",
+    "sha256": "9500eec9decca51d0dd42d912f9cd59b04b97679888c99099331c5cdf20d547a"
   },
   "renderer/scripts/stage-web.mjs": {
     "mode": "100644",
@@ -221,8 +221,8 @@ const PINS={
   },
   "renderer/tests/studio-bundle.test.mjs": {
     "mode": "100644",
-    "blob": "aa8e546798010f0878cb3b49b1c0ec649e28726a",
-    "sha256": "60beb652f88c504719de075823d7f1c140fc0f82039794554eaa0e87af34575b"
+    "blob": "7b0f5e26f5788c2affeb4533b20c632e2c02d9ca",
+    "sha256": "4546cc1ab7838faa6c6cb750809369c52fd6f12404aa1118f7e2f82f917652dc"
   },
   "renderer/tests/local-browser.mjs": {
     "mode": "100644",

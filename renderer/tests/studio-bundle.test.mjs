@@ -27,5 +27,7 @@ test('current bundle producer: deterministic exact-source assets and typed negat
     await writeFile(join(engine,'fgmr-studio.wasm'),Buffer.from('0061736d01000000','hex'));
     await writeFile(join(engine,'worker.mjs'),'');await assert.rejects(buildStudio(input,out),/E_STUDIO_EMPTY_OR_LARGE_ASSET/);
     await assert.rejects(buildStudio(input,input),/E_STUDIO_OUTPUT_DIRECTORY/);
+    // Only synthetic temp data is at risk if the guard regresses. Never target the real repo.
+    await assert.rejects(buildStudio(input,temp),/E_STUDIO_OUTPUT_DIRECTORY/);
   }finally{await rm(temp,{recursive:true,force:true});}
 });

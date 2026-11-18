@@ -40,7 +40,7 @@ flowchart TD
 
 ## Текущая защита и WASM/browser
 
-`check-platform.mjs` развивается тем же файлом в policy/3: scope S06A→S06B, fixed reviewed verifier bytes и явные Requirement transforms. Три нормативных текста адаптированы к новой авторской стратегии: FGMP-BUILD-001, FGMP-RENDERER-001, FGMV-PUB-003. ID/lifecycle не продвигаются. Новый FGMP-WASM-001 имеет false/false/false. Исторические архивы/replay и наличие старых source commits не являются текущим CI gate; временные baseline rules удаляются на S08 после функциональной замены.
+`check-platform.mjs` развивается тем же файлом в policy/3: scope S06A→S06B, fixed reviewed verifier bytes и явные Requirement transforms. Четыре нормативных текста адаптированы к новой авторской стратегии: FGMP-PROJECT-000, FGMP-BUILD-001, FGMP-RENDERER-001, FGMV-PUB-003. ID/lifecycle не продвигаются. Новый FGMP-WASM-001 имеет false/false/false. Исторические архивы/replay и наличие старых source commits не являются текущим CI gate; временные baseline rules удаляются на S08 после функциональной замены.
 
 Существующие root native Ubuntu/Windows и RepoGuard сохранены. Один дополнительный Ubuntu job в том же native workflow заменяет старые Regenerator/Renderer verification workflows: обе WASM-библиотеки, native GPU frame, Worker parity, реальный Chromium/depth/holes/4K/cancel/negative, RV01, package validators и RVI source mutations. Он проверяет сборку при заблокированных Git URL трёх старых repos. Browser network guard разрешает только локальные синтетические запросы; собственный отрицательный тест доказывает блокировку реальных Chromium запросов к старым repos.
 
