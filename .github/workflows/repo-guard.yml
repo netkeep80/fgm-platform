@@ -28,7 +28,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           node --test tests/bootstrap.test.mjs
           node scripts/check-bootstrap.mjs
-          node --test --test-isolation=none tests/document-language.test.mjs core/tests/document-language.test.mjs regenerator/tests/document-language.test.mjs renderer/tests/document-language.test.mjs
+          node --test tests/document-language.test.mjs
           node scripts/check-document-language.mjs
       - name: Checkout immutable RepoGuard for independent synthetic transition tests
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

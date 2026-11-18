@@ -90,7 +90,7 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/.github/workflows/repo-guard.yml
+      path: .github/workflows/core-ci.yml
   - predicates:
       - verified_by
     target:

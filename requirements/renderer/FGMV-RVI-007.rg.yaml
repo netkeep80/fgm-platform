@@ -51,8 +51,6 @@ relations:
     target:
       kind: artifact
       path: renderer/docs/v02-cpu.md
-  - predicates: [verified_by]
-    target: {kind: artifact, path: renderer/scripts/test-v02.mjs}
 constraints:
   - id: fgm_rvi_007_cpu_evidence
     activation: scoped_change

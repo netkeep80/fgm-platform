@@ -1,3 +1,4 @@
+import {localBrowserContext} from './local-browser.mjs';
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -39,7 +40,9 @@ async function runBrowser(action) {
       args: ["--enable-unsafe-webgpu", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
     });
     try {
-      await action(browser, `http://127.0.0.1:${server.address().port}/`);
+      const network=await localBrowserContext(browser);
+      await action(network.context, `http://127.0.0.1:${server.address().port}/`);
+      network.assertLocal();
     } finally {
       await browser.close();
     }

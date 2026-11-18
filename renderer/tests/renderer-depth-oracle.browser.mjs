@@ -1,3 +1,4 @@
+import {localBrowserContext} from './local-browser.mjs';
 /** S3-S2F: independent CPU ray/triangle reference versus actual RendererSession WebGPU.
  * Entirely original synthetic OBJ fixtures; not a second FGM/LOFT interpreter.
  */
@@ -94,12 +95,13 @@ const server=createServer((req,res)=>{
   res.writeHead(200,{'Content-Type':req.url==='/runtime.js'?'text/javascript':'text/html; charset=utf-8','Cache-Control':'no-store'}).end(body);
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-let browser;
+let browser,network;
 try {
   browser=await chromium.launch({headless:true,channel:process.env.FGM_CHROMIUM?undefined:'chromium',
     executablePath:process.env.FGM_CHROMIUM,args:['--no-sandbox','--enable-unsafe-webgpu','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  network=await localBrowserContext(browser);
   await test('S3-S2F: WebGPU depth/holes against independent CPU ray oracle', {timeout:90000},async()=>{
-    const page=await browser.newPage(),errors=[];
+    const page=await network.context.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     const stats=[];
@@ -160,3 +162,4 @@ try {
   await browser?.close();
   await new Promise(resolve=>server.close(resolve));
 }
+network?.assertLocal();

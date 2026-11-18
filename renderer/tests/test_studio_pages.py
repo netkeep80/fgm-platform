@@ -27,9 +27,8 @@ class StudioPagesTests(unittest.TestCase):
         self.assets["engine/fgmr-studio.wasm"] = bytes.fromhex("0061736d01000000")
         self.engine = read_engine_lock()
         self.manifest = {
-            "schema": "fgmv-studio-ufo-catalog/2",
-            "renderer": REVISION,
-            "regenerator": self.engine["regenerator"],
+            "schema": "fgmp-studio-bundle/1",
+            "platform": {"revision": REVISION, "tree": "a" * 40},
             "engine": self.engine.copy(),
             "assets": {name: digest(data) for name, data in self.assets.items()},
         }
@@ -56,10 +55,9 @@ class StudioPagesTests(unittest.TestCase):
         for name, checksum in first.items():
             self.assertEqual(digest((self.out / name).read_bytes()), checksum)
         manifest = json.loads((self.out / "studio-manifest.json").read_bytes())
-        self.assertEqual(manifest["schema"], "fgmv-studio-pages/3")
-        self.assertEqual(manifest["renderer"], REVISION)
+        self.assertEqual(manifest["schema"], "fgmp-studio-pages/1")
+        self.assertEqual(manifest["platform"]["revision"], REVISION)
         self.assertEqual(manifest["version"], VERSION)
-        self.assertEqual(manifest["regenerator"], self.engine["regenerator"])
         self.assertEqual(manifest["engine"], self.engine)
         self.assertEqual(manifest["assets"], {name: first[name] for name in ASSETS})
         self.assertIn(f' title="{REVISION}">Версия {VERSION}</code>',
@@ -69,7 +67,7 @@ class StudioPagesTests(unittest.TestCase):
         self.write_bundle()
         first = prepare_studio(self.bundle, self.out, REVISION, VERSION)
         another_revision = "a" * 40
-        self.manifest["renderer"] = another_revision
+        self.manifest["platform"]["revision"] = another_revision
         self.write_bundle()
         second = prepare_studio(self.bundle, self.root / "updated-site", another_revision, "1.18")
         changed = {name for name in first if first[name] != second[name]}
@@ -111,7 +109,7 @@ class StudioPagesTests(unittest.TestCase):
         self.write_bundle()
         self.reject("ASSET_DIGEST")
 
-    def test_rejects_manifest_with_wrong_regenerator(self):
+    def test_rejects_manifest_with_legacy_source_pin(self):
         self.manifest["regenerator"] = "6a9ba7d30518fb8c3a75a2f4b2bc5ae3b83c376f"
         self.write_bundle()
         self.reject("MANIFEST")
@@ -151,7 +149,7 @@ class StudioVersionHistoryTests(unittest.TestCase):
         self.repo = Path(temporary.name)
         self.git("init", "--quiet", "--initial-branch=main")
         self.architecture = self.repo / ARCHITECTURE_PATH
-        self.architecture.parent.mkdir()
+        self.architecture.parent.mkdir(parents=True)
         self.architecture.write_text("1\n")
         self.root = self.commit("Initial architecture")
 

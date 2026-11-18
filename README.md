@@ -25,7 +25,7 @@ node scripts/check-ctest.mjs build/native --suite platform --config Release
 ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
 ```
 
-[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 30 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; историческое evidence воспроизводится отдельно по immutable refs.
+[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 30 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; WASM/browser собираются из того же Platform checkout. Полный исторический архив старых репозиториев не требуется.
 
 ## Управление принятием
 
@@ -37,6 +37,6 @@ RepoGuard v6.0.1 закреплён на `74db97791e6da8a75287164f0d0b41579108f1
 
 [S00 RepoGuard](https://github.com/netkeep80/fgm-platform/issues/3) → [S01 source lock](https://github.com/netkeep80/fgm-platform/issues/4) → [S02 снимки файлов](https://github.com/netkeep80/fgm-platform/issues/5) → [S03 requirement migration](https://github.com/netkeep80/fgm-platform/issues/6) → [S04 Core](https://github.com/netkeep80/fgm-platform/issues/7) → [S05 Regenerator](https://github.com/netkeep80/fgm-platform/issues/8) → [S06 Renderer](https://github.com/netkeep80/fgm-platform/issues/9) → [S07 Live Studio](https://github.com/netkeep80/fgm-platform/issues/10) → [S08 cutover](https://github.com/netkeep80/fgm-platform/issues/14).
 
-**Прежние проекты сохраняют исторические Requirements, Issues, PR и свидетельства. Интегрированные сборки и новый live Studio в Platform ещё не приняты. Текущий Pages-сайт прежнего Renderer продолжает работать; его переключение требует отдельного принятия.**
+**Цель миграции — самостоятельный рабочий срез Platform с актуальными требованиями и незавершёнными задачами. Полная история старых репозиториев не архивируется; после финальных FUNCTIONAL/INDEPENDENCE/REQUIREMENTS/SIMPLIFICATION PASS и отдельной авторской приёмки они могут быть удалены. Новый live Studio/Pages принимается отдельно; текущий опубликованный сайт этой интеграцией не переключается.**
 
 Защита `main` [отложена по явному решению автора](https://github.com/netkeep80/fgm-platform/issues/27#issuecomment-6962327932) и не входит в текущие условия merge. Сохраняются независимый аудит exact HEAD/TREE, авторская приёмка, свежий RepoGuard и слияние с проверкой ожидаемого SHA.

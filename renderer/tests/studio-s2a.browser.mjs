@@ -1,3 +1,4 @@
+import {localBrowserContext} from './local-browser.mjs';
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -28,9 +29,10 @@ const server=createServer(async(request,response)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const url="http://127.0.0.1:"+server.address().port;
-const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.FGM_CHROMIUM,args:["--no-sandbox"]});
+const network=await localBrowserContext(browser);
 try{
-  const page=await browser.newPage();
+  const page=await network.context.newPage();
   // Deterministic adversarial scheduling: only delay dispatch of the genuine
   // WASM Worker's step request. No mock engine, synthetic replies or fake FGM.
   // The optional proof mutation operates on a real finalize reply.
@@ -492,3 +494,5 @@ try{
     [...new Set(requests.map(x=>new URL(x.url).pathname))].filter(x=>allowed.has(x)).sort());
   console.log("STUDIO_S2B_BROWSER_PASS: real WASM R06/R05, local File API, negative cases, no external requests");
 }finally{await browser.close();server.close()}
+
+network.assertLocal();
