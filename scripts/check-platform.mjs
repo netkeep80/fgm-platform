@@ -5,19 +5,11 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseDocument} from 'yaml';
 export const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-export const POLICY='fgm-platform-policy/3';
-export const SCOPE='S06A-to-S06B-local-WASM-GPU-browser-current-snapshot';
-export const BASE='79f4b4e74f00f05b8210cfd5805f1de053b74c0d';
-export const BASE_TREE='4bc532b34ebee3a8a3b36500eaa8e394e5d12287';
-const RETIRED=Object.freeze([
-  "core/tests/document-language.test.mjs",
-  "regenerator/tests/document-language.test.mjs",
-  "renderer/tests/document-language.test.mjs",
-  "renderer/scripts/test-v02.mjs",
-  "regenerator/.github/workflows/importer-ci.yml",
-  "renderer/.github/workflows/repo-guard.yml",
-  ".github/workflows/source-snapshots.yml"
-]);
+export const POLICY='fgm-platform-policy/4';
+export const SCOPE='S06B-to-S07A-current-Platform-package-admission';
+export const BASE='37e4fcc18f5526e2c872c316bfcd014799a8c94a';
+export const BASE_TREE='6e66cc7cb0531e355b3a617a31b96d11b5b7dc06';
+const RETIRED=Object.freeze([]);
 const FORBIDDEN=Object.freeze([
   "core/tests/document-language.test.mjs",
   "regenerator/tests/document-language.test.mjs",
@@ -39,49 +31,9 @@ const FORBIDDEN=Object.freeze([
   "renderer/src/rvi-v02.cpp",
   "renderer/src/rvi-v02.hpp"
 ]);
-const ADDED=Object.freeze([
-  ".github/workflows/platform-policy.yml",
-  "renderer/tests/local-browser.mjs",
-  "renderer/tests/local-browser.test.mjs",
-  "renderer/tests/studio-bundle.test.mjs",
-  "requirements/FGMP-WASM-001.rg.yaml"
-]);
-const EDITED=Object.freeze([
-  ".github/workflows/core-ci.yml",
-  ".github/workflows/repo-guard.yml",
-  "CMakeLists.txt",
-  "README.md",
-  "docs/platform.md",
-  "docs/requirements-hierarchy.md",
-  "raster/CMakeLists.txt",
-  "renderer/docs/renderer-session-s3-s2b.md",
-  "renderer/docs/studio-pages.md",
-  "renderer/docs/studio-ufo-catalog.md",
-  "renderer/scripts/build-studio-s2a.mjs",
-  "renderer/scripts/stage-web.mjs",
-  "renderer/scripts/studio_pages.py",
-  "renderer/studio/engine-lock.json",
-  "renderer/tests/browser.test.mjs",
-  "renderer/tests/renderer-depth-oracle.browser.mjs",
-  "renderer/tests/renderer-session-wasm.browser.mjs",
-  "renderer/tests/renderer-session.browser.mjs",
-  "renderer/tests/studio-s2a.browser.mjs",
-  "renderer/tests/test_studio_pages.py",
-  "scripts/check-bootstrap.mjs",
-  "scripts/check-platform.mjs",
-  "tests/platform-policy.test.mjs"
-]);
-const PATH_MAP=Object.freeze({
-  "regenerator/.github/workflows/importer-ci.yml": ".github/workflows/core-ci.yml",
-  "renderer/.github/workflows/repo-guard.yml": ".github/workflows/core-ci.yml",
-  ".github/workflows/source-snapshots.yml": ".github/workflows/platform-policy.yml"
-});
-const NORMATIVE_UPDATES=Object.freeze({
-  "FGMP-BUILD-001": "### FGMP-BUILD-001 — Platform должна собирать Core, единую CPU RVI реализацию, Regenerator и Renderer из корневого CMake-графа с локальными targets без внутренних Git FetchContent и без глобального отключения тестов. Одна RVI реализация обслуживает R07 и Raster oracle; целочисленная R05-проекция сохраняет отдельный предметный контракт. Native/Python R01–R07, CLI, package/hash, deterministic receipts, отрицательные проверки, Core/C05 и public consumer реально выполняются на Linux и Windows с точным enabled CTest inventory и --no-tests=error. Текущая защита закрепляет область изменений и критические verifiers независимо от проверяемого manifest, сохраняет ID, lifecycle и действующие execution contracts. Временная baseline policy развивается одним файлом и удаляется на S08 после действующей функциональной замены; исторические Git/Issues/PR/CI архивы и постоянный replay не требуются. Все ещё актуальные требования и незавершённые решения должны быть самостоятельно представлены в Platform. Упрощение оценивается по зависимостям, реализациям, владельцам, исключениям и процедурам сборки; обязательны независимый аудит и отдельная авторская приёмка. Private Stage A и browser R07 fit не входят в принятый native scope.",
-  "FGMP-RENDERER-001": "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. RVI implementation, tests и fixtures принадлежат Raster без forwarding alias. Прежние camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета входят в точный enabled CTest inventory на Linux и Windows вместе с Core/Regenerator/Raster tests. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одна общая проверка языка и её отрицательные тесты выполняются до RepoGuard. Удаление заменённых workflow сохраняет уникальные предметные проверки. Версия текущей policy явно закрепляет область перехода и критические verifiers, сохраняет ID, lifecycle и действующие ограничения; нормативные изменения по авторскому решению перечисляются отдельно. Историческое архивирование и вечный replay не требуются; временные migration rules удаляются на S08 после функциональной замены. Native acceptance остаётся отдельным доказательством от реальных WASM/GPU/Chromium tests, полного S06, Stage A и публикации Studio.",
-  "FGMV-PUB-003": "### FGMV-PUB-003 — Выпуск Reconstruction Studio с каталогом UFO и проверяемый откат. При каждом обновлении main workflow должен пересобирать Studio и WASM из одного точного коммита Platform, без загрузки старых FGM-репозиториев. Допуск к автоматической и ручной публикации Studio должен требовать успешного RepoGuard на точном коммите сборки, проверки схемы манифеста, состава файлов, ревизий и контрольных сумм. Перед публикацией workflow должен сверять коммит сборки Studio с актуальным main. После успешных проверок актуальная сборка должна публиковаться автоматически по событию обновления main. Версия в шапке Studio и публичном манифесте должна иметь формат A.M. Положительный номер архитектуры A хранится в репозитории и увеличивается на единицу при несовместимом изменении архитектуры Studio. Номер M равен числу merge-коммитов в истории main по первым родителям до коммита сборки включительно. M не обнуляется при повышении A. Полный SHA и TREE опубликованного коммита Platform должен присутствовать в подсказке версии и публичном манифесте. Приёмка выпуска должна подтверждать по HTTP версию и контрольные суммы опубликованных файлов и сохранять свидетельство успешной реконструкции синтетического именованного элемента через выбор локальной папки в Chromium с WASM. Ручной откат должен использовать необходимые проверенные Platform release artifacts и подтверждать публичные байты без доступности старых репозиториев или старого Pages. Проверки PR и подготовка сайта должны выполняться без разрешений публикации. Публичный пакет должен содержать только проверенные материалы с синтетическим примером.",
-  "FGMP-PROJECT-000": "### FGMP-PROJECT-000 — Проект должен обеспечивать независимый аудит exact BASE/HEAD/TREE, явное авторское принятие, воспроизводимое CI-свидетельство, причинную трассировку изменений, самостоятельный рабочий срез с актуальными требованиями и незавершёнными решениями и запрет публикации чужих игровых ресурсов в публичном репозитории. Полный архив истории прежних репозиториев не требуется; их удаление возможно отдельной финальной авторской операцией после FUNCTIONAL_PASS, INDEPENDENCE_PASS, REQUIREMENTS_PASS и SIMPLIFICATION_PASS."
-});
+const ADDED=Object.freeze(["renderer/tests/studio-pages-live.test.mjs"]);
+const EDITED=Object.freeze(["docs/platform.md", "renderer/docs/studio-pages.md",
+  "scripts/check-platform.mjs", "tests/platform-policy.test.mjs"]);
 // BEGIN REVIEWED PINS
 const PINS={
   "CMakeLists.txt": {
@@ -111,8 +63,8 @@ const PINS={
   },
   ".github/workflows/core-ci.yml": {
     "mode": "100644",
-    "blob": "815c830c700f4135cb6880e8b28be45cd9ad1213",
-    "sha256": "febd762c7156997c49e2f8d6d6a5e7bd437842c76591c58f6ef37301fc617c9c"
+    "blob": "e5e3a4c1bf9aba89f7dc3a915e6a840fb9137a83",
+    "sha256": "3c3af5560aadd35f95186adae1e820973c721cbf11c4e325fd75fcc67f799f3a"
   },
   ".github/workflows/platform-policy.yml": {
     "mode": "100644",
@@ -151,8 +103,8 @@ const PINS={
   },
   "tests/platform-policy.test.mjs": {
     "mode": "100644",
-    "blob": "159238d53ac729d51e4859f069d1601d94ff60b3",
-    "sha256": "a688efe988b6d072612f3a1f21b290bee745a504d4528747621a63f842599004"
+    "blob": "d0eeed2ea29bbd6d64e527e0681fcdbfe2c0a5a5",
+    "sha256": "66ce6f31c557b58a872fa3d6f29b51d195edc7f4ca0a463fa91dbc67166742de"
   },
   "requirements/FGMP-WASM-001.rg.yaml": {
     "mode": "100644",
@@ -211,8 +163,8 @@ const PINS={
   },
   "renderer/scripts/studio_pages.py": {
     "mode": "100644",
-    "blob": "8329041d8b19a651e7307b61627a134c309e052b",
-    "sha256": "ce4276c42cd7536e4b50fd743485029c0fd9228082d6f2f7d15f0efac406a528"
+    "blob": "e1f5f3b99c78d7b631454c88fb5432fde51c74cb",
+    "sha256": "4fecdac42206823c88ba88a0e8bde58342c30db8d5802859b95db11ffa22781c"
   },
   "renderer/studio/engine-lock.json": {
     "mode": "100644",
@@ -226,8 +178,8 @@ const PINS={
   },
   "renderer/tests/local-browser.mjs": {
     "mode": "100644",
-    "blob": "f3dc82b7d5ed50bd12fe741530698a6bde276d20",
-    "sha256": "5bdb980fc23625925d5eaf55832969895ab268f56450928e86f6a4ecd9dd76eb"
+    "blob": "992138d5606d651882f9f2c4af96cb9825c9309f",
+    "sha256": "34600398edb36fbd1c1dcc5f036e4a553c85066a5dc1acd219e43026fae51730"
   },
   "renderer/tests/local-browser.test.mjs": {
     "mode": "100644",
@@ -261,8 +213,18 @@ const PINS={
   },
   "renderer/tests/test_studio_pages.py": {
     "mode": "100644",
-    "blob": "78dde741cafda17b3bc9bd9f5aef0dd7a2ef61fe",
-    "sha256": "a7c58a9cb88d54c5af821334a9a6ca9e0d87d468b9ff03cdcab493bfa678fd3e"
+    "blob": "1c8c77f2cbb3acb036467788e88b3cb833d210c2",
+    "sha256": "d682c03fbc945da1327c3e14d70cfce69e97693dd24d4560974525751ad9621d"
+  },
+  "renderer/tests/studio-pages.live.mjs": {
+    "mode": "100644",
+    "blob": "b0e0fefc88f59677e415d2fe59a9689b38be65fa",
+    "sha256": "08a047254d84648c5a9c177b39c063caba26e3301472687740a68c4d4e40ca6a"
+  },
+  "renderer/tests/studio-pages-live.test.mjs": {
+    "mode": "100644",
+    "blob": "40287bdfa373701d98687ec056e37a9a771713ea",
+    "sha256": "48a0c51936cdf3f2d6d63d6fb8b0fcd168159303a014f90293e422cd91df55c9"
   }
 };
 // END REVIEWED PINS
@@ -293,14 +255,12 @@ function contents(repo,requests){
 }
 export function requirement(source){
   const out=structuredClone(source);
-  out.relations=(out.relations||[]).filter(r=>!RETIRED.slice(0,4).includes(r.target?.path));
-  const walk=value=>{
-    if(!value||typeof value!=='object')return;
-    if(value.kind==='artifact'&&PATH_MAP[value.path])value.path=PATH_MAP[value.path];
-    for(const child of Object.values(value))walk(child);
-  };
-  walk(out);
-  if(NORMATIVE_UPDATES[out.id])out.normative=NORMATIVE_UPDATES[out.id];
+  if(out.id==='FGMV-PUB-003'){
+    const at=out.relations.findIndex(r=>r.target?.path==='renderer/tests/studio-pages.live.mjs');
+    ensure(at>=0,'BASE_PUBLICATION_VERIFIER');
+    out.relations.splice(at+1,0,{predicates:['verified_by'],
+      target:{kind:'artifact',path:'renderer/tests/studio-pages-live.test.mjs'}});
+  }
   return out;
 }
 export function checkPlatform(repo=root,head='HEAD'){
@@ -330,11 +290,13 @@ export function checkPlatform(repo=root,head='HEAD'){
   }
   ensure([...after.keys()].filter(p=>/^requirements\/.*\.rg\.yaml$/.test(p)).length===81,'REQUIREMENT_COUNT');
   return {result:'PASS',policy:POLICY,scope:SCOPE,base:BASE,head,tree:git(repo,'rev-parse',head+'^{tree}'),
-    critical_content_pins:critical.length,normative_values_preserved:76,normative_updates:Object.keys(NORMATIVE_UPDATES),
-    existing_ids_lifecycle_preserved:80,canonical_requirements:81,required_native_tests:30,
+    critical_content_pins:critical.length,normative_values_preserved:81,normative_updates:[],
+    existing_ids_lifecycle_preserved:81,canonical_requirements:81,required_native_tests:30,
     internal_git_fetchcontent:0,raster_implementations:1,language_implementations:1,npm_locks:1,
     temporary_verifier_aliases:0,nested_legacy_workflows:1,historical_replay_required:false,
-    temporary_policy_owner:'S06 #9; remove baseline rules after current replacement S08 #14; no archive gate'};
+    publication_admission:'Git revision/TREE and independently expected complete package hashes',
+    production_deployment:'NOT_IN_S07A_SCOPE',
+    temporary_policy_owner:'S07A #10; remove baseline rules after current replacement S08 #14; no archive gate'};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{console.log(JSON.stringify(checkPlatform(root,process.argv[2]||'HEAD'),null,2));}

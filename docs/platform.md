@@ -40,7 +40,7 @@ flowchart TD
 
 ## Текущая защита и WASM/browser
 
-`check-platform.mjs` развивается тем же файлом в policy/3: scope S06A→S06B, fixed reviewed verifier bytes и явные Requirement transforms. Четыре нормативных текста адаптированы к новой авторской стратегии: FGMP-PROJECT-000, FGMP-BUILD-001, FGMP-RENDERER-001, FGMV-PUB-003. ID/lifecycle не продвигаются. Новый FGMP-WASM-001 имеет false/false/false. Исторические архивы/replay и наличие старых source commits не являются текущим CI gate; временные baseline rules удаляются на S08 после функциональной замены.
+`check-platform.mjs` развивается тем же файлом в policy/4: scope S06B→S07A, fixed reviewed verifier bytes и один явный новый verifier edge в FGMV-PUB-003. Все 81 нормативных текста, ID, lifecycle и 22 execution constraints сохраняются. Исторические архивы/replay и наличие старых source commits не являются текущим CI gate; временные baseline rules удаляются на S08 после функциональной замены.
 
 Существующие root native Ubuntu/Windows и RepoGuard сохранены. Один дополнительный Ubuntu job в том же native workflow заменяет старые Regenerator/Renderer verification workflows: обе WASM-библиотеки, native GPU frame, Worker parity, реальный Chromium/depth/holes/4K/cancel/negative, RV01, package validators и RVI source mutations. Он проверяет сборку при заблокированных Git URL трёх старых repos. Browser network guard разрешает только локальные синтетические запросы; собственный отрицательный тест доказывает блокировку реальных Chromium запросов к старым repos.
 
@@ -58,6 +58,23 @@ node renderer/scripts/build-studio-s2a.mjs build/wasm
 CMake записывает Platform revision/TREE в `build/wasm/platform-build.json`; producer сверяет их с чистым текущим checkout и отбирает девять фиксированных активов. `engine-lock.json` задаёт только действующий protocol/whole-build/core semantic contract, не источник Git. Манифест пакета хранит один Platform revision/TREE и hashes. `core` — инертный идентификатор математической семантики из runtime, не network pin. Чужая ревизия/TREE, dirty tracked source, empty/неверный WASM или небезопасный output path отвергаются.
 
 Обычный review artifact этой CI предназначен для проверки текущего пакета, не для архивирования старой истории. Пакет ещё не публикуется: единый Pages/release/rollback, live smoke и визуальная авторская приёмка — S07. Private Stage A, browser R07 fit и универсальное доказательство всех моделей FGM не заявляются.
+
+## Проверка release и rollback пакета
+
+Существующий Python publisher независимо связывает bundle и готовый сайт с настоящим Git revision/TREE,
+engine contract и A.M. Verify и byte-preserving rollback используют один строгий validator. Текущий publisher
+больше не импортирует старый V03 promoter/snapshot verifier и не поддерживает rollback-v03.
+Rollback требует independently trusted hashes всего ранее проверенного Platform пакета, включая manifest.
+Подробные текущие команды и границы — [подготовка Platform Studio](../renderer/docs/studio-pages.md).
+
+Тот же HTTP/Chromium checker проверяет локальный review сайт и будущий Platform HTTPS URL, без старых
+Renderer URL/schema. Он сопоставляет manifest TREE с Git и hashes с независимыми ожиданиями. Browser
+network boundary проверяет каждый фактически загружаемый HTTP ресурс до исполнения и блокирует внешние запросы.
+Native Ubuntu/Windows выполняют Git/rollback и реальные HTTP negative suites; существующий Ubuntu browser
+job дополнительно исполняет настоящий WASM и отвергает подмену ответа после первоначального HTTP scan.
+Новых targets, jobs или release workflows в S07A нет. Последний dormant Pages workflow остаётся до действующей
+замены S07B. Доверенное происхождение и сохранение release artifacts, фактическая публикация/откат и public smoke
+ещё не доказаны: это следующий срез, а не следствие локального admission PASS.
 
 ## Финальная цель
 

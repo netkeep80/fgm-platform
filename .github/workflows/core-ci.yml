@@ -35,6 +35,11 @@ jobs:
           node --test core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
           npm run test:node --workspace renderer
           node --test renderer/tests/studio-bundle.test.mjs
+      - name: Verify Platform publication and rollback admission on both systems
+        working-directory: renderer
+        run: |
+          python -m unittest discover -s tests -p test_studio_pages.py -v
+          node --test tests/studio-pages-live.test.mjs
       - name: Configure Platform from the monorepo root
         run: cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Build Core, Raster, Regenerator and Renderer native targets
@@ -113,7 +118,11 @@ jobs:
         working-directory: renderer
         run: |
           python -m unittest discover -s tests -p 'test_*pages*.py' -v
-          python -m scripts.studio_pages studio build/studio build/pages-studio --revision "${{ github.event.pull_request.head.sha }}" --preview-base "${{ github.event.pull_request.base.sha }}"
+          python -m scripts.studio_pages studio build/studio build/pages-studio --revision "${{ github.event.pull_request.head.sha }}" --preview-base "${{ github.event.pull_request.base.sha }}" > build/pages-hashes.json
+          python -m scripts.studio_pages verify build/pages-studio --revision "${{ github.event.pull_request.head.sha }}" --preview-base "${{ github.event.pull_request.base.sha }}" --hashes build/pages-hashes.json
+          python -m scripts.studio_pages studio build/studio build/rollback-source --revision "${{ github.event.pull_request.head.sha }}" > build/rollback-hashes.json
+          python -m scripts.studio_pages rollback build/rollback-source build/rollback-check --revision "${{ github.event.pull_request.head.sha }}" --hashes build/rollback-hashes.json
+          python -m scripts.studio_pages verify build/rollback-check --revision "${{ github.event.pull_request.head.sha }}" --hashes build/rollback-hashes.json
       - name: Run real Chromium Renderer, Worker, depth and privacy contracts
         working-directory: renderer
         run: |
@@ -121,6 +130,7 @@ jobs:
           node tests/renderer-session-wasm.browser.mjs build/pages-studio
           node tests/renderer-depth-oracle.browser.mjs
           node tests/studio-s2a.browser.mjs build/pages-studio --catalog
+          STUDIO_REVIEW_SITE=build/pages-studio node --test tests/studio-pages-live.test.mjs
       - name: Kill every real RVI source mutant
         working-directory: raster
         run: node scripts/mutate-v02.mjs
@@ -132,5 +142,8 @@ jobs:
             renderer/build/pages-studio/
             renderer/build/native/sphere.ppm
             renderer/build/renderer-session-browser.png
+            renderer/build/studio-http-smoke.png
+            renderer/build/pages-hashes.json
+            renderer/build/rollback-hashes.json
             raster/build/v02/mutations.json
           if-no-files-found: error
