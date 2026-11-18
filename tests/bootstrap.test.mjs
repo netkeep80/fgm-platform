@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import {spawnSync} from "node:child_process";
 import { root, checkBootstrap, PIN } from "../scripts/check-bootstrap.mjs";
 import {parse,stringify} from "yaml";
 
@@ -28,6 +29,16 @@ function temporary(operate) {
 test("positive: exact frozen RepoGuard revision, roots and artifact links",()=>
   assert.deepEqual(checkBootstrap(),{ok:true,roots:2,repoGuard:PIN})
 );
+test("negative: every run step must use a fail-fast shell on Windows and Ubuntu",()=>temporary(tmp=>{
+  const p=join(tmp,".github/workflows/platform.yml"),v=parse(readFileSync(p,"utf8"));
+  v.defaults.run.shell="pwsh";writeFileSync(p,stringify(v));
+  assert.throws(()=>checkBootstrap(tmp),/E_FGMP_GUARD_PIN/);
+}));
+test("real shell: a failed native command stops before the next successful command",()=>{
+  const r=spawnSync("bash",["--noprofile","--norc","-e","-o","pipefail","-c",
+    'node -e "process.exit(7)"\nnode -e \'console.log("SHOULD_NOT_RUN")\''],{encoding:"utf8"});
+  assert.equal(r.status,7,r.stderr);assert.doesNotMatch(r.stdout,/SHOULD_NOT_RUN/);
+});
 test("negative: replaced RepoGuard SHA fails closed",()=>temporary(tmp=>{
   const p=join(tmp,".github/workflows/platform.yml");
   writeFileSync(p,readFileSync(p,"utf8").replace(

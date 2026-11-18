@@ -72,7 +72,7 @@ function checkWorkflowGate(workflow) {
     seq.items.forEach((v,i)=>must(eq(v,want[i])));
   };
 
-  const root=map(doc.contents,["name","on","permissions","env","jobs"]);
+  const root=map(doc.contents,["name","on","permissions","env","defaults","jobs"]);
   must(eq(node(root,"name"),"FGM Platform — verify, publish and rollback"));
   const on=map(node(root,"on"),["pull_request","push","workflow_dispatch"]);
   const pr=map(node(on,"pull_request"),["types","branches"]);
@@ -83,6 +83,9 @@ function checkWorkflowGate(workflow) {
   must(eq(node(perms,"contents"),"read"));
   const environment=map(node(root,"env"),["SOURCE_REV"]);
   must(eq(node(environment,"SOURCE_REV"),"$"+"{{ github.event.pull_request.head.sha || github.sha }}"));
+  const defaults=map(node(root,"defaults"),["run"]);
+  const runDefaults=map(node(defaults,"run"),["shell"]);
+  must(eq(node(runDefaults,"shell"),"bash"));
   const jobs=map(node(root,"jobs"),["repo-guard","platform-policy","core","wasm-browser","release"]);
   const verification="github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'";
   const expectedNames={"repo-guard":"RepoGuard exact BASE/HEAD","platform-policy":"Platform policy / $"+"{{ matrix.os }}",

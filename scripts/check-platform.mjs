@@ -73,13 +73,13 @@ const PINS={
   },
   "scripts/check-bootstrap.mjs": {
     "mode": "100644",
-    "blob": "5bca4b4ed87cedb0fcfe300515ca98870cda4931",
-    "sha256": "50011a0f1c4b44d6db2694b054659d1ea0c0b32eefb6c58547fc36affd830585"
+    "blob": "45ba4fbc196d40b9b471579d951a152de8a0f147",
+    "sha256": "845fea50381fa610202116b6382fcabdb7f3d56b540baf253c232312d4f3db89"
   },
   "tests/bootstrap.test.mjs": {
     "mode": "100644",
-    "blob": "406a8fc15894089cd90c9fda99d6501629f23875",
-    "sha256": "679a2a035c9f2ce4947744e1542680d542e2d995bc991d44a315282848aec91e"
+    "blob": "e055488fde5b0212772b470b31a270ab6ef0ec1d",
+    "sha256": "dc80ffb22c1ab997e636b799d35ca01036f7f0fc0a644c4476c5e547b4da7c21"
   },
   "tests/ctest-gate.test.mjs": {
     "mode": "100644",
@@ -198,8 +198,8 @@ const PINS={
   },
   "renderer/tests/test_studio_pages.py": {
     "mode": "100644",
-    "blob": "1c8c77f2cbb3acb036467788e88b3cb833d210c2",
-    "sha256": "d682c03fbc945da1327c3e14d70cfce69e97693dd24d4560974525751ad9621d"
+    "blob": "2363a2e834f3ad409501bdacb3cfcee00ba5948c",
+    "sha256": "11bd11e92aab32dc09bfc53da2336df36f6a4a646fb5597b10c490cd2d4446cd"
   },
   "renderer/tests/studio-pages.live.mjs": {
     "mode": "100644",
@@ -213,8 +213,8 @@ const PINS={
   },
   ".github/workflows/platform.yml": {
     "mode": "100644",
-    "blob": "df53402cd61f9e30ff4e653459eb5bab60bca21b",
-    "sha256": "ed99e695d5188870a799ed11a05db10077acbb99f1a8e598a9123749dee9e34d"
+    "blob": "e11967697d0155f3cce0b414e9b10406e3baf656",
+    "sha256": "4ea1861232422890e85198e4a32beb92bfec7e5ddafa166e0e5576303d3f2835"
   },
   "renderer/scripts/studio_release.py": {
     "mode": "100644",

@@ -33,6 +33,9 @@ permissions:
   contents: read
 env:
   SOURCE_REV: ${{ github.event.pull_request.head.sha || github.sha }}
+defaults:
+  run:
+    shell: bash
 jobs:
   repo-guard:
     name: RepoGuard exact BASE/HEAD
@@ -155,8 +158,10 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "24"
-      - name: Reject empty and incomplete CTest suites
-        run: node --test tests/ctest-gate.test.mjs
+      - name: Reject empty CTest suites and masked native command failures
+        run: |
+          node --test tests/ctest-gate.test.mjs
+          node --test --test-name-pattern="real shell:" tests/bootstrap.test.mjs
       - name: Install the root workspace and verify Core and Renderer contracts
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
