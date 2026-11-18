@@ -18,6 +18,12 @@
 
 `implemented_by`, `verified_by`, `documents` ссылаются на точные пути этого репозитория; связность проверяется RepoGuard J1/J2/J3. Предметный CI должен запускать конкретные тесты и не подменяться наличием связи `verified_by`; активация этих запусков в Platform относится к S04–S06.
 
+## Интеграционный срез S04
+
+Новый кандидат FGMP-MIG-CORE-001 связывает локальный Core, корневой CMake, активный `core-ci.yml`, независимый native/reference verifier и фазовую проверку происхождения. С ним текущий canonical count равен 78. Семь Core execution constraints сохраняют прежние verifier keys и получают действующий CI; нормативные тексты, lifecycle и constraints всех 73 перенесённых требований не меняются. Исправление аудита P2 добавляет фиксированные content pins критических verifier/CI и gate точного CTest состава с --no-tests=error, без изменения исходных 73 требований. Подробности — [протокол S04](core-integration.md).
+
+S03 checker с count 77 и frozen 232 module files сохраняется для exact принятого исторического S03 HEAD. Новый S04 checker допускает только заявленное изменение одного Core CMake и документированные обновления relations. Эти проверки относятся к разным нормативным снимкам.
+
 ## Граница старых репозиториев
 
 `fgm-core`, `fgm-regenerator` и `fgm-renderer` сохраняют все исходные commits, Requirements, PR и audit receipts до подтверждённого cutover. Весь контекст старых Issues/PR индексируется в [S09](https://github.com/netkeep80/fgm-platform/issues/15). Приватные игровые файлы никогда не добавляются в публичную миграцию.

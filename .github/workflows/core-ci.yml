@@ -1,0 +1,43 @@
+name: S04 Core build and semantic parity
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Reject empty and incomplete CTest suites
+        run: node --test tests/ctest-gate.test.mjs
+      - name: Run all original Core Node suites and documentation audit
+        run: |
+          node --test core/tests/document-language.test.mjs core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
+          node core/scripts/check-document-language.mjs
+      - name: Configure local Core from the monorepo root
+        run: cmake -S . -B build/core -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build Core and public API consumer
+        run: cmake --build build/core --config Release --parallel 2
+      - name: Require exact enabled native CTest inventory
+        run: node scripts/check-ctest.mjs build/core --config Release
+      - name: Run original native tests, C05 parity and external consumer
+        run: ctest --test-dir build/core -C Release --output-on-failure --verbose --no-tests=error

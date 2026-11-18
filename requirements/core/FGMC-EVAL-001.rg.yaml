@@ -50,7 +50,7 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: core/.github/workflows/repo-guard.yml
+      path: .github/workflows/core-ci.yml
   - predicates:
       - verified_by
     target:
@@ -76,6 +76,21 @@ relations:
     target:
       kind: artifact
       path: core/README.md
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: CMakeLists.txt
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: tests/core-parity.test.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: tests/core/sample.cpp
 constraints:
   - id: fgm_evaluator_execution
     activation: scoped_change

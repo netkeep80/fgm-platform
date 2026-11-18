@@ -1,0 +1,294 @@
+{
+  "schema": "fgm-platform-core-integration/2",
+  "phase": "S04",
+  "baseline": {
+    "head": "e883bea583d7298ec2747375ebebeb01405a59a1",
+    "tree": "e0f16e7dcbbb66f713f9e3a529291e2e632f78bb"
+  },
+  "historical_s03": {
+    "head": "4c46d0f3aa2176a8d63448c01df55614ce169956",
+    "tree": "e0f16e7dcbbb66f713f9e3a529291e2e632f78bb",
+    "manifest_sha256": "937ff92f1b589179eb44d4c2abcac8c6b6c4dbea3d46cbfd5fb5acb6a296fc6a"
+  },
+  "module_changes": [
+    {
+      "path": "core/CMakeLists.txt",
+      "source_blob": "9b3e76bdc900dd54d8d19fb7f53d537c8518c236",
+      "target_blob": "3e8b00d55faa8ca6e59c1361bc5cae77b1c64203",
+      "mode": "100644",
+      "rule": "add_FGMC_BUILD_TESTS_without_changing_global_BUILD_TESTING"
+    }
+  ],
+  "unchanged_module_files": 231,
+  "canonical_requirements": 78,
+  "normative_values_preserved": 73,
+  "core_requirements": [
+    {
+      "path": "requirements/core/FGMC-DOC-001.rg.yaml",
+      "id": "FGMC-DOC-001",
+      "normative_digest": "1c44bd3991f56e6e22d871376f9a90f3be5a3f0609997234aca06a059f7156d7",
+      "source_relations_digest": "c33769845a8df5d4777b05e0d9b0275117a4f7ed5e2e897b17afc8ac13a97c1c",
+      "target_relations_digest": "0b255e31161c69aa9417642de3d085c77e68a7b5fd64406a587351d648b03a96",
+      "constraints_digest": "966e5b03bd6a0964d939cad5b6a7bbdd425c070e4cf4cd7c773912f9dc851a39",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-EVAL-001.rg.yaml",
+      "id": "FGMC-EVAL-001",
+      "normative_digest": "2e4b795cdbc224a7823fb8ff69717eba6e8f2bc77d9a7958a4fa20247f7f0149",
+      "source_relations_digest": "45e23c819fed102882846ecc7874f183c519cc3131bfa5c8af0152fb7ebac252",
+      "target_relations_digest": "15782606e52bb2fec5313fe59cf3fe1949b4becfcdf89bced70c84d662029ab6",
+      "constraints_digest": "3e46ec7b8818962f691af551e80f7cf8ec4205be50f598f5c33a9984d8fb90f3",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-GEOM-001.rg.yaml",
+      "id": "FGMC-GEOM-001",
+      "normative_digest": "8473cd94bc017cdc4cac6ded50a189c33c105355976a9514bdd5632d8873cb01",
+      "source_relations_digest": "3316254418a91c7a8592fffbc7f7c682abde92ed55f6fb78d6022325d1aca674",
+      "target_relations_digest": "ac498c3dc39c947396c7db8749cd450a55bfe0ab7d7b1d5473a29d23871b1841",
+      "constraints_digest": "5131e33dc05d5821d3243aaf403a91cc7314187b19b9d684519a834f843cb9cc",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-GOV-001.rg.yaml",
+      "id": "FGMC-GOV-001",
+      "normative_digest": "14765881b5b77e2cd3d3a966993e4654cc5702ad93474e0ef71d4f23f186ffb8",
+      "source_relations_digest": "6374aa9ca955e208785e430718515e07a4c6b04b480eb590000ded8827ac770a",
+      "target_relations_digest": "6374aa9ca955e208785e430718515e07a4c6b04b480eb590000ded8827ac770a",
+      "constraints_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-LANG-001.rg.yaml",
+      "id": "FGMC-LANG-001",
+      "normative_digest": "a110cf4f5044625b90e11d049e43bb525b743046422a4c6038b82142e6f3ba63",
+      "source_relations_digest": "c87a09974eeb98e3c15c98587de3c954d72c55f7ed84e44dc39f467b8e58fcff",
+      "target_relations_digest": "d137d02218b7061f772be2c242537b9b88db6368a047e54939e12b264c24ca13",
+      "constraints_digest": "63ed57570b5f835991ce1f4664fd504864252e993f85d1eebbdc40fb64a2ac27",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-LIC-001.rg.yaml",
+      "id": "FGMC-LIC-001",
+      "normative_digest": "9c069e2b528aaaab14acf58af4fece4b9df02b40a6cd8f51d4cefe3c64422df7",
+      "source_relations_digest": "491411efa937ab09adb34d5d2dc4296db0d6b9e0d2a13a1acc9ab82d89f7b701",
+      "target_relations_digest": "491411efa937ab09adb34d5d2dc4296db0d6b9e0d2a13a1acc9ab82d89f7b701",
+      "constraints_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-PRODUCT-000.rg.yaml",
+      "id": "FGMC-PRODUCT-000",
+      "normative_digest": "ee9a9ebb2e0706c27f2e2590c5dc4bc232237b1abde5022988f3cab0fd9b04a0",
+      "source_relations_digest": "6c2bc31632785c5ba3b83f6aa12c79d2a427a2c4e7058e68171bb31966ba88fa",
+      "target_relations_digest": "6c2bc31632785c5ba3b83f6aa12c79d2a427a2c4e7058e68171bb31966ba88fa",
+      "constraints_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-PROJECT-000.rg.yaml",
+      "id": "FGMC-PROJECT-000",
+      "normative_digest": "8f07400e0bdb8b1a59e44043b568891efb3c78859de48cef568d606d80d6f792",
+      "source_relations_digest": "6c2bc31632785c5ba3b83f6aa12c79d2a427a2c4e7058e68171bb31966ba88fa",
+      "target_relations_digest": "6c2bc31632785c5ba3b83f6aa12c79d2a427a2c4e7058e68171bb31966ba88fa",
+      "constraints_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-SERIAL-001.rg.yaml",
+      "id": "FGMC-SERIAL-001",
+      "normative_digest": "c7d2e2c74741e3b36a6587d1d554f6733fc7a1d5851bdff42435c2e650abe7fb",
+      "source_relations_digest": "239b0846501a6479c3e4d1ff3c6c1a26237efc143aad7b7b7ad648ee7da7703b",
+      "target_relations_digest": "66f1131777a6c13831d5ecd5002a92f0a902879a1cc0f8bb23f70a688085c6f6",
+      "constraints_digest": "2c46de7e03ff62b3d0d57fdc03d33453ac813106b0048671c3f8dbaf1e3b30d1",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-SPACE-001.rg.yaml",
+      "id": "FGMC-SPACE-001",
+      "normative_digest": "408ea5a147e2d9ec41de022ce93d0a59f6a1928f83ba131dbf62c1f7ebea1ff9",
+      "source_relations_digest": "ac18f27f53221c8a90136e4f9c703b17f873692c44f3729833ed06164856ed1b",
+      "target_relations_digest": "249a95d179b13c5c48ed0769d268a6e436e3737b2e7d46ead5de4c2db88b7b04",
+      "constraints_digest": "96ebf5993883d63fd4c103af2ebd573e02b937713386a10143b0950909aad204",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    },
+    {
+      "path": "requirements/core/FGMC-VIS-001.rg.yaml",
+      "id": "FGMC-VIS-001",
+      "normative_digest": "3749589e9ec160f3d7e271174a5081154738e92d8badc85d2d1f54bc3a7dfc22",
+      "source_relations_digest": "401ebfe3b89c56ab01624f7d4b652041b22c0f95e9d20173f575366b376c4160",
+      "target_relations_digest": "87c4cd718d8eda77353e9b569d0fa4170bf721f1529aaca38a789fb107c4e019",
+      "constraints_digest": "2a7a1754563b1288accc1cb4b5986b14f356bd1dc8c54cdf8733ef74f86c93ea",
+      "lifecycle": {
+        "accepted": false,
+        "current": false,
+        "published": false
+      }
+    }
+  ],
+  "expected_execution": [
+    "FGMC-DOC-001",
+    "FGMC-EVAL-001",
+    "FGMC-GEOM-001",
+    "FGMC-LANG-001",
+    "FGMC-SERIAL-001",
+    "FGMC-SPACE-001",
+    "FGMC-VIS-001"
+  ],
+  "source_workflow": "core/.github/workflows/repo-guard.yml",
+  "active_workflow": ".github/workflows/core-ci.yml",
+  "new_files": [
+    ".github/workflows/core-ci.yml",
+    "CMakeLists.txt",
+    "docs/core-integration.md",
+    "docs/core-integration.json",
+    "requirements/FGMP-MIG-CORE-001.rg.yaml",
+    "scripts/check-core-integration.mjs",
+    "scripts/check-core-consumer.mjs",
+    "tests/core-integration.test.mjs",
+    "tests/core-parity.test.mjs",
+    "tests/core/sample.cpp",
+    "tests/core/consumer/CMakeLists.txt",
+    "scripts/check-ctest.mjs",
+    "tests/ctest-gate.test.mjs"
+  ],
+  "functional_reference": {
+    "head": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff",
+    "tree": "67bd3a0cb5a3d2a378e6edddf9b491653ef2bfc6",
+    "role": "BYTE_REFERENCE_NOT_AUTHOR_ACCEPTANCE"
+  },
+  "critical_artifacts": [
+    {
+      "path": ".github/workflows/core-ci.yml",
+      "mode": "100644",
+      "blob": "c4628c76239a7e06cc8ba04d9f2110cf7f4a3a15",
+      "sha256": "6f787393a584c7872b1756281aa96b640ee4c01e4de29b4cdb49bc3783518f9b",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": ".github/workflows/source-snapshots.yml",
+      "mode": "100644",
+      "blob": "47685f80f1e6923c6a372eaba3861d6d8216041b",
+      "sha256": "3e7893c8956c82517e481ac126f692d945a7d5cdbfcd93ef4a0b3c5081baa28f",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "blob": "eae08ba8382f681c15019c5d72dcc6479570c55e",
+      "sha256": "825516f201b45652ff198f0f6fb82dec540b1efe57abc0afd94545b9c915b0a0",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "requirements/FGMP-MIG-CORE-001.rg.yaml",
+      "mode": "100644",
+      "blob": "09d88c9b66b4a30a865f718d4beaf328bbd7786f",
+      "sha256": "3666839af5827f3b3869351124c3dab763f9dc8d639008e088ce119aee1bc86f",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "scripts/check-core-consumer.mjs",
+      "mode": "100644",
+      "blob": "723e6c4a828deda9f64da38fd53cbb9f32da3b32",
+      "sha256": "a1fc20d827c246e53878f9cc0697f5b14398869d4fed9fc4446aebb10de2ee62",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "scripts/check-ctest.mjs",
+      "mode": "100644",
+      "blob": "b7041e6f914a94f9079fa02ad382d8850051b81c",
+      "sha256": "a83754ae978e47b5903ac85994d8e99039e63acfb5b9c6cf9eca2b04a8ef9689",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "scripts/verify-requirements-transition.mjs",
+      "mode": "100644",
+      "blob": "5fdd047d114e449f3de07c295d8febce892782ac",
+      "sha256": "ac265b30a42d0acb1a60f5ea20cb1dd49235182ad3787372c982017c9cccc7dd",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/core-integration.test.mjs",
+      "mode": "100644",
+      "blob": "cf9d27b705af75bf40b8587075a384863eeabe8b",
+      "sha256": "8855788feb60070e12042c46a30a2614d70314e3cf690b8ead80306d041aee5c",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "tests/core-parity.test.mjs",
+      "mode": "100644",
+      "blob": "13788e50c0f3b781ec797806098e0faa83b857e5",
+      "sha256": "9f9b24c3f67dd5a0a31d8f24815fcf4a6ac86e5e2f5bae88c75d83cb4e7a2789",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/core/consumer/CMakeLists.txt",
+      "mode": "100644",
+      "blob": "fc952e4140a75971d70cb696bc9d9a486ed8da10",
+      "sha256": "ca0db52ec216a491549e2fc3d7561ca01c781f9f139db6a7628ca8a50dfc5c14",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/core/sample.cpp",
+      "mode": "100644",
+      "blob": "03eefe5f5d6f7d86e7e4822a93c356585e393aad",
+      "sha256": "fb06511e8508bb555e08c0d607ff994d80b2059145fba3835e291e3108ee6618",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/ctest-gate.test.mjs",
+      "mode": "100644",
+      "blob": "869ca7ac3030d063b84e8a6546f4d606cf00c80e",
+      "sha256": "f65244b4db05f39e4018301a8ffbcf6f181526be52b336509a01473a54754f77",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "tests/requirements-migration.test.mjs",
+      "mode": "100644",
+      "blob": "18d4ceb1153512cd05c3b8476ca021749fc1ca59",
+      "sha256": "63139e1d39f362e47aef0f12a198c0988d5389f2ec687e03b312c5e1a5548f67",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    }
+  ]
+}

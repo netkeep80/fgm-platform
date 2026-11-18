@@ -2,6 +2,8 @@
 
 **Этап:** [Issue #6](https://github.com/netkeep80/fgm-platform/issues/6). Нормативный источник самого переноса — `FGMP-MIG-REQ-001`. Этот документ и JSON-реестр объясняют преобразование, но не подменяют Requirements и решение автора.
 
+**После перехода к S04:** этот протокол проверяет исторический принятый S03 HEAD `4c46d0f3aa2176a8d63448c01df55614ce169956`, а текущий срез проверяется отдельно по [правилам S04](core-integration.md). Исторический checker и реестр сохраняются побайтно.
+
 ## Исходная база и полнота
 
 База Platform: `495ebf1a28d8563a0fd6681aadb2cc77d76cb696`, дерево `de224a85b0957ca1de1e26d593a3c1ee099f85e2`. Это проверенный merge S02, содержащий точные снимки из `docs/source-snapshots.json`. Исходные репозитории используются только для чтения.
@@ -52,7 +54,7 @@ node --test tests/bootstrap.test.mjs tests/requirements-migration.test.mjs
 node scripts/check-bootstrap.mjs
 python -m unittest discover -s tests -p test_source_snapshots.py -v
 python scripts/check-source-snapshots.py --head faff85c3683a7dd87026796bf33ad11ac6d22b33 --base 9a1b41b7050ee2342d247f8d43ce5e3977de2ee6
-node scripts/check-requirements-migration.mjs HEAD
+node scripts/check-requirements-migration.mjs 4c46d0f3aa2176a8d63448c01df55614ce169956
 node scripts/verify-requirements-transition.mjs
 ```
 

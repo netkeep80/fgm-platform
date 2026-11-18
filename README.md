@@ -1,6 +1,6 @@
 # FGM Platform — единая платформа Fractal Generative Models
 
-Статус: **S02 IMPORTED · S03 CANDIDATE**. Принятый [PR #30](https://github.com/netkeep80/fgm-platform/pull/30) перенёс 305 файлов Core, Regenerator и Renderer. Этот срез предлагает корневые ветви 73 требований с проверяемой таблицей путей и нормативной идентичности. Интеграция сборок и выпуск общей Web Studio остаются следующими этапами.
+Статус: **S03 ACCEPTED · S04 CANDIDATE**. Принятые PR #30/#31 перенесли исходные файлы и 73 нормативных требования в монорепозиторий. Текущий срез подключает локальный Core к корневому CMake, активному Linux/Windows CI и проверке native/reference C05. Интеграция Regenerator/Renderer и выпуск общей Studio остаются следующими этапами.
 
 **Единственная точка восстановления проекта после окончания чата:** [CONTROL Issue #1](https://github.com/netkeep80/fgm-platform/issues/1). [Протокол журнала и контрольных точек #2](https://github.com/netkeep80/fgm-platform/issues/2). [Начальный этап RepoGuard #3](https://github.com/netkeep80/fgm-platform/issues/3). [Покрытие старой истории/roadmap #15](https://github.com/netkeep80/fgm-platform/issues/15).
 
@@ -12,6 +12,17 @@
 - `studio/` (будущий): общий Native/WASM интерфейс, локальный эксперимент и проверенный автоматический Pages release.
 
 `netkeep80/ufo-fractal` остаётся отдельным игровым GPLv3-продуктом. Оригинальные данные UFO/TFTD и производные игровые ресурсы остаются в приватном контуре; **никаких** MAP/MCD/LOFT/PCK/TAB/game images/derived FGM в публичном GitHub, Issues, CI или Pages.
+
+## Сборка Core
+
+```sh
+cmake -S . -B build/core -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build/core --config Release --parallel 2
+node scripts/check-ctest.mjs build/core --config Release
+ctest --test-dir build/core -C Release --output-on-failure --verbose --no-tests=error
+```
+
+[Интеграция и контракт потребителя](docs/core-integration.md) описывают локальный `fgm::cpu`, независимый внешний CMake-проект и проверку 6144 центров C05. Принятые S02/S03 проверяются на исторических коммитах; текущий S04 имеет отдельный [реестр](docs/core-integration.json) и checker. Отдельная авторская приёмка этого Draft среза ещё требуется.
 
 ## Управление принятием
 
