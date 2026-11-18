@@ -25,7 +25,7 @@ node scripts/check-ctest.mjs build/native --suite platform --config Release
 ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
 ```
 
-[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 30 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; историческое evidence воспроизводится отдельно по immutable refs.
+[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 30 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; WASM/browser собираются из того же Platform checkout. Полный исторический архив старых репозиториев не требуется.
 
 ## Управление принятием
 

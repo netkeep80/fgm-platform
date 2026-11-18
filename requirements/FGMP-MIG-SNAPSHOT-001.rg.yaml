@@ -35,7 +35,7 @@ relations:
       - verified_by
     target:
       kind: artifact
-      path: .github/workflows/source-snapshots.yml
+      path: .github/workflows/platform-policy.yml
   - predicates:
       - documents
     target:

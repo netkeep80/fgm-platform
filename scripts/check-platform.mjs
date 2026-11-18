@@ -1,90 +1,93 @@
-// One current policy. Historical stage policies execute only on their immutable trees.
+// One current transition policy; no imports or replay of historical stage checkers.
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseDocument} from 'yaml';
-
 export const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-export const POLICY='fgm-platform-policy/2';
-export const SCOPE='S05-to-S06A-native-renderer-raster-ownership-shared-quality';
-export const BASE='c64a1b7ae9a414386e75d1904efc319bb30a68aa';
-export const BASE_TREE='6abd50abcc801f44ead655cdf60a1f96edcad193';
-export const HISTORY=Object.freeze([
-  ['faff85c3683a7dd87026796bf33ad11ac6d22b33','de224a85b0957ca1de1e26d593a3c1ee099f85e2'],
-  ['4c46d0f3aa2176a8d63448c01df55614ce169956','e0f16e7dcbbb66f713f9e3a529291e2e632f78bb'],
-  ['5f5971eae131b2b5c79992203d2f27281d217a75','0410d0f6dd49247c53ee0f43a0426f8d82539543'],
-  ['0ed4c333cfed939b13180029871043900b372520',BASE_TREE],
-]);
-const MOVES=Object.freeze({
-  "renderer/tests/rvi-v02.test.cpp": "raster/tests/rvi-v02.test.cpp",
-  "renderer/tests/v02-c05.test.cpp": "raster/tests/v02-c05.test.cpp",
-  "renderer/tests/fixtures/v02-scenes.txt": "raster/tests/fixtures/v02-scenes.txt",
-  "renderer/scripts/test-v02.mjs": "raster/scripts/test-v02.mjs",
-  "renderer/scripts/mutate-v02.mjs": "raster/scripts/mutate-v02.mjs",
-  "core/scripts/check-document-language.mjs": "scripts/check-document-language.mjs",
-  "core/tests/document-language.test.mjs": "tests/document-language.test.mjs"
-});
-const CONSOLIDATED=Object.freeze({
-  "regenerator/scripts/check-document-language.mjs": "scripts/check-document-language.mjs",
-  "renderer/scripts/check-document-language.mjs": "scripts/check-document-language.mjs"
-});
+export const POLICY='fgm-platform-policy/3';
+export const SCOPE='S06A-to-S06B-local-WASM-GPU-browser-current-snapshot';
+export const BASE='79f4b4e74f00f05b8210cfd5805f1de053b74c0d';
+export const BASE_TREE='4bc532b34ebee3a8a3b36500eaa8e394e5d12287';
 const RETIRED=Object.freeze([
-  "regenerator/scripts/check-document-language.mjs",
-  "renderer/scripts/check-document-language.mjs",
+  "core/tests/document-language.test.mjs",
+  "regenerator/tests/document-language.test.mjs",
+  "renderer/tests/document-language.test.mjs",
+  "renderer/scripts/test-v02.mjs",
+  "regenerator/.github/workflows/importer-ci.yml",
+  "renderer/.github/workflows/repo-guard.yml",
+  ".github/workflows/source-snapshots.yml"
+]);
+const FORBIDDEN=Object.freeze([
+  "core/tests/document-language.test.mjs",
+  "regenerator/tests/document-language.test.mjs",
+  "renderer/tests/document-language.test.mjs",
+  "renderer/scripts/test-v02.mjs",
+  "regenerator/.github/workflows/importer-ci.yml",
+  "renderer/.github/workflows/repo-guard.yml",
+  ".github/workflows/source-snapshots.yml",
   "core/.github/workflows/repo-guard.yml",
   "regenerator/.github/workflows/repo-guard.yml",
-  "renderer/package-lock.json"
+  "core/scripts/check-document-language.mjs",
+  "regenerator/scripts/check-document-language.mjs",
+  "renderer/scripts/check-document-language.mjs",
+  "renderer/package-lock.json",
+  "renderer/tests/rvi-v02.test.cpp",
+  "renderer/tests/v02-c05.test.cpp",
+  "renderer/tests/fixtures/v02-scenes.txt",
+  "renderer/scripts/mutate-v02.mjs",
+  "renderer/src/rvi-v02.cpp",
+  "renderer/src/rvi-v02.hpp"
 ]);
-const MOVED_EDITED=Object.freeze([
-  "renderer/scripts/test-v02.mjs",
-  "renderer/scripts/mutate-v02.mjs"
-]);
-const ALIASES=Object.freeze(['core/tests/document-language.test.mjs','regenerator/tests/document-language.test.mjs','renderer/tests/document-language.test.mjs','renderer/scripts/test-v02.mjs']);
 const ADDED=Object.freeze([
-  "raster/tests/rvi-v02.test.cpp",
-  "raster/tests/v02-c05.test.cpp",
-  "raster/tests/fixtures/v02-scenes.txt",
-  "raster/scripts/test-v02.mjs",
-  "raster/scripts/mutate-v02.mjs",
-  "scripts/check-document-language.mjs",
-  "tests/document-language.test.mjs",
-  "renderer/tests/scene.test.cpp",
-  "requirements/FGMP-RENDERER-001.rg.yaml"
+  ".github/workflows/platform-policy.yml",
+  "renderer/tests/local-browser.mjs",
+  "renderer/tests/local-browser.test.mjs",
+  "renderer/tests/studio-bundle.test.mjs",
+  "requirements/FGMP-WASM-001.rg.yaml"
 ]);
 const EDITED=Object.freeze([
-  ".gitignore",
   ".github/workflows/core-ci.yml",
   ".github/workflows/repo-guard.yml",
-  ".github/workflows/source-snapshots.yml",
   "CMakeLists.txt",
   "README.md",
-  "core/README.md",
   "docs/platform.md",
   "docs/requirements-hierarchy.md",
-  "package-lock.json",
-  "package.json",
   "raster/CMakeLists.txt",
-  "regenerator/README.md",
-  "renderer/CMakeLists.txt",
-  "renderer/README.md",
-  "renderer/docs/v02-cpu.md",
-  "renderer/package.json",
-  "renderer/scripts/test-v03-map.mjs",
-  "renderer/scripts/test-v03.mjs",
+  "renderer/docs/renderer-session-s3-s2b.md",
+  "renderer/docs/studio-pages.md",
+  "renderer/docs/studio-ufo-catalog.md",
+  "renderer/scripts/build-studio-s2a.mjs",
+  "renderer/scripts/stage-web.mjs",
+  "renderer/scripts/studio_pages.py",
+  "renderer/studio/engine-lock.json",
+  "renderer/tests/browser.test.mjs",
+  "renderer/tests/renderer-depth-oracle.browser.mjs",
+  "renderer/tests/renderer-session-wasm.browser.mjs",
+  "renderer/tests/renderer-session.browser.mjs",
+  "renderer/tests/studio-s2a.browser.mjs",
+  "renderer/tests/test_studio_pages.py",
   "scripts/check-bootstrap.mjs",
-  "scripts/check-ctest.mjs",
-  "tests/ctest-gate.test.mjs",
   "scripts/check-platform.mjs",
   "tests/platform-policy.test.mjs"
 ]);
-// Reviewed constants. This policy itself is an external exact-HEAD audit boundary.
+const PATH_MAP=Object.freeze({
+  "regenerator/.github/workflows/importer-ci.yml": ".github/workflows/core-ci.yml",
+  "renderer/.github/workflows/repo-guard.yml": ".github/workflows/core-ci.yml",
+  ".github/workflows/source-snapshots.yml": ".github/workflows/platform-policy.yml"
+});
+const NORMATIVE_UPDATES=Object.freeze({
+  "FGMP-BUILD-001": "### FGMP-BUILD-001 — Platform должна собирать Core, единую CPU RVI реализацию, Regenerator и Renderer из корневого CMake-графа с локальными targets без внутренних Git FetchContent и без глобального отключения тестов. Одна RVI реализация обслуживает R07 и Raster oracle; целочисленная R05-проекция сохраняет отдельный предметный контракт. Native/Python R01–R07, CLI, package/hash, deterministic receipts, отрицательные проверки, Core/C05 и public consumer реально выполняются на Linux и Windows с точным enabled CTest inventory и --no-tests=error. Текущая защита закрепляет область изменений и критические verifiers независимо от проверяемого manifest, сохраняет ID, lifecycle и действующие execution contracts. Временная baseline policy развивается одним файлом и удаляется на S08 после действующей функциональной замены; исторические Git/Issues/PR/CI архивы и постоянный replay не требуются. Все ещё актуальные требования и незавершённые решения должны быть самостоятельно представлены в Platform. Упрощение оценивается по зависимостям, реализациям, владельцам, исключениям и процедурам сборки; обязательны независимый аудит и отдельная авторская приёмка. Private Stage A и browser R07 fit не входят в принятый native scope.",
+  "FGMP-RENDERER-001": "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. RVI implementation, tests и fixtures принадлежат Raster без forwarding alias. Прежние camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета входят в точный enabled CTest inventory на Linux и Windows вместе с Core/Regenerator/Raster tests. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одна общая проверка языка и её отрицательные тесты выполняются до RepoGuard. Удаление заменённых workflow сохраняет уникальные предметные проверки. Версия текущей policy явно закрепляет область перехода и критические verifiers, сохраняет ID, lifecycle и действующие ограничения; нормативные изменения по авторскому решению перечисляются отдельно. Историческое архивирование и вечный replay не требуются; временные migration rules удаляются на S08 после функциональной замены. Native acceptance остаётся отдельным доказательством от реальных WASM/GPU/Chromium tests, полного S06, Stage A и публикации Studio.",
+  "FGMV-PUB-003": "### FGMV-PUB-003 — Выпуск Reconstruction Studio с каталогом UFO и проверяемый откат. При каждом обновлении main workflow должен пересобирать Studio и WASM из одного точного коммита Platform, без загрузки старых FGM-репозиториев. Допуск к автоматической и ручной публикации Studio должен требовать успешного RepoGuard на точном коммите сборки, проверки схемы манифеста, состава файлов, ревизий и контрольных сумм. Перед публикацией workflow должен сверять коммит сборки Studio с актуальным main. После успешных проверок актуальная сборка должна публиковаться автоматически по событию обновления main. Версия в шапке Studio и публичном манифесте должна иметь формат A.M. Положительный номер архитектуры A хранится в репозитории и увеличивается на единицу при несовместимом изменении архитектуры Studio. Номер M равен числу merge-коммитов в истории main по первым родителям до коммита сборки включительно. M не обнуляется при повышении A. Полный SHA и TREE опубликованного коммита Platform должен присутствовать в подсказке версии и публичном манифесте. Приёмка выпуска должна подтверждать по HTTP версию и контрольные суммы опубликованных файлов и сохранять свидетельство успешной реконструкции синтетического именованного элемента через выбор локальной папки в Chromium с WASM. Ручной откат должен использовать необходимые проверенные Platform release artifacts и подтверждать публичные байты без доступности старых репозиториев или старого Pages. Проверки PR и подготовка сайта должны выполняться без разрешений публикации. Публичный пакет должен содержать только проверенные материалы с синтетическим примером.",
+  "FGMP-PROJECT-000": "### FGMP-PROJECT-000 — Проект должен обеспечивать независимый аудит exact BASE/HEAD/TREE, явное авторское принятие, воспроизводимое CI-свидетельство, причинную трассировку изменений, самостоятельный рабочий срез с актуальными требованиями и незавершёнными решениями и запрет публикации чужих игровых ресурсов в публичном репозитории. Полный архив истории прежних репозиториев не требуется; их удаление возможно отдельной финальной авторской операцией после FUNCTIONAL_PASS, INDEPENDENCE_PASS, REQUIREMENTS_PASS и SIMPLIFICATION_PASS."
+});
 // BEGIN REVIEWED PINS
 const PINS={
   "CMakeLists.txt": {
     "mode": "100644",
-    "blob": "d8d5004b71c2995bc474355664a7d5e335a0c02d",
-    "sha256": "1cb59cb777a4a0c0d75152327f8d62295587e0ddc2904c874be5564f9a342f37"
+    "blob": "7c93d45879eeb6dd8c5c6fff6f23ee96edc2bccd",
+    "sha256": "6074d14cb27a9a0efcbfbd618cbd44e9e8265525b89749e4a4dbb989012e1e23"
   },
   "core/CMakeLists.txt": {
     "mode": "100644",
@@ -103,23 +106,23 @@ const PINS={
   },
   "raster/CMakeLists.txt": {
     "mode": "100644",
-    "blob": "bd718f121e8a25858fcd53771eb314b82ac13df9",
-    "sha256": "46a279eacc736794dd5163fceb659f1253e33501fafda61ff9ea87c3d3f94a4a"
+    "blob": "eaa2e3b25a773b03a4587e3a95a6630b007907bc",
+    "sha256": "ca0cc076a2b6eaef6d1f8ef528c7569f67d0ecd3175cf1553bee7b0b00ad614a"
   },
   ".github/workflows/core-ci.yml": {
     "mode": "100644",
-    "blob": "deab14f1ab9a375a275226d61508ea6d1a078981",
-    "sha256": "2ee9e5c93a94dce344fe332f62371e1fa746a0edbb0c5853fd83a1e645d5f79c"
+    "blob": "7a9569fbaaee4ccd9e34904e6edeaf33f0cd4805",
+    "sha256": "173cb1541846abc6c3991bcd286f76b622f40c0c9c52f51dee29da2fb6c9f958"
   },
-  ".github/workflows/source-snapshots.yml": {
+  ".github/workflows/platform-policy.yml": {
     "mode": "100644",
-    "blob": "afeef085d32daf5c9656593bee5b561c8055a660",
-    "sha256": "a4ac76f14256707ffb3780bc4920d16c2322f7b77cfb06762df653ce2bf584e3"
+    "blob": "be9290b6f8c8bea1b2697cab1815b626b9c41b88",
+    "sha256": "848c68dcad0f04010e568bdc67d446748bba48b1ce0650d35bb2c1d3a023fc88"
   },
   ".github/workflows/repo-guard.yml": {
     "mode": "100644",
-    "blob": "fe75780b2efa30e44575ae45185bd49eea1f78db",
-    "sha256": "8d8e7c105f6a3cc4fa0823db0672d03395f98a639f6ade9f69917532c7cf5d5c"
+    "blob": "29d18bdeb1390b86ac944e892d5e530e654693f7",
+    "sha256": "c0fdf706f7e7ae1430a52596c0994098a0868828f06b1a698aaad4cede88eed4"
   },
   "scripts/check-ctest.mjs": {
     "mode": "100644",
@@ -133,8 +136,8 @@ const PINS={
   },
   "scripts/check-bootstrap.mjs": {
     "mode": "100644",
-    "blob": "4e97f209d80cca2284993149dbee7deea10d3a59",
-    "sha256": "034bff824478275a44716b5ea40c1cf49cc5ef712bdb0599cbc8f038ed96f01f"
+    "blob": "efbd0bee11af846667fe4b178b3defb2560cf23d",
+    "sha256": "ffebbfc82a83a1ff4441edb68eb28fa7f15ce51fe5658a86514e982ae7662f82"
   },
   "tests/bootstrap.test.mjs": {
     "mode": "100644",
@@ -148,13 +151,13 @@ const PINS={
   },
   "tests/platform-policy.test.mjs": {
     "mode": "100644",
-    "blob": "39418ea79a80c798b5ececab5d580caa1edc1b1c",
-    "sha256": "f4eb7dc943fd374cb0bf7a1e8059bc5f1dda8052a4e7bc603f51d37e3d2f52d8"
+    "blob": "159238d53ac729d51e4859f069d1601d94ff60b3",
+    "sha256": "a688efe988b6d072612f3a1f21b290bee745a504d4528747621a63f842599004"
   },
-  "requirements/FGMP-RENDERER-001.rg.yaml": {
+  "requirements/FGMP-WASM-001.rg.yaml": {
     "mode": "100644",
-    "blob": "0cb539faf61aad8d6433eb1acb74478b7de6350e",
-    "sha256": "6306c6dd8007edaa5f8e4f081dfee93cbed55f6bf49266f7402a366d37b96a3d"
+    "blob": "ac7481eb7a66dc5ad9db3355610bd6d6cc192ee9",
+    "sha256": "d4066198d79f4b3ec3a282631fd91b465f058f320630807ee72ed682bf72749f"
   },
   "package.json": {
     "mode": "100644",
@@ -196,25 +199,70 @@ const PINS={
     "blob": "b05aedecabb80247a226471b32006e82b0c87e92",
     "sha256": "a80d53eb971bc7c828e1a02d9b9e398fb98288b5708fecda917a358c2dfad50b"
   },
-  "core/tests/document-language.test.mjs": {
+  "renderer/scripts/build-studio-s2a.mjs": {
     "mode": "100644",
-    "blob": "c51bc1a516460d478f852c89657fd5170c47b3ed",
-    "sha256": "d2b5b30c04750629da94636e8697fc317754a0894f7011de5cc0ebafc139163a"
+    "blob": "36b6d4deb82205c97b0e46908aea3774a8ae4038",
+    "sha256": "4fdb5a523ba189098ca057edd7d77231cef33ac9be1544ca77385eab4e4dd32b"
   },
-  "regenerator/tests/document-language.test.mjs": {
+  "renderer/scripts/stage-web.mjs": {
     "mode": "100644",
-    "blob": "c51bc1a516460d478f852c89657fd5170c47b3ed",
-    "sha256": "d2b5b30c04750629da94636e8697fc317754a0894f7011de5cc0ebafc139163a"
+    "blob": "5649717496db8c9178f62c28d5cb395799d83798",
+    "sha256": "ef1902ca10939acdd0c9ffebd306533d718f08f833537a1e4c91e4e5489069bf"
   },
-  "renderer/tests/document-language.test.mjs": {
+  "renderer/scripts/studio_pages.py": {
     "mode": "100644",
-    "blob": "c51bc1a516460d478f852c89657fd5170c47b3ed",
-    "sha256": "d2b5b30c04750629da94636e8697fc317754a0894f7011de5cc0ebafc139163a"
+    "blob": "8329041d8b19a651e7307b61627a134c309e052b",
+    "sha256": "ce4276c42cd7536e4b50fd743485029c0fd9228082d6f2f7d15f0efac406a528"
   },
-  "renderer/scripts/test-v02.mjs": {
+  "renderer/studio/engine-lock.json": {
     "mode": "100644",
-    "blob": "596e077fd79e8f94818014207ef901857cebf3b0",
-    "sha256": "08772f41e0d785f167854d452bf4686d59a3cb4682947d3964fa352f2f2cb3d4"
+    "blob": "0708971fa7077380dc4493649c30149efa56c6f7",
+    "sha256": "b2729555da35396b1fa2e8e0186c95a94982e5c4389093c7287461046af74c4d"
+  },
+  "renderer/tests/studio-bundle.test.mjs": {
+    "mode": "100644",
+    "blob": "aa8e546798010f0878cb3b49b1c0ec649e28726a",
+    "sha256": "60beb652f88c504719de075823d7f1c140fc0f82039794554eaa0e87af34575b"
+  },
+  "renderer/tests/local-browser.mjs": {
+    "mode": "100644",
+    "blob": "f3dc82b7d5ed50bd12fe741530698a6bde276d20",
+    "sha256": "5bdb980fc23625925d5eaf55832969895ab268f56450928e86f6a4ecd9dd76eb"
+  },
+  "renderer/tests/local-browser.test.mjs": {
+    "mode": "100644",
+    "blob": "8f1891849f421aa233c0166fce157213c79aede8",
+    "sha256": "926d2a242bec27ac30a0e4e34f4b6ec32171d60eb054aa7e8d9d4763b3d485ac"
+  },
+  "renderer/tests/browser.test.mjs": {
+    "mode": "100644",
+    "blob": "bb313a7defe62c3000b2f2305b3f9fd774dacdb5",
+    "sha256": "2845b88e5a63f5521fc8fbe008b41ed506f6ff919751ad132de4049c4b08d977"
+  },
+  "renderer/tests/renderer-session.browser.mjs": {
+    "mode": "100644",
+    "blob": "b432b91d21f3b634e4c9652068be4b0e4ff08ae6",
+    "sha256": "d66ba148fc28baeb193bafb5c37a6fa372eff41ade9d6e9b0829d5a1b2013cba"
+  },
+  "renderer/tests/renderer-session-wasm.browser.mjs": {
+    "mode": "100644",
+    "blob": "d8379b5fa94dabd13610d579521b0f9a76ae133d",
+    "sha256": "c081b200968df05765dad9064b8f711b474b00d7d648aed508644ff0322119d0"
+  },
+  "renderer/tests/renderer-depth-oracle.browser.mjs": {
+    "mode": "100644",
+    "blob": "eb36a5c63a0e37b96fe80dd435f1eb802dfbf3db",
+    "sha256": "fa63184d7a73f7f66b7247c69814b06216eccd0569bb0a7e8e3318cb8b46a1d0"
+  },
+  "renderer/tests/studio-s2a.browser.mjs": {
+    "mode": "100644",
+    "blob": "5de71d15deb01cf9d30ddd143a1b81f3746b9842",
+    "sha256": "2bc45955c380ca464db5c924d05bd9b44cce33facecafc322fa76bef7a188df4"
+  },
+  "renderer/tests/test_studio_pages.py": {
+    "mode": "100644",
+    "blob": "78dde741cafda17b3bc9bd9f5aef0dd7a2ef61fe",
+    "sha256": "a7c58a9cb88d54c5af821334a9a6ca9e0d87d468b9ff03cdcab493bfa678fd3e"
   }
 };
 // END REVIEWED PINS
@@ -243,71 +291,33 @@ function contents(repo,requests){
   }
   return result;
 }
-const PATH_MAP=Object.freeze({
-  "renderer/tests/rvi-v02.test.cpp": "raster/tests/rvi-v02.test.cpp",
-  "renderer/tests/v02-c05.test.cpp": "raster/tests/v02-c05.test.cpp",
-  "renderer/tests/fixtures/v02-scenes.txt": "raster/tests/fixtures/v02-scenes.txt",
-  "renderer/scripts/test-v02.mjs": "raster/scripts/test-v02.mjs",
-  "renderer/scripts/mutate-v02.mjs": "raster/scripts/mutate-v02.mjs",
-  "core/scripts/check-document-language.mjs": "scripts/check-document-language.mjs",
-  "core/tests/document-language.test.mjs": "tests/document-language.test.mjs",
-  "regenerator/scripts/check-document-language.mjs": "scripts/check-document-language.mjs",
-  "regenerator/tests/document-language.test.mjs": "tests/document-language.test.mjs",
-  "renderer/scripts/check-document-language.mjs": "scripts/check-document-language.mjs",
-  "renderer/tests/document-language.test.mjs": "tests/document-language.test.mjs",
-  "core/.github/workflows/repo-guard.yml": ".github/workflows/core-ci.yml",
-  "regenerator/.github/workflows/repo-guard.yml": ".github/workflows/repo-guard.yml",
-  "renderer/package-lock.json": "package-lock.json"
-});
 export function requirement(source){
   const out=structuredClone(source);
+  out.relations=(out.relations||[]).filter(r=>!RETIRED.slice(0,4).includes(r.target?.path));
   const walk=value=>{
     if(!value||typeof value!=='object')return;
     if(value.kind==='artifact'&&PATH_MAP[value.path])value.path=PATH_MAP[value.path];
-    if(typeof value.key==='string'&&value.key.startsWith('execution:')){
-      const path=value.key.slice('execution:'.length);
-      if(PATH_MAP[path])value.key='execution:'+PATH_MAP[path];
-    }
     for(const child of Object.values(value))walk(child);
   };
   walk(out);
-  if(['FGMC-DOC-001','FGMR-DOC-001','FGMV-DOC-001'].includes(out.id))
-    for(const r of out.relations||[])
-      if(r.predicates.includes('implemented_by')&&r.target?.path?.endsWith('/repo-guard.yml')
-        ||r.predicates.includes('implemented_by')&&r.target?.path==='.github/workflows/core-ci.yml')
-        r.target.path='.github/workflows/repo-guard.yml';
-  const module=({'FGMC-DOC-001':'core','FGMR-DOC-001':'regenerator','FGMV-DOC-001':'renderer'})[out.id];
-  const alias=module?module+'/tests/document-language.test.mjs':out.id.startsWith('FGMV-RVI-')?'renderer/scripts/test-v02.mjs':undefined;
-  if(alias)out.relations.push({predicates:['verified_by'],target:{kind:'artifact',path:alias}});
+  if(NORMATIVE_UPDATES[out.id])out.normative=NORMATIVE_UPDATES[out.id];
   return out;
 }
-
 export function checkPlatform(repo=root,head='HEAD'){
   head=git(repo,'rev-parse',head+'^{commit}');
   git(repo,'merge-base','--is-ancestor',BASE,head);
   equal(git(repo,'rev-parse',BASE+'^{tree}'),BASE_TREE,'BASE_TREE');
-  for(const [ref,tree]of HISTORY)equal(git(repo,'rev-parse',ref+'^{tree}'),tree,'HISTORICAL_TREE:'+ref);
   const before=files(repo,BASE),after=files(repo,head);
   const reqs=[...before.keys()].filter(p=>/^requirements\/.*\.rg\.yaml$/.test(p));
-  const editable=new Set([...EDITED,...reqs]);
-  // Explicit retirement/consolidation; reintroducing a second owner is a failure.
-  for(const ext of ['cpp','hpp'])ensure(!after.has('renderer/src/rvi-v02.'+ext),'DUPLICATE_IMPLEMENTATION:renderer/src/rvi-v02.'+ext);
-  for(const p of ALIASES)ensure(after.has(p),'MISSING_TRANSITION_ALIAS:'+p);
+  for(const p of FORBIDDEN)ensure(!after.has(p),'RETIRED_RESOURCE:'+p);
+  const critical=Object.keys(PINS),editable=new Set([...EDITED,...reqs,...critical]);
   for(const [p,meta]of before){
-    if(MOVES[p]){
-      if(!ALIASES.includes(p))ensure(!after.has(p),'DUPLICATE_IMPLEMENTATION:'+p);
-      if(!MOVED_EDITED.includes(p))equal(after.get(MOVES[p]),meta,'MOVED_CONTENT:'+p);
-    }else if(ALIASES.includes(p)){
-      ensure(after.has(p),'MISSING_TRANSITION_ALIAS:'+p);
-    }else if(RETIRED.includes(p)){
-      ensure(!after.has(p),'RETIRED_RESOURCE:'+p);
-      if(CONSOLIDATED[p])equal(after.get(CONSOLIDATED[p]),meta,'CONSOLIDATED_CONTENT:'+p);
-    }else if(!editable.has(p))equal(after.get(p),meta,'PRESERVED_RESOURCE:'+p);
+    if(RETIRED.includes(p))continue;
+    if(!editable.has(p))equal(after.get(p),meta,'PRESERVED_RESOURCE:'+p);
     else ensure(after.has(p),'MISSING_CURRENT_RESOURCE:'+p);
   }
   equal([...after.keys()].filter(p=>!before.has(p)).sort(),[...ADDED].sort(),'UNDECLARED_NEW_RESOURCE');
-  const critical=Object.keys(PINS);
-  ensure(critical.length>=12,'POLICY_PINS_MISSING');
+  ensure(critical.length>=20,'POLICY_PINS_MISSING');
   const requests=[...reqs.flatMap(p=>[BASE+':'+p,head+':'+p]),...critical.map(p=>head+':'+p)];
   const raw=contents(repo,requests);
   for(const path of critical){
@@ -318,13 +328,13 @@ export function checkPlatform(repo=root,head='HEAD'){
     equal(parse(raw.get(head+':'+path)),requirement(parse(raw.get(BASE+':'+path))),'REQUIREMENT_DRIFT:'+path);
     equal(after.get(path)?.split(' ')[0],before.get(path).split(' ')[0],'REQUIREMENT_MODE:'+path);
   }
-  ensure([...after.keys()].filter(p=>/^requirements\/.*\.rg\.yaml$/.test(p)).length===80,'REQUIREMENT_COUNT');
-  return {result:'PASS',policy:POLICY,scope:SCOPE,base:BASE,head,
-    tree:git(repo,'rev-parse',head+'^{tree}'),critical_content_pins:critical.length,
-    normative_values_preserved:79,canonical_requirements:80,historical_refs:HISTORY.length,
-    internal_git_fetchcontent:0,raster_implementations:1,required_native_tests:30,
-    language_implementations:1,npm_locks:1,nested_legacy_workflows:3,
-    temporary_policy_owner:'S06 #9; baseline-specific rules retire/replace S08 #14'};
+  ensure([...after.keys()].filter(p=>/^requirements\/.*\.rg\.yaml$/.test(p)).length===81,'REQUIREMENT_COUNT');
+  return {result:'PASS',policy:POLICY,scope:SCOPE,base:BASE,head,tree:git(repo,'rev-parse',head+'^{tree}'),
+    critical_content_pins:critical.length,normative_values_preserved:76,normative_updates:Object.keys(NORMATIVE_UPDATES),
+    existing_ids_lifecycle_preserved:80,canonical_requirements:81,required_native_tests:30,
+    internal_git_fetchcontent:0,raster_implementations:1,language_implementations:1,npm_locks:1,
+    temporary_verifier_aliases:0,nested_legacy_workflows:1,historical_replay_required:false,
+    temporary_policy_owner:'S06 #9; remove baseline rules after current replacement S08 #14; no archive gate'};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{console.log(JSON.stringify(checkPlatform(root,process.argv[2]||'HEAD'),null,2));}

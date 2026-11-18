@@ -1,7 +1,9 @@
+import {localBrowserContext} from './local-browser.mjs';
 /** S3-S2B: pinned C++20 WASM BuildWholeObject output -> exact bytes -> RendererSession. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import {execFileSync} from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { join, resolve } from "node:path";
@@ -12,9 +14,11 @@ const lock=JSON.parse(readFileSync("studio/engine-lock.json","utf8"));
 const manifest=JSON.parse(readFileSync(join(root,"studio-manifest.json"),"utf8"));
 assert.equal(lock.workerProtocol,1);
 assert.equal(lock.wholeBuild,"r06-whole-build/1");
-assert.equal(manifest.engine.regenerator,lock.regenerator);
 assert.equal(manifest.engine.core,lock.core);
-assert.equal(manifest.regenerator,lock.regenerator);
+assert.ok(["fgmp-studio-bundle/1","fgmp-studio-pages/1"].includes(manifest.schema));
+assert.equal(manifest.platform.revision,execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim());
+assert.equal(manifest.platform.tree,execFileSync("git",["rev-parse","HEAD^{tree}"],{encoding:"utf8"}).trim());
+assert.equal("regenerator" in manifest,false);
 const files=new Map();
 for(const name of ["engine/worker.mjs","engine/fgmr-studio.mjs","engine/fgmr-studio.wasm"]){
   const bytes=readFileSync(join(root,name));
@@ -36,16 +40,17 @@ const server=createServer((req,res)=>{
   res.writeHead(200,{"Content-Type":mime,"Cache-Control":"no-store","Cross-Origin-Resource-Policy":"same-origin"}).end(bytes);
 });
 await new Promise(done=>server.listen(0,"127.0.0.1",done));
-let browser;
+let browser,network;
 try {
   browser=await chromium.launch({headless:true,channel:process.env.FGM_CHROMIUM?undefined:"chromium",
     executablePath:process.env.FGM_CHROMIUM,args:[
     "--no-sandbox","--enable-unsafe-webgpu","--use-angle=swiftshader","--enable-unsafe-swiftshader"
   ]});
+  network=await localBrowserContext(browser);
   await test("Chromium: pinned C++20/WASM -> RendererSession WebGPU (2, 4, 8 cells; bounded readback)",{
     timeout:180000
   },async()=>{
-    const page=await browser.newPage();
+    const page=await network.context.newPage();
     const errors=[];
     page.on("pageerror",e=>errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
@@ -488,3 +493,5 @@ try {
   await browser?.close();
   await new Promise(done=>server.close(done));
 }
+
+network?.assertLocal();

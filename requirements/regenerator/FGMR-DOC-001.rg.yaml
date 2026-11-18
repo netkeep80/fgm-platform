@@ -36,8 +36,6 @@ relations:
     target:
       kind: artifact
       path: tests/document-language.test.mjs
-  - predicates: [verified_by]
-    target: {kind: artifact, path: regenerator/tests/document-language.test.mjs}
 constraints:
   - id: russian_documentation_execution
     activation: scoped_change

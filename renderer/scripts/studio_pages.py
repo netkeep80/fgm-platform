@@ -19,7 +19,7 @@ MANIFEST = "studio-manifest.json"
 VERSION_PLACEHOLDER = '<code id="studio-version">Локальная сборка</code>'.encode()
 SIZE_LIMIT = 16 * 1024 * 1024
 REPOSITORY = Path(__file__).resolve().parents[1]
-ARCHITECTURE_PATH = "studio/architecture-version.txt"
+ARCHITECTURE_PATH = "renderer/studio/architecture-version.txt"
 REVISION = re.compile(r"[0-9a-f]{40}")
 VERSION = re.compile(r"[1-9][0-9]*\.(0|[1-9][0-9]*)")
 
@@ -31,9 +31,10 @@ def require(condition: bool, reason: str) -> None:
 
 def read_engine_lock() -> dict:
     engine = json.loads((REPOSITORY / "studio/engine-lock.json").read_text(encoding="utf-8"))
-    require(isinstance(engine, dict) and engine.get("schema") == "fgmv-studio-engine/1"
+    require(isinstance(engine, dict) and engine.get("schema") == "fgmp-studio-engine/1"
             and all(isinstance(engine.get(key), str) and REVISION.fullmatch(engine[key])
-                    for key in ("regenerator", "core"))
+                    for key in ("core",))
+            and "regenerator" not in engine
             and type(engine.get("workerProtocol")) is int and engine["workerProtocol"] == 1
             and engine.get("wholeBuild") == "r06-whole-build/1",
             "ENGINE_LOCK")
@@ -79,9 +80,13 @@ def prepare_studio(bundle: Path, output: Path, revision: str, version: str) -> d
     inputs = {name: path.read_bytes() for name, path in entries.items()}
     manifest = json.loads(inputs.pop(MANIFEST))
     engine = read_engine_lock()
-    require(isinstance(manifest, dict) and manifest.get("schema") == "fgmv-studio-ufo-catalog/2"
-            and manifest.get("renderer") == revision
-            and manifest.get("regenerator") == engine["regenerator"] and manifest.get("engine") == engine
+    require(isinstance(manifest, dict) and manifest.get("schema") == "fgmp-studio-bundle/1"
+            and isinstance(manifest.get("platform"), dict)
+            and manifest["platform"].get("revision") == revision
+            and isinstance(manifest["platform"].get("tree"), str)
+            and REVISION.fullmatch(manifest["platform"]["tree"]) is not None
+            and "regenerator" not in manifest and "renderer" not in manifest
+            and manifest.get("engine") == engine
             and type(manifest["engine"]["workerProtocol"]) is int,
             "MANIFEST")
     require(manifest.get("assets") == {name: digest(data) for name, data in inputs.items()},
@@ -91,10 +96,9 @@ def prepare_studio(bundle: Path, output: Path, revision: str, version: str) -> d
     badge = f'<code id="studio-version" title="{revision}">Версия {version}</code>'.encode()
     inputs["index.html"] = inputs["index.html"].replace(VERSION_PLACEHOLDER, badge, 1)
     published = {
-        "schema": "fgmv-studio-pages/3",
-        "renderer": revision,
+        "schema": "fgmp-studio-pages/1",
+        "platform": manifest["platform"],
         "version": version,
-        "regenerator": engine["regenerator"],
         "engine": engine,
         "assets": {name: digest(data) for name, data in inputs.items()},
     }
@@ -120,7 +124,7 @@ def main() -> None:
     args = parser.parse_args()
     try:
         if args.mode == "studio":
-            version = calculate_studio_version(REPOSITORY, args.revision, args.preview_base or None)
+            version = calculate_studio_version(REPOSITORY.parent, args.revision, args.preview_base or None)
             hashes = prepare_studio(args.input, args.output, args.revision, version)
         else:
             hashes = prepare_rollback(args.input, args.output)

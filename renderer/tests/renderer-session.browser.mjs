@@ -1,3 +1,4 @@
+import {localBrowserContext} from './local-browser.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,11 +13,12 @@ const server = createServer((req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const url=`http://127.0.0.1:${server.address().port}`;
-let browser;
+let browser,network;
 try {
-  browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
+  browser=await chromium.launch({headless:true,executablePath:process.env.FGM_CHROMIUM,args:["--no-sandbox"]});
+  network=await localBrowserContext(browser);
   await test("Chromium: whole-object Canvas2D session, SHA/bindings, no fake WebGPU", async()=>{
-    const page=await browser.newPage();
+    const page=await network.context.newPage();
     await page.addInitScript(()=>Object.defineProperty(navigator,"gpu",{value:undefined}));
     await page.goto(url);
     const answer=await page.evaluate(async()=>{
@@ -75,3 +77,5 @@ try {
 } finally {
   await browser?.close(); await new Promise(resolve=>server.close(resolve));
 }
+
+network?.assertLocal();

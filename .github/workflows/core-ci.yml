@@ -42,3 +42,95 @@ jobs:
         run: node scripts/check-ctest.mjs build/native --suite platform --config Release
       - name: Run native/Python R01-R07, Studio contracts, RVI and C05 parity
         run: ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
+
+  wasm-browser:
+    name: Local WASM, WebGPU and Chromium / ubuntu-24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Install one workspace and real Chromium
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          echo "STUDIO_CHROMIUM=$(node --input-type=module -e 'import {chromium} from "playwright";console.log(chromium.executablePath())')" >> "$GITHUB_ENV"
+      - name: Deny all three legacy Git repositories before building
+        run: |
+          for repo in fgm-core fgm-regenerator fgm-renderer; do
+            git config --global "url.http://127.0.0.1:9/blocked/$repo.insteadOf" "https://github.com/netkeep80/$repo"
+            if git ls-remote "https://github.com/netkeep80/$repo"; then
+              echo "Legacy repository was unexpectedly reachable: $repo"; exit 1
+            fi
+          done
+          echo OLD_REPO_GIT_DENY_PASS
+      - name: Install pinned third-party WebGPU and Emscripten toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+          curl -fLsS --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v29.0.1.1/wgpu-linux-x86_64-release.zip -o "$RUNNER_TEMP/wgpu.zip"
+          echo "95a4d90c071005a98d03eab348beaa6b07e16eb00d1dcdb9f8348f75eb97ec5a  $RUNNER_TEMP/wgpu.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/wgpu.zip" -d "$RUNNER_TEMP/wgpu"
+          git clone --depth 1 --branch 4.0.21 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          test "$(git -C "$RUNNER_TEMP/emsdk" rev-parse HEAD)" = b2436aafa7351ee1b581f15841f1b45ed716a279
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.21
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.21
+      - name: Build native GPU frame and local Regenerator consumers
+        run: |
+          cmake -S . -B build/gpu -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DFGMV_BUILD_GPU_DEMO=ON -DWGPU_ROOT="$RUNNER_TEMP/wgpu"
+          cmake --build build/gpu --config Release --parallel 2 --target fgm_boot fgmr-studio-native fgmr-r06-multicell-sample fgmr-r06-whole-build fgmr-r06-sample fgmr-r03 fgmr-r04 fgmr-r07-fit
+          mkdir -p renderer/build/native "$RUNNER_TEMP/fgm-runtime"
+          chmod 700 "$RUNNER_TEMP/fgm-runtime"
+          XDG_RUNTIME_DIR="$RUNNER_TEMP/fgm-runtime" build/gpu/renderer/fgm_boot renderer/web/sphere.fgm.json renderer/web/scene.wgsl renderer/build/native/sphere.ppm
+      - name: Build both WASM engines from the same root checkout
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build/wasm -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build build/wasm --parallel 2
+          npm run build --workspace renderer
+          npm run test:node --workspace renderer
+          node --test renderer/tests/studio-bundle.test.mjs
+          node renderer/scripts/build-studio-s2a.mjs build/wasm
+      - name: Run native, Node Worker and Chromium protocol/cell/catalog/whole parity
+        working-directory: regenerator
+        run: |
+          native="$GITHUB_WORKSPACE/build/gpu/regenerator"
+          worker="$GITHUB_WORKSPACE/build/wasm/regenerator/worker.mjs"
+          node tests/test_studio.mjs "$native/fgmr-studio-native" "$worker"
+          node tests/test_studio_cell.mjs "$native/fgmr-studio-native" "$worker"
+          node tests/test_studio_catalog.mjs "$native/fgmr-studio-native" "$worker"
+          node tests/test_studio_whole.mjs "$native/fgmr-studio-native" "$native/fgmr-r06-multicell-sample" "$worker" --builder "$native/fgmr-r06-whole-build"
+          python scripts/smoke_rv01.py --html viewer/index.html --browser-script viewer/rv01-browser-smoke.js --cdp-script scripts/rv01-cdp.mjs --r06-script scripts/reconstruct_r06.py --r06-test tests/test_r06.py --sampler "$native/fgmr-r06-sample" --loft "$native/fgmr-r03" --sprite "$native/fgmr-r04" --r07-script scripts/run_r07.py --export scripts/export_rv01.py --fit "$native/fgmr-r07-fit"
+      - name: Verify current package allowlist, hashes, version and negative cases
+        working-directory: renderer
+        run: |
+          python -m unittest discover -s tests -p 'test_*pages*.py' -v
+          python -m scripts.studio_pages studio build/studio build/pages-studio --revision "${{ github.event.pull_request.head.sha }}" --preview-base "${{ github.event.pull_request.base.sha }}"
+      - name: Run real Chromium Renderer, Worker, depth and privacy contracts
+        working-directory: renderer
+        run: |
+          node --test tests/local-browser.test.mjs tests/browser.test.mjs tests/renderer-session.browser.mjs
+          node tests/renderer-session-wasm.browser.mjs build/pages-studio
+          node tests/renderer-depth-oracle.browser.mjs
+          node tests/studio-s2a.browser.mjs build/pages-studio --catalog
+      - name: Kill every real RVI source mutant
+        working-directory: raster
+        run: node scripts/mutate-v02.mjs
+      - name: Save current review bundle and actual test outputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: platform-browser-review
+          path: |
+            renderer/build/pages-studio/
+            renderer/build/native/sphere.ppm
+            renderer/build/renderer-session-browser.png
+            raster/build/v02/mutations.json
+          if-no-files-found: error

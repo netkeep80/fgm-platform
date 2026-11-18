@@ -113,7 +113,7 @@ function checkWorkflowGate(workflow) {
     "npm ci --ignore-scripts --no-audit --no-fund\n"+
     "node --test tests/bootstrap.test.mjs\n"+
     "node scripts/check-bootstrap.mjs\n"+
-    "node --test --test-isolation=none tests/document-language.test.mjs core/tests/document-language.test.mjs regenerator/tests/document-language.test.mjs renderer/tests/document-language.test.mjs\n"+
+    "node --test tests/document-language.test.mjs\n"+
     "node scripts/check-document-language.mjs\n"));
 
   const compiler=step(3,"Checkout immutable RepoGuard for independent synthetic transition tests",["uses","with"]);

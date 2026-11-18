@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: FGMP-RENDERER-001
-normative: "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. Математические реализации сохраняются, RVI tests и fixtures имеют единственного владельца Raster. Два существующих camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета должны входить в точный enabled CTest inventory на Linux и Windows вместе с прежними Core/Regenerator/Raster тестами. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одинаковые проверки языка объединяются, их отрицательные тесты и аудит документов выполняются до RepoGuard; удаление заменённых workflow не уменьшает уникальное покрытие. Версия текущей policy явно закрепляет область native-перехода и критические verifiers, сохраняет нормативные значения, ID, lifecycle и ограничения существующих требований. Историческое evidence S02–S05 сохраняется по immutable SHA, его replay отделён от обычного CI. Временные правила принадлежат S06 и подлежат retirement на S08. Этот срез не утверждает выполнение GPU/WASM/Chromium, завершение S06, Stage A или публикацию Studio; они требуют отдельных доказательств и авторской приёмки."
+normative: "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. RVI implementation, tests и fixtures принадлежат Raster без forwarding alias. Прежние camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета входят в точный enabled CTest inventory на Linux и Windows вместе с Core/Regenerator/Raster tests. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одна общая проверка языка и её отрицательные тесты выполняются до RepoGuard. Удаление заменённых workflow сохраняет уникальные предметные проверки. Версия текущей policy явно закрепляет область перехода и критические verifiers, сохраняет ID, lifecycle и действующие ограничения; нормативные изменения по авторскому решению перечисляются отдельно. Историческое архивирование и вечный replay не требуются; временные migration rules удаляются на S08 после функциональной замены. Native acceptance остаётся отдельным доказательством от реальных WASM/GPU/Chromium tests, полного S06, Stage A и публикации Studio."
 lifecycle: {accepted: false, current: false, published: false}
 relations:
   - predicates: [derives_from]
@@ -52,7 +52,7 @@ relations:
   - predicates: [verified_by]
     target: {kind: artifact, path: .github/workflows/core-ci.yml}
   - predicates: [verified_by]
-    target: {kind: artifact, path: .github/workflows/source-snapshots.yml}
+    target: {kind: artifact, path: .github/workflows/platform-policy.yml}
   - predicates: [verified_by]
     target: {kind: artifact, path: .github/workflows/repo-guard.yml}
   - predicates: [documents]

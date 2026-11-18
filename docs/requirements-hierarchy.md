@@ -45,3 +45,7 @@ S03 checker с count 77 и frozen 232 module files сохраняется для
 ## Native-интеграция Renderer
 
 `FGMP-RENDERER-001` — candidate-контракт корневой native-сборки Renderer, владения Raster tests, общей проверки языка и npm workspace. Требование имеет lifecycle false/false/false; GPU/WASM/browser и публикация Studio принимаются отдельно.
+
+## Локальная WASM и браузерная интеграция
+
+`FGMP-WASM-001` связывает root native/WASM consumers, Platform bundle provenance, реальные Chromium/GPU/Worker negative tests и privacy. Lifecycle false/false/false; production Pages/S07 и четыре финальных S08 gate отдельно.

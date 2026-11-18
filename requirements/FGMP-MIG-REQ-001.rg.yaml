@@ -19,7 +19,7 @@ relations:
   - predicates: [verified_by]
     target: {kind: artifact, path: scripts/verify-requirements-transition.mjs}
   - predicates: [verified_by]
-    target: {kind: artifact, path: .github/workflows/source-snapshots.yml}
+    target: {kind: artifact, path: .github/workflows/platform-policy.yml}
   - predicates: [documents]
     target: {kind: artifact, path: docs/requirements-migration.json}
   - predicates: [documents]
