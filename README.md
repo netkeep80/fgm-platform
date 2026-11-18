@@ -18,7 +18,8 @@
 ```sh
 cmake -S . -B build/core -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build/core --config Release --parallel 2
-ctest --test-dir build/core -C Release --output-on-failure --verbose
+node scripts/check-ctest.mjs build/core --config Release
+ctest --test-dir build/core -C Release --output-on-failure --verbose --no-tests=error
 ```
 
 [Интеграция и контракт потребителя](docs/core-integration.md) описывают локальный `fgm::cpu`, независимый внешний CMake-проект и проверку 6144 центров C05. Принятые S02/S03 проверяются на исторических коммитах; текущий S04 имеет отдельный [реестр](docs/core-integration.json) и checker. Отдельная авторская приёмка этого Draft среза ещё требуется.

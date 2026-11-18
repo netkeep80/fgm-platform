@@ -20,7 +20,7 @@
 
 ## Интеграционный срез S04
 
-Новый кандидат FGMP-MIG-CORE-001 связывает локальный Core, корневой CMake, активный `core-ci.yml`, независимый native/reference verifier и фазовую проверку происхождения. С ним текущий canonical count равен 78. Семь Core execution constraints сохраняют прежние verifier keys и получают действующий CI; нормативные тексты, lifecycle и constraints всех 73 перенесённых требований не меняются. Подробности — [протокол S04](core-integration.md).
+Новый кандидат FGMP-MIG-CORE-001 связывает локальный Core, корневой CMake, активный `core-ci.yml`, независимый native/reference verifier и фазовую проверку происхождения. С ним текущий canonical count равен 78. Семь Core execution constraints сохраняют прежние verifier keys и получают действующий CI; нормативные тексты, lifecycle и constraints всех 73 перенесённых требований не меняются. Исправление аудита P2 добавляет фиксированные content pins критических verifier/CI и gate точного CTest состава с --no-tests=error, без изменения исходных 73 требований. Подробности — [протокол S04](core-integration.md).
 
 S03 checker с count 77 и frozen 232 module files сохраняется для exact принятого исторического S03 HEAD. Новый S04 checker допускает только заявленное изменение одного Core CMake и документированные обновления relations. Эти проверки относятся к разным нормативным снимкам.
 

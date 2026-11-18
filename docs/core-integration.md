@@ -15,7 +15,8 @@ Regenerator и Renderer по-прежнему имеют самостоятел�
 ```sh
 cmake -S . -B build/core -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build/core --config Release --parallel 2
-ctest --test-dir build/core -C Release --output-on-failure --verbose
+node scripts/check-ctest.mjs build/core --config Release
+ctest --test-dir build/core -C Release --output-on-failure --verbose --no-tests=error
 ```
 
 Корневой CTest запускает исходный `fgm_cpu`, новый `core-c05-parity` и `core-external-consumer`. Прежние 64 Node tests запускаются отдельно в root workflow `core-ci.yml`: FGM-0, space, visual independence, geometry, serialization и document language. Они сохраняют проверки ошибок, canonical bytes, модельных/package hashes, seeds и синтетических эталонов.
@@ -47,6 +48,16 @@ S02 oracle продолжает проверять принятый import HEAD.
 
 Новый `check-core-integration.mjs` проверяет текущий S04 от exact BASE: 231 module file остаётся прежним, единственная допустимая правка Core CMake воспроизводится точным преобразованием. Все 73 исходных нормативных значения, ID, lifecycle и constraints неизменны. Семь Core связей `implemented_by` переводятся с исторического вложенного workflow на активный root workflow. К FGMC-EVAL-001 добавлены корневая сборка и два новых C05 проверяющих артефакта. Исторический вложенный workflow теперь документирует FGMP-MIG-CORE-001. Остальные требования остаются прежними; с новым требованием среза canonical count равен 78.
 
-Матрица CI и полный набор фактических команд проверяются как YAML 1.2 AST без возможности условно пропустить job/step или продолжить после ошибки. Mutation tests должны отвергать незаявленные изменения Core/Regenerator, неверный CMake, потерю verified_by, нормативный/constraint/lifecycle drift, подмену исторического checker, лишний ресурс и пропущенный native CI.
+Матрица CI и полный набор фактических команд проверяются как YAML 1.2 AST без возможности условно пропустить job/step или продолжить после ошибки. Дополнительно версия policy 2 закрепляет точные mode, Git blob и SHA-256 тринадцати критических файлов: корневого CMake, workflow, verifier, native sample, consumer project и исторических CI/harness компонентов. Неизменённые функциональные файлы сравниваются с immutable Git-снимком `c512b24282c29c51dd52301e6ea78a2f8b0ab0ff` / TREE `67bd3a0cb5a3d2a378e6edddf9b491653ef2bfc6`; это источник конкретных байтов, а не приёмка заблокированного candidate. Исправленные/новые файлы имеют фиксированные pins в checker. Ожидания не вычисляются по проверяемому HEAD или его manifest: подмена verifier вместе с обновлённой записью manifest всё равно отвергается.
+
+Сам checker и изменение его pin-policy остаются частью независимого exact-HEAD аудита. Никакой самопроверяющийся исходник не заменяет эту границу доверия: новый HEAD требует нового аудита и авторской приёмки. Реестр версии 2 документирует policy, но не выдаёт себе полномочия менять ожидания.
+
+Mutation tests реально исполняют успешные no-op Node scripts, затем требуют typed отказ current checker. Отдельно проверяются пустые root/consumer CMake, no-op native sample, ослабленный historical workflow, mode drift, изменённые code/requirements/constraints/lifecycle и совместная подмена verifier + manifest. Исторический S03 checker и manifest остаются побайтно прежними.
+
+## Обязательный состав CTest
+
+До запуска тестов `check-ctest.mjs` получает полный `ctest --show-only=json-v1`, требует уникальные имена и точное число включённых тестов с непустыми командами, отвергает DISABLED, WILL_FAIL и skip policies. Корневая suite должна содержать ровно `fgm_cpu`, `core-c05-parity`, `core-external-consumer`; отдельный consumer — только `consumer-public-api`. И корневой, и nested CTest выполняются с `--no-tests=error`.
+
+`tests/ctest-gate.test.mjs` проверяет не только JSON-контрпримеры. В изолированных настоящих CMake-проектах ноль тестов при BUILD_TESTING ON/OFF даёт старый exit 0 и новый nonzero exit с `--no-tests=error`; inventory gate также отвергает обе пустые suite. Два зарегистрированных успешно проходящих теста всё ещё могут дать CTest exit 0, поэтому отдельная проверка точных трёх имён обязательна и тоже должна отвергнуть такой проект.
 
 RepoGuard остаётся единым compiler на `74db97791e6da8a75287164f0d0b41579108f114`. Семь Core execution constraints с новым workflow могут иметь результат `DELEGATED`: это структурное направление к проверяющим программам. Успех предметных тестов подтверждает отдельный Core job на каждой ОС, а не это слово в отчёте compiler. Остальные execution constraints Regenerator/Renderer остаются работой S05/S06.

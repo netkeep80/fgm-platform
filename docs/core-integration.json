@@ -1,5 +1,5 @@
 {
-  "schema": "fgm-platform-core-integration/1",
+  "schema": "fgm-platform-core-integration/2",
   "phase": "S04",
   "baseline": {
     "head": "e883bea583d7298ec2747375ebebeb01405a59a1",
@@ -189,6 +189,106 @@
     "tests/core-integration.test.mjs",
     "tests/core-parity.test.mjs",
     "tests/core/sample.cpp",
-    "tests/core/consumer/CMakeLists.txt"
+    "tests/core/consumer/CMakeLists.txt",
+    "scripts/check-ctest.mjs",
+    "tests/ctest-gate.test.mjs"
+  ],
+  "functional_reference": {
+    "head": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff",
+    "tree": "67bd3a0cb5a3d2a378e6edddf9b491653ef2bfc6",
+    "role": "BYTE_REFERENCE_NOT_AUTHOR_ACCEPTANCE"
+  },
+  "critical_artifacts": [
+    {
+      "path": ".github/workflows/core-ci.yml",
+      "mode": "100644",
+      "blob": "c4628c76239a7e06cc8ba04d9f2110cf7f4a3a15",
+      "sha256": "6f787393a584c7872b1756281aa96b640ee4c01e4de29b4cdb49bc3783518f9b",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": ".github/workflows/source-snapshots.yml",
+      "mode": "100644",
+      "blob": "47685f80f1e6923c6a372eaba3861d6d8216041b",
+      "sha256": "3e7893c8956c82517e481ac126f692d945a7d5cdbfcd93ef4a0b3c5081baa28f",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "blob": "eae08ba8382f681c15019c5d72dcc6479570c55e",
+      "sha256": "825516f201b45652ff198f0f6fb82dec540b1efe57abc0afd94545b9c915b0a0",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "requirements/FGMP-MIG-CORE-001.rg.yaml",
+      "mode": "100644",
+      "blob": "09d88c9b66b4a30a865f718d4beaf328bbd7786f",
+      "sha256": "3666839af5827f3b3869351124c3dab763f9dc8d639008e088ce119aee1bc86f",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "scripts/check-core-consumer.mjs",
+      "mode": "100644",
+      "blob": "723e6c4a828deda9f64da38fd53cbb9f32da3b32",
+      "sha256": "a1fc20d827c246e53878f9cc0697f5b14398869d4fed9fc4446aebb10de2ee62",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "scripts/check-ctest.mjs",
+      "mode": "100644",
+      "blob": "b7041e6f914a94f9079fa02ad382d8850051b81c",
+      "sha256": "a83754ae978e47b5903ac85994d8e99039e63acfb5b9c6cf9eca2b04a8ef9689",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "scripts/verify-requirements-transition.mjs",
+      "mode": "100644",
+      "blob": "5fdd047d114e449f3de07c295d8febce892782ac",
+      "sha256": "ac265b30a42d0acb1a60f5ea20cb1dd49235182ad3787372c982017c9cccc7dd",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/core-integration.test.mjs",
+      "mode": "100644",
+      "blob": "cf9d27b705af75bf40b8587075a384863eeabe8b",
+      "sha256": "8855788feb60070e12042c46a30a2614d70314e3cf690b8ead80306d041aee5c",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "tests/core-parity.test.mjs",
+      "mode": "100644",
+      "blob": "13788e50c0f3b781ec797806098e0faa83b857e5",
+      "sha256": "9f9b24c3f67dd5a0a31d8f24815fcf4a6ac86e5e2f5bae88c75d83cb4e7a2789",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/core/consumer/CMakeLists.txt",
+      "mode": "100644",
+      "blob": "fc952e4140a75971d70cb696bc9d9a486ed8da10",
+      "sha256": "ca0db52ec216a491549e2fc3d7561ca01c781f9f139db6a7628ca8a50dfc5c14",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/core/sample.cpp",
+      "mode": "100644",
+      "blob": "03eefe5f5d6f7d86e7e4822a93c356585e393aad",
+      "sha256": "fb06511e8508bb555e08c0d607ff994d80b2059145fba3835e291e3108ee6618",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    },
+    {
+      "path": "tests/ctest-gate.test.mjs",
+      "mode": "100644",
+      "blob": "869ca7ac3030d063b84e8a6546f4d606cf00c80e",
+      "sha256": "f65244b4db05f39e4018301a8ffbcf6f181526be52b336509a01473a54754f77",
+      "reference": "s04-p2-content-policy/1"
+    },
+    {
+      "path": "tests/requirements-migration.test.mjs",
+      "mode": "100644",
+      "blob": "18d4ceb1153512cd05c3b8476ca021749fc1ca59",
+      "sha256": "63139e1d39f362e47aef0f12a198c0988d5389f2ec687e03b312c5e1a5548f67",
+      "reference": "c512b24282c29c51dd52301e6ea78a2f8b0ab0ff"
+    }
   ]
 }

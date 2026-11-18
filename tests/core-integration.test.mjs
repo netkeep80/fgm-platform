@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -30,9 +31,36 @@ test('S04 approved changes and unapproved drift',async t=>{
       ['weakened historical checker',()=>writeFileSync(join(temp,'scripts/check-requirements-migration.mjs'),'synthetic bypass\n'),'UNDECLARED_CHANGE'],
       ['unlisted new resource',()=>writeFileSync(join(temp,'s04-orphan.txt'),'synthetic orphan\n'),'S04_NEW_FILE_SET'],
       ['skipped native CI',()=>change('.github/workflows/core-ci.yml',d=>{d.jobs.core.steps.at(-1).if='false';}),'CORE_WORKFLOW_GATE'],
+      ['root CMake without native tests',()=>writeFileSync(join(temp,'CMakeLists.txt'),
+        'cmake_minimum_required(VERSION 3.24)\nproject(noop LANGUAGES NONE)\ninclude(CTest)\n'),'CRITICAL_CONTENT_DRIFT'],
+      ['empty consumer CMake',()=>writeFileSync(join(temp,'tests/core/consumer/CMakeLists.txt'),
+        'cmake_minimum_required(VERSION 3.24)\nproject(noop LANGUAGES NONE)\ninclude(CTest)\n'),'CRITICAL_CONTENT_DRIFT'],
+      ['no-op native sample',()=>writeFileSync(join(temp,'tests/core/sample.cpp'),'int main(){return 0;}\n'),'CRITICAL_CONTENT_DRIFT'],
+      ['weakened historical workflow',()=>writeFileSync(join(temp,'.github/workflows/source-snapshots.yml'),
+        'name: noop\non: [pull_request]\njobs:\n  noop:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo PASS\n'),'CRITICAL_CONTENT_DRIFT'],
+      ['modified critical file mode',()=>{},'CRITICAL_CONTENT_DRIFT',
+        ()=>git(temp,'update-index','--chmod=+x','tests/core-parity.test.mjs')],
     ];
-    for(const [name,mutate,code]of cases)await t.test(name,()=>{
+    const noop='console.log("PASS");\n';
+    for(const path of ['tests/core-parity.test.mjs','scripts/check-core-consumer.mjs',
+      'scripts/verify-requirements-transition.mjs','tests/requirements-migration.test.mjs',
+      'tests/core-integration.test.mjs','scripts/check-ctest.mjs','tests/ctest-gate.test.mjs'])
+      cases.push(['successful no-op '+path,()=>{
+        writeFileSync(join(temp,path),noop);
+        const run=spawnSync(process.execPath,[join(temp,path)],{encoding:'utf8'});
+        assert.equal(run.status,0);assert.match(run.stdout,/PASS/);
+      },'CRITICAL_CONTENT_DRIFT']);
+    cases.push(['no-op plus rewritten manifest pin',()=>{
+      const path='tests/core-parity.test.mjs';writeFileSync(join(temp,path),noop);
+      const p=join(temp,'docs/core-integration.json'),m=JSON.parse(readFileSync(p));
+      const pin=m.critical_artifacts.find(p=>p.path===path);
+      pin.sha256=createHash('sha256').update(noop).digest('hex');
+      pin.blob=createHash('sha1').update('blob '+Buffer.byteLength(noop)+'\0').update(noop).digest('hex');
+      writeFileSync(p,JSON.stringify(m));
+    },'CRITICAL_CONTENT_DRIFT']);
+    for(const [name,mutate,code,afterAdd]of cases)await t.test(name,()=>{
       git(temp,'reset','--hard',head);git(temp,'clean','-fd');mutate();git(temp,'add','-A');
+      afterAdd?.();
       git(temp,'commit','--quiet','-m','synthetic S04 negative');
       assert.throws(()=>checkCore(temp,'HEAD'),new RegExp(code));
     });
