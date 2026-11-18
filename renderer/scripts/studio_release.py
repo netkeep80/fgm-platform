@@ -48,7 +48,8 @@ def gh(*args: str, binary: bool = False):
 def api(path: str):
     endpoint = "repos/" + REPOSITORY + ("/" + path if path else "")
     result = subprocess.run(["gh", "api", endpoint], capture_output=True, check=False, timeout=120)
-    if path == "releases/latest" and result.returncode and b"(HTTP 404)" in result.stderr:
+    optional = path == "releases/latest" or re.fullmatch(r"git/ref/tags/studio-[0-9a-f]{40}", path)
+    if optional and result.returncode and b"(HTTP 404)" in result.stderr:
         return None
     require(result.returncode == 0, "GITHUB_COMMAND")
     return json.loads(result.stdout)
@@ -211,9 +212,21 @@ def check_release(data: dict, revision: str) -> None:
     require(len(assets) == 2 and {a.get("name") for a in assets} == {ARCHIVE, BUNDLE}, "RELEASE_ASSETS")
 
 
-def check_tag(revision: str, query=api) -> None:
+def check_tag(revision: str, query=api, *, allow_missing: bool = False) -> None:
     tag = query("git/ref/tags/" + release_tag(revision))
-    require(tag.get("object", {}).get("type") == "commit" and tag["object"].get("sha") == revision, "RELEASE_TAG")
+    if tag is None and allow_missing:
+        return
+    require(isinstance(tag, dict) and tag.get("object", {}).get("type") == "commit"
+            and tag["object"].get("sha") == revision, "RELEASE_TAG")
+
+
+def check_release_target(data: dict, revision: str, query=api) -> None:
+    require(data.get("tag_name") == release_tag(revision) and data.get("prerelease") is False
+            and type(data.get("draft")) is bool, "RELEASE")
+    if data["draft"]:
+        # GitHub creates an absent tag from this target when a Draft becomes public.
+        require(data.get("target_commitish") == revision, "RELEASE_TARGET")
+    check_tag(revision, query, allow_missing=data["draft"])
 
 
 def restore(revision: str, output: Path, *, repo: Path = PLATFORM, query=api, fetch=None) -> dict:
@@ -263,14 +276,13 @@ def retain(archive: Path, bundle: Path, revision: str, *, repo: Path = PLATFORM)
     releases = api("releases?per_page=100")
     existing = next((r for r in releases if r.get("tag_name") == tag), None)
     if existing is None:
+        check_tag(revision, api, allow_missing=True)
         gh("release", "create", tag, "--repo", REPOSITORY, "--target", revision, "--draft",
            "--title", "Platform Studio " + info["version"], "--notes",
            "Verified Platform Studio; source " + revision + ", TREE " + info["tree"] + ".",
            binary=True)
         existing = api("releases/tags/" + tag)
-    require(existing.get("prerelease") is False, "RELEASE")
-    if existing.get("draft") is False:
-        check_tag(revision, api)
+    check_release_target(existing, revision, api)
     for path in (archive, bundle):
         asset = next((a for a in existing.get("assets", []) if a.get("name") == path.name), None)
         if asset is None:
@@ -286,6 +298,8 @@ def retain(archive: Path, bundle: Path, revision: str, *, repo: Path = PLATFORM)
            "--pattern", BUNDLE, "--dir", str(directory), binary=True)
         require(digest((directory / ARCHIVE).read_bytes()) == digest(archive.read_bytes()), "RELEASE_CONFLICT")
         verify_attestation(directory / ARCHIVE, directory / BUNDLE, revision)
+    # Re-read after uploads/download/signature verification, before the public/latest transition.
+    check_release_target(api("releases/tags/" + tag), revision, api)
     gh("release", "edit", tag, "--repo", REPOSITORY, "--draft=false", "--latest", binary=True)
     check_tag(revision, api)
     return info

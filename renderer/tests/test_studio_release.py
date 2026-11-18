@@ -1,6 +1,7 @@
 """Предметные origin/ZIP/rollback проверки; только синтетические пакеты и API fixtures."""
 
 import copy
+from contextlib import contextmanager
 import hashlib
 import io
 import json
@@ -18,7 +19,7 @@ from scripts.studio_pages import (
 )
 from scripts.studio_release import (
     ARCHIVE, BUNDLE, INDEX, REPOSITORY, REPOSITORY_ID, REQUIRED_JOBS, WORKFLOW,
-    archive_bytes, check_ci_origin, check_current_main, check_release,
+    api, archive_bytes, check_ci_origin, check_current_main, check_release, check_tag,
     prepare_ci, previous, read_archive, restore, retain, seal, unpack, verify_attestation,
 )
 
@@ -325,6 +326,133 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "RELEASE_TAG"):
                 retain(self.archive, bundle, self.revision, repo=self.repo)
             command.assert_not_called()
+
+    @contextmanager
+    def release_provider(self, *, draft=True, target=None, tag=None, existing=True, after_download=None):
+        """Модель GitHub: отсутствующий tag создаётся из Draft target при публикации."""
+        bundle = self.root / BUNDLE
+        bundle.write_bytes(b"signature-fixture")
+        state = {"release": {"id": 91, "tag_name": "studio-" + self.revision,
+                             "target_commitish": self.revision if target is None else target,
+                             "draft": draft, "prerelease": False,
+                             "assets": [] if draft else [{"name": ARCHIVE}, {"name": BUNDLE}]},
+                 "tag": copy.deepcopy(tag), "existing": existing}
+        calls = []
+        def query(path):
+            calls.append(("api", path))
+            if path == "":
+                return self.query("")
+            if path == "releases?per_page=100":
+                return [copy.deepcopy(state["release"])] if state["existing"] else []
+            if path == "releases/tags/studio-" + self.revision:
+                return copy.deepcopy(state["release"])
+            if path == "git/ref/tags/studio-" + self.revision:
+                return copy.deepcopy(state["tag"])
+            self.fail("Unexpected API path: " + path)
+        def command(*args, **kwargs):
+            calls.append(("gh", *args))
+            if args[:2] == ("release", "create"):
+                state["existing"] = True
+                state["release"]["target_commitish"] = args[args.index("--target") + 1]
+            elif args[:2] == ("release", "upload"):
+                state["release"]["assets"].append({"name": Path(args[3]).name})
+            elif args[:2] == ("release", "download"):
+                directory = Path(args[args.index("--dir") + 1])
+                (directory / ARCHIVE).write_bytes(self.data)
+                (directory / BUNDLE).write_bytes(bundle.read_bytes())
+                if after_download:
+                    after_download(state)
+            elif args[:2] == ("release", "edit"):
+                if state["tag"] is None:
+                    state["tag"] = {"object": {"type": "commit", "sha": state["release"]["target_commitish"]}}
+                state["release"]["draft"] = False
+            else:
+                self.fail("Unexpected release command: " + str(args))
+        with patch("scripts.studio_release.api", side_effect=query), \
+                patch("scripts.studio_release.gh", side_effect=command), \
+                patch("scripts.studio_release.verify_attestation"):
+            yield state, calls, bundle
+
+    def test_retain_rejects_existing_draft_wrong_target_before_any_release_mutation(self):
+        correct_tag = {"object": {"type": "commit", "sha": self.revision}}
+        for target in ("e" * 40, "main", self.revision[:12], ""):
+            for tag in (None, correct_tag):
+                with self.subTest(target=target, tag=tag), self.release_provider(target=target, tag=tag) as (state, calls, bundle):
+                    with self.assertRaises(ValueError):
+                        retain(self.archive, bundle, self.revision, repo=self.repo)
+                    self.assertEqual([c for c in calls if c[0] == "gh"], [])
+                    self.assertTrue(state["release"]["draft"])
+
+    def test_retain_rejects_wrong_existing_draft_tag_before_any_release_mutation(self):
+        for tag in ({"object": {"type": "commit", "sha": "e" * 40}},
+                    {"object": {"type": "tag", "sha": self.revision}}, {"object": {}}):
+            with self.subTest(tag=tag), self.release_provider(tag=tag) as (state, calls, bundle):
+                with self.assertRaisesRegex(ValueError, "RELEASE_TAG"):
+                    retain(self.archive, bundle, self.revision, repo=self.repo)
+                self.assertEqual([c for c in calls if c[0] == "gh"], [])
+                self.assertTrue(state["release"]["draft"])
+
+    def test_correct_existing_draft_checks_target_and_absent_or_present_tag_before_publish(self):
+        correct_tag = {"object": {"type": "commit", "sha": self.revision}}
+        for tag in (None, correct_tag):
+            with self.subTest(tag=tag), self.release_provider(tag=tag) as (state, calls, bundle):
+                result = retain(self.archive, bundle, self.revision, repo=self.repo)
+                self.assertEqual(result["archive_sha256"], checksum(self.data))
+                publish = next(i for i, c in enumerate(calls) if c[:3] == ("gh", "release", "edit"))
+                self.assertEqual(calls[publish - 2:publish], [
+                    ("api", "releases/tags/studio-" + self.revision),
+                    ("api", "git/ref/tags/studio-" + self.revision)])
+                self.assertEqual(calls[-1], ("api", "git/ref/tags/studio-" + self.revision))
+                self.assertFalse(state["release"]["draft"])
+
+    def test_retain_rereads_target_and_tag_after_download_before_publishing(self):
+        for changed in ("target", "tag"):
+            def drift(state):
+                if changed == "target":
+                    state["release"]["target_commitish"] = "e" * 40
+                else:
+                    state["tag"] = {"object": {"type": "commit", "sha": "e" * 40}}
+            with self.subTest(changed=changed), self.release_provider(after_download=drift) as (state, calls, bundle):
+                with self.assertRaisesRegex(ValueError, "RELEASE_TARGET|RELEASE_TAG"):
+                    retain(self.archive, bundle, self.revision, repo=self.repo)
+                self.assertTrue(any(c[:3] == ("gh", "release", "download") for c in calls))
+                self.assertFalse(any(c[:3] == ("gh", "release", "edit") for c in calls))
+                self.assertTrue(state["release"]["draft"])
+
+    def test_new_draft_uses_exact_target_and_rejects_conflicting_existing_tag(self):
+        with self.release_provider(existing=False) as (state, calls, bundle):
+            retain(self.archive, bundle, self.revision, repo=self.repo)
+            create = next(c for c in calls if c[:3] == ("gh", "release", "create"))
+            self.assertEqual(create[create.index("--target") + 1], self.revision)
+            self.assertFalse(state["release"]["draft"])
+        with self.release_provider(existing=False, tag={"object": {"type": "commit", "sha": "e" * 40}}) as (state, calls, bundle):
+            with self.assertRaisesRegex(ValueError, "RELEASE_TAG"):
+                retain(self.archive, bundle, self.revision, repo=self.repo)
+            self.assertEqual([c for c in calls if c[0] == "gh"], [])
+
+    def test_published_release_is_revalidated_without_overwriting_assets(self):
+        tag = {"object": {"type": "commit", "sha": self.revision}}
+        with self.release_provider(draft=False, target="main", tag=tag) as (state, calls, bundle):
+            retain(self.archive, bundle, self.revision, repo=self.repo)
+            self.assertFalse(any(c[:3] == ("gh", "release", "upload") for c in calls))
+            self.assertTrue(any(c[:3] == ("gh", "release", "edit") for c in calls))
+
+    def test_only_exact_studio_tag_404_is_optional_and_api_errors_fail_closed(self):
+        path = "git/ref/tags/studio-" + self.revision
+        def answer(error):
+            return subprocess.CompletedProcess([], 1, b"", error)
+        with patch("scripts.studio_release.subprocess.run", return_value=answer(b"gh: Not Found (HTTP 404)")):
+            self.assertIsNone(api(path))
+            self.assertIsNone(api("releases/latest"))
+            for other in ("git/ref/tags/other", "git/ref/tags/studio-main", "releases/tags/studio-" + self.revision):
+                with self.subTest(path=other), self.assertRaisesRegex(ValueError, "GITHUB_COMMAND"):
+                    api(other)
+        for error in (b"gh: Forbidden (HTTP 403)", b"gh: Failure (HTTP 500)", b"connection failed"):
+            with self.subTest(error=error), patch("scripts.studio_release.subprocess.run", return_value=answer(error)):
+                with self.assertRaisesRegex(ValueError, "GITHUB_COMMAND"):
+                    api(path)
+        with self.assertRaisesRegex(ValueError, "RELEASE_TAG"):
+            check_tag(self.revision, lambda p: None)
 
 
 if os.environ.get("STUDIO_REAL_GH_VERIFY") == "1":
