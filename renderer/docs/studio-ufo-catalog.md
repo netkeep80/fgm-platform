@@ -14,14 +14,17 @@
 
 ## Локальная сборка
 
-Соберите WASM из коммита регенератора, закреплённого в [`studio/engine-lock.json`](../studio/engine-lock.json), с Emscripten 4.0.21. Из корня рендерера выполните:
+Команды выполняются из корня Platform после активации Emscripten 4.0.21. Все движки собираются из одного текущего checkout; engine-lock задаёт runtime contract, а Platform SHA/TREE вычисляются producer из этой сборки.
 
 ```sh
-STUDIO_RENDERER_REV="$(git rev-parse HEAD)" \
-  STUDIO_REGENERATOR_REV="$(git -C /путь/к/исходникам/регенератора rev-parse HEAD)" \
-  node scripts/build-studio-s2a.mjs /путь/к/wasm/build
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
+emcmake cmake -S . -B build/wasm -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build/wasm --parallel 2
+npm run build --workspace renderer
+node renderer/scripts/build-studio-s2a.mjs build/wasm
 npx playwright install chromium
-node --test tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs
-node tests/studio-s2a.browser.mjs build/studio --catalog
+(cd renderer && node --test tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs)
+(cd renderer && node tests/studio-s2a.browser.mjs build/studio --catalog)
 ```
+
+Проверяется настоящий локальный WASM Worker, исходные File API данные остаются в браузере. Общая автоматическая последовательность находится в `.github/workflows/platform.yml`; [текущая архитектура и сборка](../../docs/platform.md).

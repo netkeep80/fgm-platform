@@ -22,21 +22,20 @@
 
 ## Сборка и независимая проверка
 
-Команды ниже описывают исторический снимок S2A. Для текущей ветки используйте [инструкции STUDIO-S2B](studio-s2b.md).
-
-Сборка для PR и Pages использует точно закреплённый Git-коммит регенератора. Установка Emscripten 4.0.21 и проверки WASM в Chromium описаны в `.github/workflows/studio-pages.yml`.
+Команды выполняются из корня Platform после активации Emscripten 4.0.21. Все движки собираются из одного текущего checkout; engine-lock задаёт runtime contract, а Platform SHA/TREE вычисляются producer из этой сборки.
 
 ```sh
-git checkout bf9af5b990ced0f16dd82dca04170d7d016871fd # внутри копии fgm-regenerator
-emcmake cmake -S . -B build/studio-wasm -DCMAKE_BUILD_TYPE=Release
-cmake --build build/studio-wasm --parallel 2
-STUDIO_REGENERATOR_REV=bf9af5b990ced0f16dd82dca04170d7d016871fd node scripts/build-studio-s2a.mjs /путь/к/wasm/build
-node tests/studio-s2a.browser.mjs build/studio
+npm ci --ignore-scripts --no-audit --no-fund
+emcmake cmake -S . -B build/wasm -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build/wasm --parallel 2
+npm run build --workspace renderer
+node renderer/scripts/build-studio-s2a.mjs build/wasm
+npx playwright install chromium
+(cd renderer && node --test tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs)
+(cd renderer && node tests/studio-s2a.browser.mjs build/studio --catalog)
 ```
 
-Команды выполняются из соответствующих каталогов; проверенная автоматическая последовательность — в workflow. Публикуемый пакет для ревью содержит только собственный синтетический объект и исполняемые WASM/HTML/JS. Никаких UFO-оригиналов в CI и GitHub Actions artifacts нет.
-
-Проверка Chromium должна действительно выполнять Worker, проверять 4 экспортируемых файла и отрицательный сценарий неправильной привязки, а также фиксировать отсутствие исходящих сетевых обращений за пределы собственного HTTP-сервера теста.
+Проверяется настоящий локальный WASM Worker, исходные File API данные остаются в браузере. Общая автоматическая последовательность находится в `.github/workflows/platform.yml`; [текущая архитектура и сборка](../../docs/platform.md).
 
 ## Информационные и функциональные границы
 
@@ -45,7 +44,7 @@ node tests/studio-s2a.browser.mjs build/studio
 - Свободный учебный объект является собственным синтетическим тестом, не содержимым UFO.
 - Слишком большой набор входных файлов или несовпадающие привязки должны давать явный отказ. Суммарный лимит входов — 4 МиБ, максимум 21 файл.
 - Реальные PCK/TAB могут быть структурно валидны, но относиться не к тому MCD. Не выдавать завершённый R06 за доказанную художественную идентичность.
-- Публикация нынешней V03 не изменяется; её самостоятельное отключение и удаление одноразовых Pages workflows — отдельная [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
+- Публичная Studio выпускается единственным root workflow Platform после проверок текущего main.
 
 ## Приёмка
 

@@ -17,16 +17,19 @@
 
 ## Локальная проверка
 
-Команды ниже относятся к историческому снимку S2B. [Сборка Studio с каталогом UFO](studio-ufo-catalog.md)
-
-Соберите точный коммит регенератора с помощью Emscripten 4.0.21. Затем из каталога `fgm-renderer` выполните:
+Команды выполняются из корня Platform после активации Emscripten 4.0.21. Все движки собираются из одного текущего checkout; engine-lock задаёт runtime contract, а Platform SHA/TREE вычисляются producer из этой сборки.
 
 ```sh
-STUDIO_REGENERATOR_REV=c6a54376d55e48c023c7203e55914d43f5ea7088 node scripts/build-studio-s2a.mjs /путь/к/wasm/build
-node --test tests/studio-r05.test.mjs
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
+emcmake cmake -S . -B build/wasm -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build/wasm --parallel 2
+npm run build --workspace renderer
+node renderer/scripts/build-studio-s2a.mjs build/wasm
 npx playwright install chromium
-node tests/studio-s2a.browser.mjs build/studio
+(cd renderer && node --test tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs)
+(cd renderer && node tests/studio-s2a.browser.mjs build/studio --catalog)
 ```
 
-Браузерный тест запускает настоящий Worker на синтетической сцене, проверяет пиксели пяти режимов и отказ при изменении строки или её хеша. Пакет для проверки содержит только разрешённые файлы из списка сборки. Публикация на GitHub Pages входит в отдельный этап [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
+Проверяется настоящий локальный WASM Worker, исходные File API данные остаются в браузере. Общая автоматическая последовательность находится в `.github/workflows/platform.yml`; [текущая архитектура и сборка](../../docs/platform.md).
+
+Браузерный тест проверяет режимы сравнения R05 и отвергает изменение наблюдения или его хеша. Публичный пакет содержит только разрешённые синтетические материалы.
