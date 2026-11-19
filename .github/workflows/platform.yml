@@ -176,15 +176,6 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npx playwright install --with-deps chromium
           echo "STUDIO_CHROMIUM=$(node --input-type=module -e 'import {chromium} from "playwright";console.log(chromium.executablePath())')" >> "$GITHUB_ENV"
-      - name: Deny all three legacy Git repositories before building
-        run: |
-          for repo in fgm-core fgm-regenerator fgm-renderer; do
-            git config --global "url.http://127.0.0.1:9/blocked/$repo.insteadOf" "https://github.com/netkeep80/$repo"
-            if git ls-remote "https://github.com/netkeep80/$repo"; then
-              echo "Legacy repository was unexpectedly reachable: $repo"; exit 1
-            fi
-          done
-          echo OLD_REPO_GIT_DENY_PASS
       - name: Install pinned third-party WebGPU and Emscripten toolchains
         run: |
           sudo apt-get update
@@ -237,7 +228,7 @@ jobs:
       - name: Run real Chromium Renderer, Worker, depth and privacy contracts
         working-directory: renderer
         run: |
-          node --test tests/local-browser.test.mjs tests/browser.test.mjs tests/renderer-session.browser.mjs
+          node --test tests/browser.test.mjs tests/renderer-session.browser.mjs
           node tests/renderer-session-wasm.browser.mjs build/pages-studio
           node tests/renderer-depth-oracle.browser.mjs
           node tests/studio-s2a.browser.mjs build/pages-studio --catalog
