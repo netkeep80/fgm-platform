@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: FGMP-BUILD-001
-normative: "### FGMP-BUILD-001 — Platform должна собирать Core, единую CPU RVI реализацию, Regenerator и Renderer из корневого CMake-графа с локальными targets без внутренних Git FetchContent и без глобального отключения тестов. Одна RVI реализация обслуживает R07 и Raster oracle; целочисленная R05-проекция сохраняет отдельный предметный контракт. Native/Python R01–R07, CLI, package/hash, deterministic receipts, отрицательные проверки, Core/C05 и public consumer реально выполняются на Linux и Windows с точным enabled CTest inventory и --no-tests=error. Текущая защита закрепляет область изменений и критические verifiers независимо от проверяемого manifest, сохраняет ID, lifecycle и действующие execution contracts. Временная baseline policy развивается одним файлом и удаляется на S08 после действующей функциональной замены; исторические Git/Issues/PR/CI архивы и постоянный replay не требуются. Все ещё актуальные требования и незавершённые решения должны быть самостоятельно представлены в Platform. Упрощение оценивается по зависимостям, реализациям, владельцам, исключениям и процедурам сборки; обязательны независимый аудит и отдельная авторская приёмка. Private Stage A и browser R07 fit не входят в принятый native scope."
+normative: "### FGMP-BUILD-001 — Platform должна собирать Core, единую CPU RVI реализацию, Regenerator и Renderer из корневого CMake-графа с локальными targets без внутренних Git FetchContent и без глобального отключения тестов. Одна RVI реализация обслуживает R07 и Raster oracle; целочисленная R05-проекция сохраняет отдельный предметный контракт. Native/Python R01–R07, CLI, package/hash, deterministic receipts, отрицательные проверки, Core/C05 и public consumer реально выполняются на Linux и Windows с точным enabled CTest inventory и --no-tests=error. Пустая, неполная, отключённая или инвертированная suite отвергается. Действующие Requirements связывают реализацию и исполняемые предметные verifiers; RepoGuard J1/J2/J3 и независимый exact-HEAD аудит проверяют причинность изменений. Обычная разработка не требует исторических manifests, migration-checker, фиксированных снимков кода или старых репозиториев. Python сохраняется для необходимых задач. Private Stage A и browser R07 fit не выводятся из native scope."
 lifecycle: { accepted: false, current: false, published: false }
 relations:
   - predicates: [ derives_from ]
@@ -21,10 +21,6 @@ relations:
     target: { kind: artifact, path: renderer/CMakeLists.txt }
   - predicates: [ implemented_by ]
     target: { kind: artifact, path: raster/CMakeLists.txt }
-  - predicates: [ implemented_by ]
-    target: { kind: artifact, path: scripts/check-platform.mjs }
-  - predicates: [ verified_by ]
-    target: { kind: artifact, path: tests/platform-policy.test.mjs }
   - predicates: [ verified_by ]
     target: { kind: artifact, path: .github/workflows/platform.yml }
   - predicates: [ verified_by ]
@@ -35,3 +31,33 @@ relations:
     target: { kind: artifact, path: docs/platform.md }
   - predicates: [ documents ]
     target: { kind: artifact, path: .github/workflows/platform.yml }
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: scripts/check-core-consumer.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: tests/core/consumer/CMakeLists.txt
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: tests/core-parity.test.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: tests/core/sample.cpp
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: scripts/check-workflow.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: tests/workflow.test.mjs

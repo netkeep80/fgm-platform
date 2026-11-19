@@ -1,6 +1,6 @@
 # STUDIO-S2B — сравнение одной клетки
 
-Сборка для проверки запускает локальный R06 через реальный WASM Worker из [снимка регенератора](https://github.com/netkeep80/fgm-regenerator/commit/c6a54376d55e48c023c7203e55914d43f5ea7088). Формат `fgmr-studio-r05-observation/1` описан в [контракте STUDIO-S2B0](https://github.com/netkeep80/fgm-regenerator/blob/c6a54376d55e48c023c7203e55914d43f5ea7088/docs/studio-s2b0-r05-observations.md). Координаты приходят из нативного R05, а холст отображает их в общей системе отсчёта с целочисленным масштабом.
+Сборка для проверки запускает локальный R06 через реальный WASM Worker из снимка регенератора (историческая запись). Формат `fgmr-studio-r05-observation/1` описан в [контракте STUDIO-S2B0](https://github.com/netkeep80/fgm-platform/blob/main/regenerator/docs/studio-s2b0-r05-observations.md). Координаты приходят из нативного R05, а холст отображает их в общей системе отсчёта с целочисленным масштабом.
 
 | Режим | Что показывает |
 | --- | --- |
@@ -29,4 +29,4 @@ npx playwright install chromium
 node tests/studio-s2a.browser.mjs build/studio
 ```
 
-Браузерный тест запускает настоящий Worker на синтетической сцене, проверяет пиксели пяти режимов и отказ при изменении строки или её хеша. Пакет для проверки содержит только разрешённые файлы из списка сборки. Публикация на GitHub Pages входит в отдельный этап [STUDIO-RELEASE](https://github.com/netkeep80/fgm-renderer/issues/27).
+Браузерный тест запускает настоящий Worker на синтетической сцене, проверяет пиксели пяти режимов и отказ при изменении строки или её хеша. Пакет для проверки содержит только разрешённые файлы из списка сборки. Публикация на GitHub Pages входит в отдельный этап [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).

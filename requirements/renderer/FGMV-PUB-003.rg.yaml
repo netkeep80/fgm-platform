@@ -75,4 +75,4 @@ relations:
       - documents
     target:
       kind: artifact
-      path: renderer/docs/requirements-hierarchy.md
+      path: docs/requirements-hierarchy.md

@@ -1,6 +1,6 @@
 # R07-S1B0 — локальный constrained-fit исходного наблюдения (кандидат)
 
-**Узкий контракт:** [Issue #54](https://github.com/netkeep80/fgm-regenerator/issues/54). Предшественники: R07-S0 PR #51, R07-S1A PR #53 — приняты и смержены. S1B0 **не** означает завершения R07-EARLY-MVP #50, восстановления настоящей ObjectDefinition, четыре контрольных ракурса либо Stage A acceptance.
+**Узкий контракт:** [план Platform](https://github.com/netkeep80/fgm-platform/issues/11). Предшественники: R07-S0 PR #51, R07-S1A PR #53 — приняты и смержены. S1B0 **не** означает завершения R07-EARLY-MVP #50, восстановления настоящей ObjectDefinition, четыре контрольных ракурса либо Stage A acceptance.
 
 ## Архитектура
 

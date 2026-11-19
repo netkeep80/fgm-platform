@@ -1,24 +1,17 @@
 # FGM Platform — единая платформа Fractal Generative Models
 
-**[Открыть FGM Studio](https://netkeep80.github.io/fgm-platform/)** — веб-приложение на GitHub Pages для локальных экспериментов с FGM в браузере.
+**[Открыть FGM Studio](https://netkeep80.github.io/fgm-platform/)** — локальная реконструкция и просмотр FGM в браузере.
 
-Локальная native-сборка объединяет Core, общую CPU Raster реализацию и Regenerator, а также native scene/camera Renderer. Текущее состояние принятия и следующий этап находятся в [Issue #1](https://github.com/netkeep80/fgm-platform/issues/1); README описывает устройство и команды Platform.
+Platform объединяет математический Core, CPU Raster, Regenerator и Renderer в одном исходном дереве, одной native/WASM сборке и одном CI/CD. Текущее состояние проекта: [Issue #1](https://github.com/netkeep80/fgm-platform/issues/1). Незавершённые продуктовые задачи: [roadmap #15](https://github.com/netkeep80/fgm-platform/issues/15).
 
-**Единственная точка восстановления проекта после окончания чата:** [CONTROL Issue #1](https://github.com/netkeep80/fgm-platform/issues/1). [Протокол журнала и контрольных точек #2](https://github.com/netkeep80/fgm-platform/issues/2). [Начальный этап RepoGuard #3](https://github.com/netkeep80/fgm-platform/issues/3). [Покрытие старой истории/roadmap #15](https://github.com/netkeep80/fgm-platform/issues/15).
+## Сборка и тесты
 
-## Назначение и границы
-
-- `core/`: FGM-0, каноническая модель, математическая семантика, C04/C05.
-- `raster/`: единая CPU RVI реализация для R07 и Renderer oracle.
-- `regenerator/`: R01–R07, исходные наблюдения, происхождение данных, whole-object fit.
-- `renderer/`: RendererSession, WebGPU, производная геометрия и браузерная Studio в `renderer/studio/`.
-
-`netkeep80/ufo-fractal` остаётся отдельным игровым GPLv3-продуктом. Оригинальные данные UFO/TFTD и производные игровые ресурсы остаются в приватном контуре; **никаких** MAP/MCD/LOFT/PCK/TAB/game images/derived FGM в публичном GitHub, Issues, CI или Pages.
-
-## Native-сборка Platform
+Нужны CMake ≥3.24, компилятор C++20, Python 3 и Node.js 24. Команды выполняются из корня репозитория:
 
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
+node --test tests/workflow.test.mjs tests/ctest-gate.test.mjs tests/document-language.test.mjs
+node scripts/check-workflow.mjs
 npm run test:node --workspace renderer
 cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build/native --config Release --parallel 2
@@ -26,18 +19,25 @@ node scripts/check-ctest.mjs build/native --suite platform --config Release
 ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error
 ```
 
-[Архитектура и проверка Platform](docs/platform.md): один граф локальных targets, 30 обязательных native/Python/C05 CTests и отдельный public API consumer. Core, Regenerator и Renderer не загружают друг друга через Git FetchContent. Предметные отрицательные тесты и current policy работают на текущем HEAD; WASM/browser собираются из того же Platform checkout. Полный исторический архив старых репозиториев не требуется.
+30 обязательных native/Python/C05 CTests включают самостоятельного потребителя публичного Core API. Пустые, неполные и отключённые наборы тестов отвергаются. [Сборка WASM, архитектура и границы проверок](docs/platform.md).
 
-## Управление принятием
+## Модули
 
-Единственные нормативные источники — файлы `requirements/**/*.rg.yaml`, включая FGMP в корне и независимые ветви FGMC/FGMR/FGMV. [Протокол переноса S03](docs/requirements-migration.md) и [машинный реестр](docs/requirements-migration.json) сохраняют происхождение и точные преобразования 73 требований. Все перенесённые субъекты пока имеют lifecycle false/false/false; исходные флаги сохранены отдельно. `accepted:true` внутри **Draft PR** — предлагаемое значение для будущего принятого снапшота, **не самостоятельная авторская приёмка**. До независимого аудита exact HEAD/TREE и явного авторского подтверждения нельзя переводить PR в Ready/merge или объявлять требования действующими.
+| Каталог | Ответственность |
+|---|---|
+| `core/` | Единственный FGM evaluator, каноническая модель, сериализация и C05 |
+| `raster/` | Единственная CPU RVI реализация и независимые геометрические эталоны |
+| `regenerator/` | R01–R07, безопасное локальное чтение данных, реконструкция и whole-object fit |
+| `renderer/` | Scene/camera, RendererSession, WebGPU и интерфейс `renderer/studio/` |
 
-RepoGuard v6.0.1 закреплён на `74db97791e6da8a75287164f0d0b41579108f114`. CI выполняет локальные положительные и отрицательные проверки bootstrap и затем RepoGuard `base/head`. Настоящая блокирующая защита `main` требует отдельной настройки required check в GitHub rulesets; зелёный workflow сам по себе не доказывает включённую protection.
+Core используется локально. Regenerator и Renderer не зависят друг от друга. Python выполняет необходимые задачи разбора, оркестрации и пакетирования.
 
-## Очередность
+## Публикация
 
-[S00 RepoGuard](https://github.com/netkeep80/fgm-platform/issues/3) → [S01 source lock](https://github.com/netkeep80/fgm-platform/issues/4) → [S02 снимки файлов](https://github.com/netkeep80/fgm-platform/issues/5) → [S03 requirement migration](https://github.com/netkeep80/fgm-platform/issues/6) → [S04 Core](https://github.com/netkeep80/fgm-platform/issues/7) → [S05 Regenerator](https://github.com/netkeep80/fgm-platform/issues/8) → [S06 Renderer](https://github.com/netkeep80/fgm-platform/issues/9) → [S07 Live Studio](https://github.com/netkeep80/fgm-platform/issues/10) → [S08 cutover](https://github.com/netkeep80/fgm-platform/issues/14).
+**Каждый принятый merge в `main`, включая изменения документации, автоматически обновляет GitHub Pages после обязательных проверок.** Один workflow собирает и проверяет native/WASM/Chromium, затем публикует тот же проверенный пакет. Публичные SHA/TREE, версия, hashes и настоящий WASM smoke подтверждаются перед сохранением подписанного Release. [Контракт и команды работы с пакетами](renderer/docs/studio-pages.md).
 
-**Цель миграции — самостоятельный рабочий срез Platform с актуальными требованиями и незавершёнными задачами. Полная история старых репозиториев не архивируется; после финальных FUNCTIONAL/INDEPENDENCE/REQUIREMENTS/SIMPLIFICATION PASS и отдельной авторской приёмки они могут быть удалены. Studio уже опубликована; реальный rollback/fallback и итоговая приёмка всей миграции остаются отдельными проверками.**
+## Требования и разработка
 
-Защита `main` [отложена по явному решению автора](https://github.com/netkeep80/fgm-platform/issues/27#issuecomment-6962327932) и не входит в текущие условия merge. Сохраняются независимый аудит exact HEAD/TREE, авторская приёмка, свежий RepoGuard и слияние с проверкой ожидаемого SHA.
+Нормативные источники — `requirements/**/*.rg.yaml`; [единая иерархия](docs/requirements-hierarchy.md) связывает требования, реализацию и тесты. RepoGuard v6.0.1 проверяет точные BASE/HEAD, J1/J2/J3 и причинность изменений. Действуют независимый exact-HEAD аудит и отдельная авторская приёмка перед Ready/merge; lifecycle не повышается автоматически. Защита `main` [отложена автором](https://github.com/netkeep80/fgm-platform/issues/27#issuecomment-6962327932). [Протокол работы](https://github.com/netkeep80/fgm-platform/issues/2).
+
+Публичные примеры и CI используют только синтетические данные. Оригинальные UFO/TFTD MAP/MCD/LOFT/PCK/TAB, изображения и производные игровые ресурсы не публикуются. `ufo-fractal` остаётся самостоятельной GPLv3-игрой; Platform имеет собственную лицензию Unlicense. Private Stage A, browser R07 fit и Stage B — отдельные задачи roadmap, а не результат сборки этого репозитория.

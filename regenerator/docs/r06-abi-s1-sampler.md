@@ -1,6 +1,6 @@
 # R06-ABI-S1 — единая C05-выборка whole-object в native и WASM Worker
 
-**Статус:** кандидатный первый срез [Regenerator #43](https://github.com/netkeep80/fgm-regenerator/issues/43) после принятого [R06-S2B2 PR #42](https://github.com/netkeep80/fgm-regenerator/pull/42). Не является реализацией whole-object *reconstruction*, portable B1 verifier или браузерного Studio UI. Архитектурная точка: [FGM Ecosystem #22](https://github.com/netkeep80/fgm-core/issues/22).
+**Статус:** кандидатный первый срез [план Platform](https://github.com/netkeep80/fgm-platform/issues/15) после принятого R06-S2B2 PR #42 (историческая запись). Не является реализацией whole-object *reconstruction*, portable B1 verifier или браузерного Studio UI. Архитектурная точка: [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
 
 ## Разделение ответственности и доверия
 

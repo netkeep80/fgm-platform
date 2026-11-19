@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: FGMP-RENDERER-001
-normative: "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. RVI implementation, tests и fixtures принадлежат Raster без forwarding alias. Прежние camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета входят в точный enabled CTest inventory на Linux и Windows вместе с Core/Regenerator/Raster tests. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одна общая проверка языка и её отрицательные тесты выполняются до RepoGuard. Удаление заменённых workflow сохраняет уникальные предметные проверки. Версия текущей policy явно закрепляет область перехода и критические verifiers, сохраняет ID, lifecycle и действующие ограничения; нормативные изменения по авторскому решению перечисляются отдельно. Историческое архивирование и вечный replay не требуются; временные migration rules удаляются на S08 после функциональной замены. Native acceptance остаётся отдельным доказательством от реальных WASM/GPU/Chromium tests, полного S06, Stage A и публикации Studio."
+normative: "### FGMP-RENDERER-001 — Корневая native-сборка Platform должна собирать существующие scene и camera Renderer через локальный fgm::cpu без обязательного GPU SDK; native GPU demo включается отдельной явной опцией. RVI implementation, tests и fixtures принадлежат Raster без forwarding alias. Прежние camera oracle и независимый аналитический scene oracle с отрицательной проверкой пакета входят в точный enabled CTest inventory на Linux и Windows вместе с Core/Regenerator/Raster tests. RendererSession trust/lifecycle и Studio Node contracts выполняются из единого npm workspace с закреплёнными зависимостями. Одна общая проверка языка и её отрицательные тесты выполняются до RepoGuard. Удаление заменённых workflow сохраняет уникальные предметные проверки. Текущие регрессионные и отрицательные тесты проверяют предметное поведение и обязательный состав CI без исторической baseline policy; нормативные изменения и lifecycle требуют отдельного авторского решения. Native acceptance остаётся отдельным доказательством от реальных WASM/GPU/Chromium tests, полного S06, Stage A и публикации Studio."
 lifecycle: { accepted: false, current: false, published: false }
 relations:
   - predicates: [ derives_from ]
@@ -28,9 +28,7 @@ relations:
   - predicates: [ implemented_by ]
     target: { kind: artifact, path: renderer/package.json }
   - predicates: [ implemented_by ]
-    target: { kind: artifact, path: scripts/check-platform.mjs }
-  - predicates: [ implemented_by ]
-    target: { kind: artifact, path: scripts/check-bootstrap.mjs }
+    target: { kind: artifact, path: scripts/check-workflow.mjs }
   - predicates: [ verified_by ]
     target: { kind: artifact, path: renderer/tests/scene.test.cpp }
   - predicates: [ verified_by ]
@@ -44,11 +42,9 @@ relations:
   - predicates: [ verified_by ]
     target: { kind: artifact, path: renderer/tests/studio-ufo-catalog.test.mjs }
   - predicates: [ verified_by ]
-    target: { kind: artifact, path: tests/platform-policy.test.mjs }
-  - predicates: [ verified_by ]
     target: { kind: artifact, path: tests/ctest-gate.test.mjs }
   - predicates: [ verified_by ]
-    target: { kind: artifact, path: tests/bootstrap.test.mjs }
+    target: { kind: artifact, path: tests/workflow.test.mjs }
   - predicates: [ verified_by ]
     target: { kind: artifact, path: .github/workflows/platform.yml }
   - predicates: [ documents ]

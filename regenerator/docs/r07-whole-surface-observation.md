@@ -1,6 +1,6 @@
 # R07-S1B1B0 — единая FGM-поверхность нескольких клеток, C05 для всего состава
 
-**Статус:** кандидат, [Issue #58](https://github.com/netkeep80/fgm-regenerator/issues/58), после принятого [R07-S1B1A PR #57](https://github.com/netkeep80/fgm-regenerator/pull/57). `fgmr-r07-whole-surface` — opt-in native C++20 наблюдатель **одного** canonical FGM-пакета в локальном базисе многоклеточного объекта. Он **не** является самостоятельной ObjectDefinition, R07-fit или Stage A acceptance.
+**Статус:** кандидат, [план Platform](https://github.com/netkeep80/fgm-platform/issues/11), после принятого R07-S1B1A PR #57 (историческая запись). `fgmr-r07-whole-surface` — opt-in native C++20 наблюдатель **одного** canonical FGM-пакета в локальном базисе многоклеточного объекта. Он **не** является самостоятельной ObjectDefinition, R07-fit или Stage A acceptance.
 
 ## Почему нельзя использовать старый S1A без изменения
 

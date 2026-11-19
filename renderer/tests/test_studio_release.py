@@ -71,7 +71,7 @@ class ReleaseTests(unittest.TestCase):
                          "size_in_bytes": len(self.wrapper),
                          "workflow_run": {"id": self.run_id, "head_sha": self.revision,
                                           "repository_id": REPOSITORY_ID, "head_repository_id": REPOSITORY_ID}}
-        self.jobs = {"total_count": 6, "jobs": [
+        self.jobs = {"total_count": len(REQUIRED_JOBS), "jobs": [
             {"name": n, "run_id": self.run_id, "head_sha": self.revision,
              "status": "completed", "conclusion": "success"} for n in sorted(REQUIRED_JOBS)]}
         self.output = self.root / "prepared" / "site"
@@ -130,7 +130,7 @@ class ReleaseTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "ARTIFACT|PROVIDER_DIGEST"):
                     check_ci_origin(case, self.run, self.jobs, self.revision, self.run_id, self.attempt)
 
-    def test_all_six_jobs_must_be_unique_complete_successful_and_same_source(self):
+    def test_all_required_jobs_must_be_unique_complete_successful_and_same_source(self):
         for change in ("missing", "duplicate", "failed", "skipped", "wrong-sha", "wrong-run", "truncated"):
             jobs = copy.deepcopy(self.jobs)
             if change == "missing":

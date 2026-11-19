@@ -35,7 +35,7 @@ relations:
       - verified_by
     target:
       kind: artifact
-      path: renderer/.github/workflows/studio-pages.yml
+      path: .github/workflows/platform.yml
   - predicates:
       - documents
     target:

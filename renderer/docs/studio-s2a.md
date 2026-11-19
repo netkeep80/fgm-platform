@@ -4,9 +4,9 @@
 
 Этот срез является **первым кандидатом** на единое приложение Reconstruction Studio. Он не заменяет опубликованную V03, не выполняет публичный Pages deployment и не изменяет исходные данные в приватном репозитории.
 
-- Владелец: [STUDIO-S2, Issue #25](https://github.com/netkeep80/fgm-renderer/issues/25).
-- Архитектура: [STUDIO-000, Issue #24](https://github.com/netkeep80/fgm-renderer/issues/24).
-- Единственный исполнитель R06: [принятый fgm-regenerator](https://github.com/netkeep80/fgm-regenerator/commit/bf9af5b990ced0f16dd82dca04170d7d016871fd).
+- Владелец: [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
+- Архитектура: [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
+- Единственный исполнитель R06: принятый fgm-regenerator (историческая запись).
 - Закреплённый C05: `ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b`.
 - Выходная геометрия: проверенный R06 OBJ, а не заново интерпретированная семантика FGM в JavaScript.
 
@@ -45,7 +45,7 @@ node tests/studio-s2a.browser.mjs build/studio
 - Свободный учебный объект является собственным синтетическим тестом, не содержимым UFO.
 - Слишком большой набор входных файлов или несовпадающие привязки должны давать явный отказ. Суммарный лимит входов — 4 МиБ, максимум 21 файл.
 - Реальные PCK/TAB могут быть структурно валидны, но относиться не к тому MCD. Не выдавать завершённый R06 за доказанную художественную идентичность.
-- Публикация нынешней V03 не изменяется; её самостоятельное отключение и удаление одноразовых Pages workflows — отдельная [задача выпуска #27](https://github.com/netkeep80/fgm-renderer/issues/27).
+- Публикация нынешней V03 не изменяется; её самостоятельное отключение и удаление одноразовых Pages workflows — отдельная [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
 
 ## Приёмка
 

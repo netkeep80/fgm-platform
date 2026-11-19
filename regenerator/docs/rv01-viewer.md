@@ -54,7 +54,7 @@ python scripts/export_rv01.py --source panel-fit --fit build/fgmr-r07-fit --outp
 
 ## Трассируемость и линейный процесс
 
-Источник архитектуры — [RV01 #26](https://github.com/netkeep80/fgm-regenerator/issues/26), предшествующая реализация — [R07-S1 #25](https://github.com/netkeep80/fgm-regenerator/pull/25), отдельная поздняя игровая камера — [V03](https://github.com/netkeep80/fgm-renderer/issues/7), будущий FGM Viewer — [V05](https://github.com/netkeep80/fgm-renderer/issues/9).
+Источник архитектуры — [план Platform](https://github.com/netkeep80/fgm-platform/issues/15), предшествующая реализация — R07-S1 #25 (историческая запись), отдельная поздняя игровая камера — [план Platform](https://github.com/netkeep80/fgm-platform/issues/15), будущий FGM Viewer — [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
 
 Кандидаты требований: `FGMR-VIEW-001`…`FGMR-VIEW-005`; жизненный цикл остаётся `accepted:false/current:false/published:false` до отдельного авторского принятия. Репозиторий продолжает использовать RepoGuard v6.0.1, независимый аудит exact HEAD/TREE и правило одного активного реализационного PR.
 

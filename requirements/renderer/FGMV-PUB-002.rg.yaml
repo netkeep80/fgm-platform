@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: FGMV-PUB-002
-normative: "### FGMV-PUB-002 — Явное подтверждаемое развёртывание Pages. Публичная камера должна выпускаться через официальный GitHub Pages workflow лишь после точной проверки принятого снимка ветки, допустимых файлов и их содержимого, с разделением прав проверки и публикации. Статус завершённой публикации запрещён без успешного задания развёртывания и последующего подтверждения публичных HTTP-ресурсов."
+normative: "### FGMV-PUB-002 — Явное подтверждаемое развёртывание Studio Platform должно выполняться единственным официальным GitHub Pages workflow после проверки точного принятого main SHA/TREE, допустимых файлов и их содержимого, с разделением прав проверки PR и публикации. Статус завершённой публикации запрещён без успешного задания deploy и последующей проверки публичных HTTP hashes, версии и реального WASM/Chromium smoke. Старые репозитории и их Pages не требуются для подготовки, проверки и публикации."
 lifecycle:
   accepted: false
   current: false
@@ -25,22 +25,22 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/.github/workflows/studio-pages.yml
+      path: .github/workflows/platform.yml
   - predicates:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/scripts/verify_pages_snapshot.py
+      path: renderer/scripts/studio_pages.py
   - predicates:
       - verified_by
     target:
       kind: artifact
-      path: renderer/tests/test_pages_snapshot.py
+      path: renderer/tests/test_studio_pages.py
   - predicates:
       - documents
     target:
       kind: artifact
-      path: renderer/docs/pages-s2-deploy.md
+      path: renderer/docs/studio-pages.md
 constraints:
   - id: fgmv_pub_002_snapshot_execution
     activation: scoped_change
@@ -50,7 +50,7 @@ constraints:
         - verified_by
     evidence:
       class: execution
-      key: execution:renderer/tests/test_pages_snapshot.py
+      key: execution:renderer/tests/test_studio_pages.py
       verifier:
         kind: artifact
-        path: renderer/tests/test_pages_snapshot.py
+        path: renderer/tests/test_studio_pages.py

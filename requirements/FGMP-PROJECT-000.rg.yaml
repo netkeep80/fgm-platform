@@ -29,11 +29,11 @@ relations:
   - predicates: [ implemented_by ]
     target:
       kind: artifact
-      path: "scripts/check-bootstrap.mjs"
+      path: "scripts/check-workflow.mjs"
   - predicates: [ verified_by ]
     target:
       kind: artifact
-      path: "tests/bootstrap.test.mjs"
+      path: "tests/workflow.test.mjs"
   - predicates: [ verified_by ]
     target:
       kind: artifact
@@ -46,3 +46,13 @@ relations:
     target:
       kind: artifact
       path: "package-lock.json"
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: .gitignore
+  - predicates:
+      - implemented_by
+    target:
+      kind: artifact
+      path: scripts/run-repoguard.mjs

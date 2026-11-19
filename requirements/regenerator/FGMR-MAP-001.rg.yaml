@@ -50,14 +50,9 @@ relations:
       - documents
     target:
       kind: artifact
-      path: regenerator/docs/current-step.md
-  - predicates:
-      - documents
-    target:
-      kind: artifact
       path: regenerator/README.md
   - predicates:
       - documents
     target:
       kind: artifact
-      path: regenerator/docs/requirements-hierarchy.md
+      path: docs/requirements-hierarchy.md

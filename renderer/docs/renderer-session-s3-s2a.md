@@ -1,6 +1,6 @@
 # S3-S2A — исполняемый диагностический RendererSession
 
-**Статус:** кандидат реализации, не принят и не опубликован. [Задача #44](https://github.com/netkeep80/fgm-renderer/issues/44) · [контракт S3-S1 #41](https://github.com/netkeep80/fgm-renderer/issues/41) · [экосистема Core #22](https://github.com/netkeep80/fgm-core/issues/22).
+**Статус:** кандидат реализации, не принят и не опубликован. [план Platform](https://github.com/netkeep80/fgm-platform/issues/15) · [план Platform](https://github.com/netkeep80/fgm-platform/issues/15) · [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
 
 ## 1. Граница первого работающего среза
 
@@ -35,4 +35,4 @@
 
 ## 5. Следующий срез и не закрытые ограничения
 
-**S3-S2B:** фактическая передача `model.fgm.json` + `preview.obj`, полученных из **реального** принятого WASM `BuildWholeObject`, в `RendererSession`, точная проверка паритета и переключение отдельного тестового интерфейса, затем WebGPU capability-gated backend и тесты потери устройства. Сохраняются прежние P3: предельные 8 клеток/49 152 C05, происхождение B1/R03 и дублированный Core SHA. Отдельный процессный долг Pages synchronize — [#43](https://github.com/netkeep80/fgm-renderer/issues/43).
+**S3-S2B:** фактическая передача `model.fgm.json` + `preview.obj`, полученных из **реального** принятого WASM `BuildWholeObject`, в `RendererSession`, точная проверка паритета и переключение отдельного тестового интерфейса, затем WebGPU capability-gated backend и тесты потери устройства. Сохраняются прежние P3: предельные 8 клеток/49 152 C05, происхождение B1/R03 и дублированный Core SHA. Отдельный процессный долг Pages synchronize — [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).

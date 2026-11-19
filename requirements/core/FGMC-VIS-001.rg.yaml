@@ -45,7 +45,7 @@ relations:
       - documents
     target:
       kind: artifact
-      path: core/docs/requirements-hierarchy.md
+      path: docs/requirements-hierarchy.md
 constraints:
   - id: fgm_visual_examples_execution
     activation: scoped_change

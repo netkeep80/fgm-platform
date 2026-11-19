@@ -1,6 +1,6 @@
 # R07-S1A — непрерывная R05-проекция поверхности FGM (синтетический эксперимент)
 
-**Статус:** кандидат требования `FGMR-R07-SURFACE-001`, `accepted:false/current:false/published:false`. Реализация по [Issue #52](https://github.com/netkeep80/fgm-regenerator/issues/52), не является завершённым подбором R07 и не подтверждает восстановление оригинального игрового объекта.
+**Статус:** кандидат требования `FGMR-R07-SURFACE-001`, `accepted:false/current:false/published:false`. Реализация по [план Platform](https://github.com/netkeep80/fgm-platform/issues/11), не является завершённым подбором R07 и не подтверждает восстановление оригинального игрового объекта.
 
 ## Два разделённых наблюдения
 

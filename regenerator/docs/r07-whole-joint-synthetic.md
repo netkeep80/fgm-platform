@@ -1,6 +1,6 @@
 # R07-S1B1B1A — совместный подбор одной многоклеточной FGM-модели (синтетический gate)
 
-**Статус:** кандидат, [Issue #60](https://github.com/netkeep80/fgm-regenerator/issues/60). База — принятый [R07-S1B1B0 PR #59](https://github.com/netkeep80/fgm-regenerator/pull/59). Этот срез **не** принимает исходные MAP/MCD/LOFT/PCK/TAB и не является локальной проверкой оригинального UFO; для Stage A он выдаёт только **NOT_ACCEPTED**. Следующий gate должен независимо выполнить R03/S1B1A source binding и R04/R05 наблюдения нескольких частей.
+**Статус:** кандидат, [план Platform](https://github.com/netkeep80/fgm-platform/issues/11). База — принятый R07-S1B1B0 PR #59 (историческая запись). Этот срез **не** принимает исходные MAP/MCD/LOFT/PCK/TAB и не является локальной проверкой оригинального UFO; для Stage A он выдаёт только **NOT_ACCEPTED**. Следующий gate должен независимо выполнить R03/S1B1A source binding и R04/R05 наблюдения нескольких частей.
 
 ## Разделение математических обязательств
 
