@@ -1,5 +1,7 @@
 # FGM Platform — единая платформа Fractal Generative Models
 
+**[Открыть FGM Studio](https://netkeep80.github.io/fgm-platform/)** — веб-приложение на GitHub Pages для локальных экспериментов с FGM в браузере.
+
 Локальная native-сборка объединяет Core, общую CPU Raster реализацию и Regenerator, а также native scene/camera Renderer. Текущее состояние принятия и следующий этап находятся в [Issue #1](https://github.com/netkeep80/fgm-platform/issues/1); README описывает устройство и команды Platform.
 
 **Единственная точка восстановления проекта после окончания чата:** [CONTROL Issue #1](https://github.com/netkeep80/fgm-platform/issues/1). [Протокол журнала и контрольных точек #2](https://github.com/netkeep80/fgm-platform/issues/2). [Начальный этап RepoGuard #3](https://github.com/netkeep80/fgm-platform/issues/3). [Покрытие старой истории/roadmap #15](https://github.com/netkeep80/fgm-platform/issues/15).
@@ -9,8 +11,7 @@
 - `core/`: FGM-0, каноническая модель, математическая семантика, C04/C05.
 - `raster/`: единая CPU RVI реализация для R07 и Renderer oracle.
 - `regenerator/`: R01–R07, исходные наблюдения, происхождение данных, whole-object fit.
-- `renderer/`: RendererSession, WebGPU и производная геометрия.
-- `studio/` (будущий): общий Native/WASM интерфейс, локальный эксперимент и проверенный автоматический Pages release.
+- `renderer/`: RendererSession, WebGPU, производная геометрия и браузерная Studio в `renderer/studio/`.
 
 `netkeep80/ufo-fractal` остаётся отдельным игровым GPLv3-продуктом. Оригинальные данные UFO/TFTD и производные игровые ресурсы остаются в приватном контуре; **никаких** MAP/MCD/LOFT/PCK/TAB/game images/derived FGM в публичном GitHub, Issues, CI или Pages.
 
@@ -37,6 +38,6 @@ RepoGuard v6.0.1 закреплён на `74db97791e6da8a75287164f0d0b41579108f1
 
 [S00 RepoGuard](https://github.com/netkeep80/fgm-platform/issues/3) → [S01 source lock](https://github.com/netkeep80/fgm-platform/issues/4) → [S02 снимки файлов](https://github.com/netkeep80/fgm-platform/issues/5) → [S03 requirement migration](https://github.com/netkeep80/fgm-platform/issues/6) → [S04 Core](https://github.com/netkeep80/fgm-platform/issues/7) → [S05 Regenerator](https://github.com/netkeep80/fgm-platform/issues/8) → [S06 Renderer](https://github.com/netkeep80/fgm-platform/issues/9) → [S07 Live Studio](https://github.com/netkeep80/fgm-platform/issues/10) → [S08 cutover](https://github.com/netkeep80/fgm-platform/issues/14).
 
-**Цель миграции — самостоятельный рабочий срез Platform с актуальными требованиями и незавершёнными задачами. Полная история старых репозиториев не архивируется; после финальных FUNCTIONAL/INDEPENDENCE/REQUIREMENTS/SIMPLIFICATION PASS и отдельной авторской приёмки они могут быть удалены. Новый live Studio/Pages принимается отдельно; текущий опубликованный сайт этой интеграцией не переключается.**
+**Цель миграции — самостоятельный рабочий срез Platform с актуальными требованиями и незавершёнными задачами. Полная история старых репозиториев не архивируется; после финальных FUNCTIONAL/INDEPENDENCE/REQUIREMENTS/SIMPLIFICATION PASS и отдельной авторской приёмки они могут быть удалены. Studio уже опубликована; реальный rollback/fallback и итоговая приёмка всей миграции остаются отдельными проверками.**
 
 Защита `main` [отложена по явному решению автора](https://github.com/netkeep80/fgm-platform/issues/27#issuecomment-6962327932) и не входит в текущие условия merge. Сохраняются независимый аудит exact HEAD/TREE, авторская приёмка, свежий RepoGuard и слияние с проверкой ожидаемого SHA.
