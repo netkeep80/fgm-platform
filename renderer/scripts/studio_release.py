@@ -11,6 +11,7 @@ import re
 import stat
 import subprocess
 import tempfile
+import time
 import zipfile
 
 from scripts.studio_pages import (
@@ -299,7 +300,14 @@ def retain(archive: Path, bundle: Path, revision: str, *, repo: Path = PLATFORM)
            "--title", "Platform Studio " + info["version"], "--notes",
            "Verified Platform Studio; source " + revision + ", TREE " + info["tree"] + ".",
            binary=True)
-        existing = release_snapshot(revision, api)
+        # A newly created GitHub Draft can be visible to gh/GraphQL before the REST list.
+        # Retry only absence; any API error, ambiguity or identity drift fails immediately.
+        for attempt in range(12):
+            existing = release_snapshot(revision, api)
+            if existing is not None:
+                break
+            if attempt != 11:
+                time.sleep(2)
         require(existing is not None and existing.get("draft") is True, "RELEASE_CREATE")
     require(existing is not None, "RELEASE")
     check_release_target(existing, revision, api)

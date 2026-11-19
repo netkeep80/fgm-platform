@@ -333,7 +333,8 @@ class ReleaseTests(unittest.TestCase):
             command.assert_not_called()
 
     @contextmanager
-    def release_provider(self, *, draft=True, target=None, tag=None, existing=True, after_download=None):
+    def release_provider(self, *, draft=True, target=None, tag=None, existing=True, after_download=None,
+                         new_draft_hidden_reads=0, created_target_override=None):
         """Модель GitHub: отсутствующий tag создаётся из Draft target при публикации."""
         bundle = self.root / BUNDLE
         bundle.write_bytes(b"signature-fixture")
@@ -341,13 +342,17 @@ class ReleaseTests(unittest.TestCase):
                              "target_commitish": self.revision if target is None else target,
                              "draft": draft, "prerelease": False,
                              "assets": [] if draft else [{"name": ARCHIVE}, {"name": BUNDLE}]},
-                 "tag": copy.deepcopy(tag), "existing": existing}
+                 "tag": copy.deepcopy(tag), "existing": existing,
+                 "created": False, "hidden_reads": new_draft_hidden_reads}
         calls = []
         def query(path):
             calls.append(("api", path))
             if path == "":
                 return self.query("")
             if path == "releases?per_page=100":
+                if state["created"] and state["hidden_reads"] > 0:
+                    state["hidden_reads"] -= 1
+                    return []  # GitHub REST has not yet exposed the successful new Draft.
                 return [copy.deepcopy(state["release"])] if state["existing"] else []
             if path == "releases/tags/studio-" + self.revision:
                 if state["release"]["draft"]:
@@ -362,7 +367,9 @@ class ReleaseTests(unittest.TestCase):
             calls.append(("gh", *args))
             if args[:2] == ("release", "create"):
                 state["existing"] = True
-                state["release"]["target_commitish"] = args[args.index("--target") + 1]
+                state["created"] = True
+                state["release"]["target_commitish"] = (created_target_override
+                    if created_target_override is not None else args[args.index("--target") + 1])
             elif args[:2] == ("release", "upload"):
                 state["release"]["assets"].append({"name": Path(args[3]).name})
             elif args[:2] == ("release", "download"):
@@ -441,6 +448,39 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "RELEASE_TAG"):
                 retain(self.archive, bundle, self.revision, repo=self.repo)
             self.assertEqual([c for c in calls if c[0] == "gh"], [])
+
+    def test_new_draft_delayed_rest_visibility_recovers_with_one_create(self):
+        with self.release_provider(existing=False, new_draft_hidden_reads=3) as (state, calls, bundle):
+            with patch("scripts.studio_release.time.sleep") as sleep:
+                result = retain(self.archive, bundle, self.revision, repo=self.repo)
+            self.assertEqual(result["archive_sha256"], checksum(self.data))
+            self.assertEqual(sleep.call_count, 3)
+            sleep.assert_any_call(2)
+            self.assertEqual(len([c for c in calls if c[:3] == ("gh", "release", "create")]), 1)
+            self.assertEqual(len([c for c in calls if c[:3] == ("gh", "release", "upload")]), 2)
+            self.assertFalse(state["release"]["draft"])
+            self.assertEqual(state["hidden_reads"], 0)
+
+    def test_new_draft_permanent_rest_invisibility_fails_without_mutation(self):
+        with self.release_provider(existing=False, new_draft_hidden_reads=20) as (state, calls, bundle):
+            with patch("scripts.studio_release.time.sleep") as sleep:
+                with self.assertRaisesRegex(ValueError, "RELEASE_CREATE"):
+                    retain(self.archive, bundle, self.revision, repo=self.repo)
+            self.assertEqual(sleep.call_count, 11)
+            self.assertEqual(len([c for c in calls if c[:3] == ("gh", "release", "create")]), 1)
+            self.assertFalse(any(c[:3] in (("gh", "release", "upload"), ("gh", "release", "edit"))
+                                 for c in calls))
+            self.assertTrue(state["release"]["draft"])
+
+    def test_new_draft_wrong_target_rejects_immediately_without_retry(self):
+        with self.release_provider(existing=False, created_target_override="e" * 40) as (state, calls, bundle):
+            with patch("scripts.studio_release.time.sleep") as sleep:
+                with self.assertRaisesRegex(ValueError, "RELEASE_TARGET"):
+                    retain(self.archive, bundle, self.revision, repo=self.repo)
+            sleep.assert_not_called()
+            self.assertFalse(any(c[:3] in (("gh", "release", "upload"), ("gh", "release", "edit"))
+                                 for c in calls))
+            self.assertTrue(state["release"]["draft"])
 
     def test_published_release_is_revalidated_without_overwriting_assets(self):
         tag = {"object": {"type": "commit", "sha": self.revision}}
