@@ -117,8 +117,8 @@ test('HTTP admission binds actual responses to independently expected hashes and
         revision, version, repo}), /ALLOWLIST/);}
       finally {await server.close();}
     });
-    await t.test('non-site and legacy URLs are rejected', () => {
-      for (const url of ['https://netkeep80.github.io/fgm-renderer/', 'https://github.com/netkeep80/fgm-core/',
+    await t.test('non-site, malformed and unrelated origin URLs are rejected', () => {
+      for (const url of ['https://unrelated.example.invalid/', 'https://github.com/other-owner/other-repository/',
         'https://example.invalid/', 'https://netkeep80.github.io/fgm-platform/?redirect=1',
         'http://127.0.0.1/fgm-platform', 'http://user@127.0.0.1/fgm-platform/']) {
         assert.throws(() => siteURL(url), /URL/);
