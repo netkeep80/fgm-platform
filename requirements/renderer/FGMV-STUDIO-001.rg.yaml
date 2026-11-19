@@ -40,7 +40,7 @@ relations:
       - implemented_by
     target:
       kind: artifact
-      path: renderer/.github/workflows/studio-pages.yml
+      path: .github/workflows/platform.yml
   - predicates:
       - verified_by
     target:
@@ -55,4 +55,4 @@ relations:
       - documents
     target:
       kind: artifact
-      path: renderer/docs/requirements-hierarchy.md
+      path: docs/requirements-hierarchy.md

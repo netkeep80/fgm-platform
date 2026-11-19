@@ -6,7 +6,7 @@
 
 Выберите локальную папку установки UFO: Enemy Unknown или X-COM: UFO Defense, затем карту и именованный тактический элемент. Studio показывает число его экземпляров и восстанавливает один представительный экземпляр. Известные типы имеют названия из каталога. Родовые названия пола, стен и объектов уточняются идентификатором набора и номером записи. Профили неизвестных карт и отсутствующие ресурсы видны при выборе карты.
 
-Правила порядка наборов, классификация и разрешение индексов выполняются в [принятом WASM-исполнителе](https://github.com/netkeep80/fgm-regenerator/blob/6a9ba7d30518fb8c3a75a2f4b2bc5ae3b83c376f/docs/studio-ufo-catalog.md). Индекс путей проверяется до отправки сообщения Worker с учётом полного JSON и UTF-8. Для выбранной карты браузер находит файлы по точным путям каталога и читает MAP и MCD один раз. Тот же снимок байтов передаётся инспекции и последующему R06. Набор спрайтов, банк палитры и параметры TAB берутся из каталога. Автоматический режим использует первый кадр и материал `stone`.
+Правила порядка наборов, классификация и разрешение индексов выполняются в [принятом WASM-исполнителе](https://github.com/netkeep80/fgm-platform/blob/main/regenerator/docs/studio-ufo-catalog.md). Индекс путей проверяется до отправки сообщения Worker с учётом полного JSON и UTF-8. Для выбранной карты браузер находит файлы по точным путям каталога и читает MAP и MCD один раз. Тот же снимок байтов передаётся инспекции и последующему R06. Набор спрайтов, банк палитры и параметры TAB берутся из каталога. Автоматический режим использует первый кадр и материал `stone`.
 
 Значение элемента формируется из идентификатора карты, части клетки, набора, номера записи, признака правой половины кадра и координаты представительного экземпляра. Оно устойчиво при повторном выборе того же набора ресурсов. Выбор не записывается на диск. Смена папки, карты или элемента прерывает прежний запуск и сбрасывает результаты. Реконструкция и сравнение выполняются в браузере без сетевой отправки файлов.
 
@@ -14,14 +14,17 @@
 
 ## Локальная сборка
 
-Соберите WASM из коммита регенератора, закреплённого в [`studio/engine-lock.json`](../studio/engine-lock.json), с Emscripten 4.0.21. Из корня рендерера выполните:
+Команды выполняются из корня Platform после активации Emscripten 4.0.21. Все движки собираются из одного текущего checkout; engine-lock задаёт runtime contract, а Platform SHA/TREE вычисляются producer из этой сборки.
 
 ```sh
-STUDIO_RENDERER_REV="$(git rev-parse HEAD)" \
-  STUDIO_REGENERATOR_REV="$(git -C /путь/к/исходникам/регенератора rev-parse HEAD)" \
-  node scripts/build-studio-s2a.mjs /путь/к/wasm/build
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
+emcmake cmake -S . -B build/wasm -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build/wasm --parallel 2
+npm run build --workspace renderer
+node renderer/scripts/build-studio-s2a.mjs build/wasm
 npx playwright install chromium
-node --test tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs
-node tests/studio-s2a.browser.mjs build/studio --catalog
+(cd renderer && node --test tests/studio-r05.test.mjs tests/studio-ufo-catalog.test.mjs)
+(cd renderer && node tests/studio-s2a.browser.mjs build/studio --catalog)
 ```
+
+Проверяется настоящий локальный WASM Worker, исходные File API данные остаются в браузере. Общая автоматическая последовательность находится в `.github/workflows/platform.yml`; [текущая архитектура и сборка](../../docs/platform.md).

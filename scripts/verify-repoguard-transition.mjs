@@ -18,7 +18,7 @@ function git(cwd, ...args) {
 function probe(directory, base, head) {
   return runRepoGuard(cli,"netkeep80/fgm-platform",directory,base,head);
 }
-function ensure(ok, code) {if(!ok) throw new Error("E_FGMP_S00B_"+code);}
+function ensure(ok, code) {if(!ok) throw new Error("E_FGMP_REPOGUARD_"+code);}
 ensure(git(toolDir,"rev-parse","HEAD")===pin, "COMPILER_SHA");
 const names=execFileSync("git",["ls-files","-z"],{cwd:repo})
   .toString("utf8").split("\0").filter(Boolean);
@@ -36,7 +36,7 @@ try {
   }
   git(temp,"add","-A");git(temp,"commit","-qm","synthetic accepted normative BASE");
   const goodBase=git(temp,"rev-parse","HEAD");
-  appendFileSync(join(temp,"README.md"),"\nS00B synthetic documented transition, no gameplay data.\n");
+  appendFileSync(join(temp,"README.md"),"\nSynthetic documented transition, no gameplay data.\n");
   git(temp,"add","-A");git(temp,"commit","-qm","synthetic justified README transition");
   const goodHead=git(temp,"rev-parse","HEAD");
   const positive=probe(temp,goodBase,goodHead);

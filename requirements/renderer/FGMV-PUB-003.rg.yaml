@@ -35,7 +35,7 @@ relations:
       - verified_by
     target:
       kind: artifact
-      path: renderer/tests/test_studio_pages.py
+      path: renderer/tests/test_pages_snapshot.py
   - predicates:
       - verified_by
     target:
@@ -75,4 +75,14 @@ relations:
       - documents
     target:
       kind: artifact
-      path: renderer/docs/requirements-hierarchy.md
+      path: docs/requirements-hierarchy.md
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/test_pages_release.py
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/studio_pages_fixture.py

@@ -25,4 +25,4 @@ relations:
       - documents
     target:
       kind: artifact
-      path: regenerator/docs/requirements-hierarchy.md
+      path: docs/requirements-hierarchy.md

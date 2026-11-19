@@ -115,7 +115,7 @@ Chromium smoke и подмену ответа после scan. Тестовые 
 Реальное подписание main, сохранение и проверка bundle, public publish/rollback фиксируются отдельно после merge.
 
 S07 остаётся открытым до live-доказательства, отдельной визуальной авторской приёмки и удаления последнего
-renderer/.github/workflows/studio-pages.yml следующим последовательным retirement PR.
+renderer/.github/workflows/platform.yml следующим последовательным retirement PR.
 Пока этот dormant файл сохранён побайтно; он не является текущим Platform release workflow.
 Зелёный PR CI не означает PUBLISHED. Stage A, browser R07 fit, физические GPU/Windows WebGPU,
 универсальная корректность всех FGM моделей и финальные четыре PASS этим срезом не принимаются.

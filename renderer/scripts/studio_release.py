@@ -29,7 +29,6 @@ SCHEMA = "fgmp-studio-release/1"
 LIMIT = SIZE_LIMIT + 128 * 1024
 REQUIRED_JOBS = {
     "RepoGuard exact BASE/HEAD",
-    "Platform policy / ubuntu-24.04", "Platform policy / windows-2025",
     "Native Platform / ubuntu-24.04", "Native Platform / windows-2025",
     "Local WASM, WebGPU and Chromium / ubuntu-24.04",
 }

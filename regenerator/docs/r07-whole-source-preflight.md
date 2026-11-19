@@ -1,6 +1,6 @@
 # R07-S1B1A — предварительная проверка целого объекта по исходникам
 
-**Статус:** кандидат; [Issue #56](https://github.com/netkeep80/fgm-regenerator/issues/56), родитель [R07-EARLY-MVP #50](https://github.com/netkeep80/fgm-regenerator/issues/50). S1B0 [PR #55](https://github.com/netkeep80/fgm-regenerator/pull/55) принят и смержен. Новый срез **не** проводит общий fit, не выпускает Stage A acceptance и не доказывает истинность объектной идентичности по одной MCD.
+**Статус:** кандидат; [план Platform](https://github.com/netkeep80/fgm-platform/issues/11), родитель [план Platform](https://github.com/netkeep80/fgm-platform/issues/11). S1B0 PR #55 (историческая запись) принят и смержен. Новый срез **не** проводит общий fit, не выпускает Stage A acceptance и не доказывает истинность объектной идентичности по одной MCD.
 
 ## Архитектура и границы
 

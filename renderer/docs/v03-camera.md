@@ -2,7 +2,7 @@
 
 ## Назначение и происхождение
 
-Этот узкий срез задаёт математический контракт камеры для **одной локальной плитки** 16×16×24 в координатах R05. Владелец — `fgm-renderer`, нормативный кандидат — `FGMV-CAM-001`, задача — [V03](https://github.com/netkeep80/fgm-renderer/issues/7). Принятые входные формулы и соглашения R05: [документация регенератора](https://github.com/netkeep80/fgm-regenerator/blob/5ed08509bd2630a6aec92e63b21a85793bfee940/docs/r05-projection.md) и [`src/projection.cpp`](https://github.com/netkeep80/fgm-regenerator/blob/5ed08509bd2630a6aec92e63b21a85793bfee940/src/projection.cpp).
+Этот узкий срез задаёт математический контракт камеры для **одной локальной плитки** 16×16×24 в координатах R05. Владелец — `fgm-renderer`, нормативный кандидат — `FGMV-CAM-001`, задача — [план Platform](https://github.com/netkeep80/fgm-platform/issues/15). Принятые входные формулы и соглашения R05: [документация регенератора](https://github.com/netkeep80/fgm-platform/blob/main/regenerator/docs/r05-projection.md) и [`src/projection.cpp`](https://github.com/netkeep80/fgm-platform/blob/main/regenerator/src/projection.cpp).
 
 Срез не изменяет FGM и не зависит от художественного профиля, GPU, масок коллизий, загрузки UFO или игровой видимости. Это математический фундамент будущих V03-S2 и V05, **не** полноценная интерактивная камера и **не** pixel-perfect raster произвольных 3D-мешей.
 
@@ -57,6 +57,6 @@ node scripts/test-v03.mjs
 - V03-S2: согласовать поворот **всей карты**, origin/pivot, zoom/viewport, курсор и игровой picking с заданным авторитетным уровнем/глубиной.
 - V03-S3: интеграция GPU/WASM и браузерный визуальный smoke, эталонные кадры и производительность.
 - Калибровка новых проекций не должна изменять `fgm-core` или превращать диагностическую видимость в информацию игроку.
-- Полный [R07](https://github.com/netkeep80/fgm-regenerator/issues/11) по-прежнему нуждается в проверенных камере и материалах V04; этот узкий срез не закрывает такие зависимости.
+- Полный [план Platform](https://github.com/netkeep80/fgm-platform/issues/15) по-прежнему нуждается в проверенных камере и материалах V04; этот узкий срез не закрывает такие зависимости.
 
 Источники оригинальной игры или их производные байты **не входят** в тесты, артефакты и публичный репозиторий.

@@ -70,7 +70,7 @@ relations:
       - documents
     target:
       kind: artifact
-      path: core/docs/requirements-hierarchy.md
+      path: docs/requirements-hierarchy.md
   - predicates:
       - documents
     target:

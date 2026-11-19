@@ -1,6 +1,6 @@
 # Канонический пакет FGM
 
-Кандидат C04 задаёт переносимую запись одной модели и рецепта её получения. [C04](https://github.com/netkeep80/fgm-core/issues/8) · [FGMC-SERIAL-001](../requirements/FGMC-SERIAL-001.rg.yaml)
+Кандидат C04 задаёт переносимую запись одной модели и рецепта её получения. [план Platform](https://github.com/netkeep80/fgm-platform/issues/15) · [FGMC-SERIAL-001](../../requirements/core/FGMC-SERIAL-001.rg.yaml)
 
 ## Структура пакета
 

@@ -1,6 +1,6 @@
 # R07-EARLY-MVP — S0: локальное исходное наблюдение и честный baseline
 
-**Статус:** кандидат `FGMR-R07-LOCAL-001`, `accepted:false / current:false / published:false`. Первый технический срез задачи [Regenerator #50](https://github.com/netkeep80/fgm-regenerator/issues/50). **Не завершает R07-EARLY-MVP:** ещё нет оптимизации параметров по исходному спрайту, независимой аттестации целой ObjectDefinition и четырёх новых видов.
+**Статус:** кандидат `FGMR-R07-LOCAL-001`, `accepted:false / current:false / published:false`. Первый технический срез задачи [план Platform](https://github.com/netkeep80/fgm-platform/issues/11). **Не завершает R07-EARLY-MVP:** ещё нет оптимизации параметров по исходному спрайту, независимой аттестации целой ObjectDefinition и четырёх новых видов.
 
 ## Назначение
 

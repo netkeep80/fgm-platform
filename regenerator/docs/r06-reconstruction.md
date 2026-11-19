@@ -4,7 +4,7 @@
 
 ## Запуск
 
-Нужны CMake 3.24+, C++20 и Python 3. Интерпретатор FGM закреплён на принятом коммите [fgm-core](https://github.com/netkeep80/fgm-core/tree/ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b). Соберите проект обычным способом и передайте путь к собранному `fgmr-r06-sample`.
+Нужны CMake 3.24+, C++20 и Python 3. Интерпретатор FGM закреплён на принятом коммите [fgm-core](https://github.com/netkeep80/fgm-platform/blob/main/core/). Соберите проект обычным способом и передайте путь к собранному `fgmr-r06-sample`.
 
 ~~~sh
 python scripts/reconstruct_r06.py --loft loft.json --sprite sprite.json \

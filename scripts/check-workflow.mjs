@@ -1,5 +1,5 @@
-// FGM Platform bootstrap governance checker; only declarative, local, no network.
-import { existsSync, readFileSync } from "node:fs";
+// FGM Platform workflow governance checker; only declarative, local, no network.
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseDocument, visit, isAlias, isMap, isScalar, isSeq } from "yaml";
@@ -13,11 +13,16 @@ const requiredPaths = [
   "requirements/FGMP-PRODUCT-000.rg.yaml",
   "requirements/FGMP-PROJECT-000.rg.yaml",
   ".github/workflows/platform.yml",
-  "scripts/check-bootstrap.mjs",
-  "tests/bootstrap.test.mjs",
+  "scripts/check-workflow.mjs",
+  "tests/workflow.test.mjs",
   "scripts/verify-repoguard-transition.mjs",
   "package.json",
   "package-lock.json",
+  "CMakeLists.txt",
+  "core/CMakeLists.txt",
+  "raster/CMakeLists.txt",
+  "regenerator/CMakeLists.txt",
+  "renderer/CMakeLists.txt",
 ];
 
 function fail(code) { throw new Error("E_FGMP_" + code); }
@@ -30,7 +35,7 @@ const source = (base, path) => {
   const rel=relative(base,absolute);
   if (rel.startsWith(".."+sep) || rel===".." || rel.startsWith(sep)) fail("UNSAFE_PATH");
   if (!existsSync(absolute)) fail("MISSING_FILE:" + path);
-  return readFileSync(absolute,"utf8");
+  return readFileSync(absolute,"utf8").replace(/\r\n/g,"\n");
 };
 
 
@@ -86,17 +91,17 @@ function checkWorkflowGate(workflow) {
   const defaults=map(node(root,"defaults"),["run"]);
   const runDefaults=map(node(defaults,"run"),["shell"]);
   must(eq(node(runDefaults,"shell"),"bash"));
-  const jobs=map(node(root,"jobs"),["repo-guard","platform-policy","core","wasm-browser","release"]);
+  const jobs=map(node(root,"jobs"),["repo-guard","core","wasm-browser","release"]);
   const verification="github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'";
-  const expectedNames={"repo-guard":"RepoGuard exact BASE/HEAD","platform-policy":"Platform policy / $"+"{{ matrix.os }}",
+  const expectedNames={"repo-guard":"RepoGuard exact BASE/HEAD",
     core:"Native Platform / $"+"{{ matrix.os }}","wasm-browser":"Local WASM, WebGPU and Chromium / ubuntu-24.04"};
   for(const [id,name]of Object.entries(expectedNames)){
     const j=node(jobs,id);must(isMap(j)&&eq(node(j,"name"),name)&&eq(node(j,"if"),verification));
     must(!j.has("continue-on-error")&&!j.has("permissions"));
   }
   const release=node(jobs,"release");must(isMap(release));
-  must(eq(node(release,"if"),"always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback') || (needs.repo-guard.result == 'success' && needs.platform-policy.result == 'success' && needs.core.result == 'success' && needs.wasm-browser.result == 'success'))"));
-  strings(node(release,"needs"),["repo-guard","platform-policy","core","wasm-browser"]);
+  must(eq(node(release,"if"),"always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback') || (needs.repo-guard.result == 'success' && needs.core.result == 'success' && needs.wasm-browser.result == 'success'))"));
+  strings(node(release,"needs"),["repo-guard","core","wasm-browser"]);
   const releasePermissions=map(node(release,"permissions"),["contents","actions","pages","id-token","attestations"]);
   for(const [name,value]of Object.entries({contents:"write",actions:"read",pages:"write","id-token":"write",attestations:"write"}))
     must(eq(node(releasePermissions,name),value));
@@ -121,6 +126,45 @@ function checkWorkflowGate(workflow) {
   const pinned="74db97791e6da8a75287164f0d0b41579108f114";
   const eventSha=dim=>"$"+"{{ github.event.pull_request."+dim+".sha }}";
 
+  // Current execution contracts, independent of historical commits or file hashes.
+  const requireRun=(id,command)=>{
+    const items=node(node(jobs,id),"steps");must(isSeq(items));
+    const matches=items.items.filter(s=>isMap(s)&&isScalar(node(s,"run"))&&
+      node(s,"run").value.split("\n").some(line=>line.trim()===command));
+    must(matches.length===1);
+    const s=matches[0];must(!s.has("if")&&!s.has("continue-on-error")&&!s.has("shell"));
+  };
+  const native=node(jobs,"core");
+  const strategy=node(native,"strategy");must(isMap(strategy)&&eq(node(strategy,"fail-fast"),false));
+  const matrix=map(node(strategy,"matrix"),["os"]);
+  strings(node(matrix,"os"),["ubuntu-24.04","windows-2025"]);
+  for(const command of [
+    "node --test tests/workflow.test.mjs",
+    "node --test tests/ctest-gate.test.mjs",
+    "npm run test:node --workspace renderer",
+    "node --test renderer/tests/studio-bundle.test.mjs",
+    "python -m unittest discover -s tests -p 'test_pages_*.py' -v",
+    "node --test tests/studio-pages-live.test.mjs",
+    "python -m unittest discover -s tests -p test_studio_release.py -v",
+    "cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON",
+    "cmake --build build/native --config Release --parallel 2",
+    "node scripts/check-ctest.mjs build/native --suite platform --config Release",
+    "ctest --test-dir build/native -C Release --output-on-failure --verbose --no-tests=error",
+  ])requireRun("core",command);
+  for(const command of [
+    "node tests/test_studio.mjs \"$native/fgmr-studio-native\" \"$worker\"",
+    "node tests/test_studio_cell.mjs \"$native/fgmr-studio-native\" \"$worker\"",
+    "node tests/test_studio_catalog.mjs \"$native/fgmr-studio-native\" \"$worker\"",
+    "node tests/test_studio_whole.mjs \"$native/fgmr-studio-native\" \"$native/fgmr-r06-multicell-sample\" \"$worker\" --builder \"$native/fgmr-r06-whole-build\"",
+    "node --test tests/local-browser.test.mjs tests/browser.test.mjs tests/renderer-session.browser.mjs",
+    "node tests/renderer-session-wasm.browser.mjs build/pages-studio",
+    "node tests/renderer-depth-oracle.browser.mjs",
+    "node tests/studio-s2a.browser.mjs build/pages-studio --catalog",
+    "STUDIO_REVIEW_SITE=build/pages-studio node --test tests/studio-pages-live.test.mjs",
+    "node scripts/mutate-v02.mjs",
+    "python -m unittest discover -s tests -p test_studio_release.py -v",
+  ])requireRun("wasm-browser",command);
+
   const source=step(0,"Checkout exact source",["uses","with"]);
   must(eq(node(source,"uses"),checkout));
   withOptions(source,{ref:"$"+"{{ env.SOURCE_REV }}","fetch-depth":0,"persist-credentials":false});
@@ -128,11 +172,11 @@ function checkWorkflowGate(workflow) {
   must(eq(node(setup,"uses"),setupNode));
   withOptions(setup,{"node-version":"24"});
 
-  const bootstrap=step(2,"Independent positive and negative bootstrap checks",["run"]);
+  const bootstrap=step(2,"Independent positive and negative workflow checks",["run"]);
   must(eq(node(bootstrap,"run"),
     "npm ci --ignore-scripts --no-audit --no-fund\n"+
-    "node --test tests/bootstrap.test.mjs\n"+
-    "node scripts/check-bootstrap.mjs\n"+
+    "node --test tests/workflow.test.mjs\n"+
+    "node scripts/check-workflow.mjs\n"+
     "node --test tests/document-language.test.mjs\n"+
     "node scripts/check-document-language.mjs\n"));
 
@@ -179,10 +223,21 @@ function checkWorkflowGate(workflow) {
 }
 
 
-export function checkBootstrap(base=root) {
+export function checkWorkflow(base=root) {
   for (const p of requiredPaths) source(base,p);
   const workflow=source(base,".github/workflows/platform.yml");
   checkWorkflowGate(workflow);
+  for(const module of ["core","raster","regenerator","renderer"]){
+    const cmake=source(base,module+"/CMakeLists.txt").replace(/#[^\n]*/g,"");
+    if(/FetchContent_Declare\s*\(\s*fgm_(?:core|regenerator|renderer)\b/i.test(cmake)||
+       /github\.com\/netkeep80\/fgm-(?:core|regenerator|renderer)/i.test(cmake)||
+       /\bset\s*\(\s*BUILD_TESTING\s+(?:OFF|FALSE|0)\b/i.test(cmake))fail("LOCAL_BUILD");
+    const nested=resolve(base,module,".github/workflows");
+    if(existsSync(resolve(base,module,"package-lock.json"))||
+       existsSync(nested)&&readdirSync(nested).some(name=>/\.ya?ml$/.test(name)))fail("DUPLICATE_MODULE_INFRASTRUCTURE");
+    if(!new RegExp("add_subdirectory\\s*\\(\\s*"+module+"\\s*\\)","i")
+      .test(source(base,"CMakeLists.txt").replace(/#[^\n]*/g,"")))fail("LOCAL_BUILD");
+  }
   for(const [file,id] of [
     ["requirements/FGMP-PRODUCT-000.rg.yaml","FGMP-PRODUCT-000"],
     ["requirements/FGMP-PROJECT-000.rg.yaml","FGMP-PROJECT-000"],
@@ -197,4 +252,4 @@ export function checkBootstrap(base=root) {
   return {ok:true,roots:2,repoGuard:PIN};
 }
 if(process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
-  console.log(JSON.stringify(checkBootstrap()));
+  console.log(JSON.stringify(checkWorkflow()));

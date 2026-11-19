@@ -51,11 +51,11 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "24"
-      - name: Independent positive and negative bootstrap checks
+      - name: Independent positive and negative workflow checks
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          node --test tests/bootstrap.test.mjs
-          node scripts/check-bootstrap.mjs
+          node --test tests/workflow.test.mjs
+          node scripts/check-workflow.mjs
           node --test tests/document-language.test.mjs
           node scripts/check-document-language.mjs
       - name: Checkout immutable RepoGuard for independent synthetic transition tests
@@ -112,32 +112,6 @@ jobs:
         run: |
           printf 'RG_STEP=%s\nRG_RESULT=%s\nRG_SUMMARY=%s\n' "$RG_STEP" "$RG_RESULT" "$RG_SUMMARY"
     if: github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'
-  platform-policy:
-    name: Platform policy / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-24.04
-          - windows-2025
-    steps:
-      - name: Checkout exact source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          ref: ${{ env.SOURCE_REV }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Set up Node.js 24
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: "24"
-      - name: Validate current policy and successful no-op mutations
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          node --test tests/platform-policy.test.mjs
-          node scripts/check-platform.mjs "${{ env.SOURCE_REV }}"
-    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback'
   core:
     name: Native Platform / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -163,14 +137,14 @@ jobs:
       - name: Install the root workspace and verify Core and Renderer contracts
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          node --test --test-name-pattern="real shell:" tests/bootstrap.test.mjs
+          node --test tests/workflow.test.mjs
           node --test core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
           npm run test:node --workspace renderer
           node --test renderer/tests/studio-bundle.test.mjs
       - name: Verify Platform publication and rollback admission on both systems
         working-directory: renderer
         run: |
-          python -m unittest discover -s tests -p test_studio_pages.py -v
+          python -m unittest discover -s tests -p 'test_pages_*.py' -v
           node --test tests/studio-pages-live.test.mjs
           python -m unittest discover -s tests -p test_studio_release.py -v
       - name: Configure Platform from the monorepo root
@@ -250,7 +224,7 @@ jobs:
       - name: Verify current package allowlist, hashes, version and negative cases
         working-directory: renderer
         run: |
-          python -m unittest discover -s tests -p 'test_*pages*.py' -v
+          python -m unittest discover -s tests -p 'test_pages_*.py' -v
           preview=()
           if [[ -n "$PREVIEW_BASE" ]]; then preview=(--preview-base "$PREVIEW_BASE"); fi
           python -m scripts.studio_pages studio build/studio build/pages-studio --revision "$SOURCE_REV" "${preview[@]}" > build/pages-hashes.json
@@ -322,10 +296,9 @@ jobs:
     name: Publish or restore verified Platform Studio
     needs:
       - repo-guard
-      - platform-policy
       - core
       - wasm-browser
-    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback') || (needs.repo-guard.result == 'success' && needs.platform-policy.result == 'success' && needs.core.result == 'success' && needs.wasm-browser.result == 'success'))
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback') || (needs.repo-guard.result == 'success' && needs.core.result == 'success' && needs.wasm-browser.result == 'success'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
