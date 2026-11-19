@@ -1,9 +1,9 @@
 # Выпуск и проверка Platform Studio
 
 Один root workflow `.github/workflows/platform.yml` проверяет Platform и публикует тот же готовый пакет.
-Шесть verification jobs сохранены; единственный дополнительный release job работает только на main.
+Четыре обязательных verification jobs: RepoGuard, native Ubuntu, native Windows и реальный WASM/WebGPU/Chromium. Единственный дополнительный release job работает только на main после их успеха.
 PR получает read permissions и review artifact. Наличие этого workflow не доказывает успешной live-публикации:
-первая публикация и реальный rollback проверяются после принятия exact HEAD/TREE и merge.
+каждая новая публикация подтверждается отдельно по production CI, публичным SHA/TREE/hashes и настоящему WASM/Chromium smoke; ручные recovery/failure drills имеют самостоятельные свидетельства.
 [Корневая инструкция](../../docs/platform.md) содержит одну процедуру native/WASM сборки.
 
 ## Один пакет и точная ревизия
@@ -36,10 +36,10 @@ WASM/browser job упаковывает уже проверенный сайт �
 полный hash index, repository ID, source SHA/TREE, версия. Этот ZIP загружается один раз как
 immutable Actions artifact с именем platform-studio-FULL_SHA-ATTEMPT.
 Release job получает его по точному artifact ID текущего run/attempt, независимо сверяет provider digest,
-repository ID, main ref, source SHA, workflow path и шесть успешных обязательных jobs этого же attempt.
+repository ID, main ref, source SHA, workflow path и четыре успешных обязательных verification jobs этого же attempt.
 Только после этого ZIP раскрывается через существующий validator. Другая сборка ради публикации не нужна.
 
-Push принятого main запускает проверки и публикацию. Для явного повторного выпуска используется
+Каждый push в принятый main, включая изменения только документации или CI, запускает все обязательные проверки и автоматическую публикацию без path filters. Для явного повторного выпуска используется
 workflow_dispatch на main: mode=publish, expected_main=FULL_CURRENT_MAIN_SHA.
 Текущий main проверяется через GitHub API при входе и перед заменой Pages; stale запуск отвергается.
 Привилегии contents/pages/attestations/id-token ограничены release job, общая concurrency не прерывает
@@ -104,18 +104,23 @@ Gzip сравнивается по распакованным байтам; пр
 
 Из renderer:
 
-    python -m unittest discover -s tests -p test_studio_pages.py -v
+    python -m unittest discover -s tests -p 'test_pages_*.py' -v
     python -m unittest discover -s tests -p test_studio_release.py -v
     node --test tests/studio-pages-live.test.mjs
 
 Native Ubuntu/Windows исполняют publisher, origin/ZIP/rollback и HTTP negatives.
 Ubuntu WASM job дополнительно запускает настоящий закреплённый gh attestation verifier против unsigned bundle,
-Chromium smoke и подмену ответа после scan. Тестовые verifier fixtures проверяют policy/control flow;
-они не доказывают положительную криптографическую проверку будущего Platform release.
-Реальное подписание main, сохранение и проверка bundle, public publish/rollback фиксируются отдельно после merge.
+Chromium smoke и подмену ответа после scan. Тестовые verifier fixtures проверяют отрицательные сценарии admission/control flow, но не заменяют
+положительную проверку подписи и реальной публикации. Для Studio 1.12, 1.13 и 1.14 уже зафиксированы
+подписанные продуктовые Releases и успешные публичные HTTP/WASM проверки; [последний выпуск Studio 1.14](https://github.com/netkeep80/fgm-platform/releases/tag/studio-88cfb3aecedf07bcfb363eea910b4163356e9727)
+подтверждён [production run #44612285253](https://github.com/netkeep80/fgm-platform/actions/runs/44612285253).
+Отдельно подтверждён [ручной откат на подписанную Studio 1.12](https://github.com/netkeep80/fgm-platform/issues/1#issuecomment-7019384340).
+Дополнительные ручные failure/fallback drills отложены автором до завершения миграции и не являются её блокером.
 
-S07 остаётся открытым до live-доказательства, отдельной визуальной авторской приёмки и удаления последнего
-renderer/.github/workflows/platform.yml следующим последовательным retirement PR.
-Пока этот dormant файл сохранён побайтно; он не является текущим Platform release workflow.
-Зелёный PR CI не означает PUBLISHED. Stage A, browser R07 fit, физические GPU/Windows WebGPU,
-универсальная корректность всех FGM моделей и финальные четыре PASS этим срезом не принимаются.
+Положительный live-выпуск Platform и удаление прежнего вложенного
+`renderer/.github/workflows/studio-pages.yml` подтверждены в принятом S08 PR #43. Единственный действующий
+workflow публикации — `.github/workflows/platform.yml` в корне монорепозитория.
+Зелёный PR CI не означает PUBLISHED: для каждого merge проверяются production deploy, HTTP hashes и реальный WASM.
+Финальные FUNCTIONAL/INDEPENDENCE/REQUIREMENTS/SIMPLIFICATION_PASS требуют отдельного независимого аудита
+и авторской приёмки. Stage A, browser R07 fit, физические GPU/Windows WebGPU и универсальная корректность
+всех FGM моделей не выводятся из этих технических проверок.
