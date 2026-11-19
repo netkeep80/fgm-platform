@@ -35,7 +35,7 @@ const source = (base, path) => {
   const rel=relative(base,absolute);
   if (rel.startsWith(".."+sep) || rel===".." || rel.startsWith(sep)) fail("UNSAFE_PATH");
   if (!existsSync(absolute)) fail("MISSING_FILE:" + path);
-  return readFileSync(absolute,"utf8");
+  return readFileSync(absolute,"utf8").replace(/\r\n/g,"\n");
 };
 
 

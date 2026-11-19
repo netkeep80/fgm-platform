@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {spawnSync} from "node:child_process";
@@ -23,7 +23,7 @@ function temporary(operate) {
   try {
     for(const path of paths) {
       const dst=join(tmp,path);mkdirSync(resolve(dst,".."),{recursive:true});
-      cpSync(join(root,path),dst);
+      writeFileSync(dst,readFileSync(join(root,path),"utf8").replace(/\r\n/g,"\n"));
     }
     return operate(tmp);
   } finally {rmSync(tmp,{recursive:true,force:true});}
@@ -31,6 +31,10 @@ function temporary(operate) {
 test("positive: exact frozen RepoGuard revision, roots and artifact links",()=>
   assert.deepEqual(checkWorkflow(),{ok:true,roots:2,repoGuard:PIN})
 );
+test("positive: CRLF checkout has the same workflow and requirement semantics",()=>temporary(tmp=>{
+  for(const path of paths){const p=join(tmp,path);writeFileSync(p,readFileSync(p,"utf8").replace(/\n/g,"\r\n"));}
+  assert.deepEqual(checkWorkflow(tmp),{ok:true,roots:2,repoGuard:PIN});
+}));
 test("negative: every run step must use a fail-fast shell on Windows and Ubuntu",()=>temporary(tmp=>{
   const p=join(tmp,".github/workflows/platform.yml"),v=parse(readFileSync(p,"utf8"));
   v.defaults.run.shell="pwsh";writeFileSync(p,stringify(v));
