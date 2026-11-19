@@ -5,8 +5,8 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseDocument} from 'yaml';
 export const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-export const POLICY='fgm-platform-policy/5';
-export const SCOPE='S07A-to-S07B-unified-CI-trusted-release-and-rollback';
+export const POLICY='fgm-platform-policy/6';
+export const SCOPE='S07A-to-S07E-published-Studio-documentation';
 export const BASE='a8eb0bdbb1ac844c3d4b9ad1c1a83a1a529eedcd';
 export const BASE_TREE='257f81b1517f098c86a17bd586a15ce7fc55f564';
 const RETIRED=Object.freeze(['.github/workflows/repo-guard.yml','.github/workflows/core-ci.yml','.github/workflows/platform-policy.yml']);
@@ -230,6 +230,11 @@ const PINS={
     "mode": "100644",
     "blob": "9f4792f4df7e2468ed4a4dc11540d292d929b678",
     "sha256": "a08a3d0fd1d47c3ad8772830391e0adb7a7e559d14040faf6d6e75e2de919b63"
+  },
+  "README.md": {
+    "mode": "100644",
+    "blob": "942122580a2a507deb45b636cb88e4e5ed116077",
+    "sha256": "0249093351fca41a9fbf98890fd15d0dbf7dee042c8d8be1c68e6820a550af4c"
   }
 };
 // END REVIEWED PINS
@@ -305,7 +310,7 @@ export function checkPlatform(repo=root,head='HEAD'){
     execution_constraints_preserved:22,execution_constraints_added:1,root_ci_workflows:1,
     publication_admission:'Immutable current main CI origin/provider digest and signed retained Platform release',
     production_deployment:'REQUIRES_ACCEPTED_MAIN_AND_REAL_POSTMERGE_EVIDENCE',
-    temporary_policy_owner:'S07B #10; remove baseline rules after current replacement S08 #14; no archive gate'};
+    temporary_policy_owner:'S07E #10; remove baseline rules after current replacement S08 #14; no archive gate'};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{console.log(JSON.stringify(checkPlatform(root,process.argv[2]||'HEAD'),null,2));}
