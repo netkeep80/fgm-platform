@@ -143,7 +143,7 @@ for(const [name,mutate]of [
   ["Windows native verification cannot disappear",w=>{w.jobs.core.strategy.matrix.os=["ubuntu-24.04"];}],
   ["native tests cannot be replaced by successful echo",w=>{w.jobs.core.steps.find(s=>s.run?.includes('ctest --test-dir')).run='echo PASS';}],
   ["native inventory cannot be bypassed",w=>{w.jobs.core.steps.find(s=>s.run?.startsWith('node scripts/check-ctest.mjs')).if=false;}],
-  ["publisher admission suite cannot be bypassed",w=>{w.jobs.core.steps.find(s=>s.run?.includes('test_studio_pages.py')).if=false;}],
+  ["publisher admission suite cannot be bypassed",w=>{w.jobs.core.steps.find(s=>s.run?.includes('test_pages_*.py')).if=false;}],
   ["WASM depth oracle must execute",w=>{const s=w.jobs['wasm-browser'].steps.find(s=>s.run?.includes('node tests/renderer-depth-oracle.browser.mjs'));s.run=s.run.replace('node tests/renderer-depth-oracle.browser.mjs','echo PASS');}],
   ["WASM whole-object parity must execute",w=>{const s=w.jobs['wasm-browser'].steps.find(s=>s.run?.includes('node tests/test_studio_whole.mjs'));s.run=s.run.replace(/node tests\/test_studio_whole[^\n]+/,'echo PASS');}],
   ["compiled RVI mutation testing cannot be disabled",w=>{w.jobs['wasm-browser'].steps.find(s=>s.run==='node scripts/mutate-v02.mjs').if=false;}],

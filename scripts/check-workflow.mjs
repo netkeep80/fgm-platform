@@ -142,7 +142,7 @@ function checkWorkflowGate(workflow) {
     "node --test tests/ctest-gate.test.mjs",
     "npm run test:node --workspace renderer",
     "node --test renderer/tests/studio-bundle.test.mjs",
-    "python -m unittest discover -s tests -p test_studio_pages.py -v",
+    "python -m unittest discover -s tests -p 'test_pages_*.py' -v",
     "node --test tests/studio-pages-live.test.mjs",
     "python -m unittest discover -s tests -p test_studio_release.py -v",
     "cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON",

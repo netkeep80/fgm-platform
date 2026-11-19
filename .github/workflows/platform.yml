@@ -144,7 +144,7 @@ jobs:
       - name: Verify Platform publication and rollback admission on both systems
         working-directory: renderer
         run: |
-          python -m unittest discover -s tests -p test_studio_pages.py -v
+          python -m unittest discover -s tests -p 'test_pages_*.py' -v
           node --test tests/studio-pages-live.test.mjs
           python -m unittest discover -s tests -p test_studio_release.py -v
       - name: Configure Platform from the monorepo root
@@ -224,7 +224,7 @@ jobs:
       - name: Verify current package allowlist, hashes, version and negative cases
         working-directory: renderer
         run: |
-          python -m unittest discover -s tests -p 'test_*pages*.py' -v
+          python -m unittest discover -s tests -p 'test_pages_*.py' -v
           preview=()
           if [[ -n "$PREVIEW_BASE" ]]; then preview=(--preview-base "$PREVIEW_BASE"); fi
           python -m scripts.studio_pages studio build/studio build/pages-studio --revision "$SOURCE_REV" "${preview[@]}" > build/pages-hashes.json

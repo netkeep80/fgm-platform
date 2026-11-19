@@ -46,7 +46,7 @@ relations:
   - predicates: [ verified_by ]
     target: { kind: artifact, path: renderer/tests/studio-s2a.browser.mjs }
   - predicates: [ verified_by ]
-    target: { kind: artifact, path: renderer/tests/test_studio_pages.py }
+    target: { kind: artifact, path: renderer/tests/test_pages_snapshot.py }
   - predicates: [ documents ]
     target: { kind: artifact, path: docs/platform.md }
   - predicates: [ documents ]
@@ -62,3 +62,13 @@ relations:
     target:
       kind: artifact
       path: tests/workflow.test.mjs
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/test_pages_release.py
+  - predicates:
+      - verified_by
+    target:
+      kind: artifact
+      path: renderer/tests/studio_pages_fixture.py
