@@ -139,6 +139,7 @@ function checkWorkflowGate(workflow) {
   const matrix=map(node(strategy,"matrix"),["os"]);
   strings(node(matrix,"os"),["ubuntu-24.04","windows-2025"]);
   for(const command of [
+    "node --test tests/workflow.test.mjs",
     "node --test tests/ctest-gate.test.mjs",
     "npm run test:node --workspace renderer",
     "node --test renderer/tests/studio-bundle.test.mjs",

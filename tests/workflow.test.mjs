@@ -141,6 +141,7 @@ for(const [name,mutate]of [
   ["main push cannot omit documentation merges",w=>{w.on.push.paths=["renderer/**"];}],
   ["main push cannot ignore documentation merges",w=>{w.on.push['paths-ignore']=["**/*.md"];}],
   ["Windows native verification cannot disappear",w=>{w.jobs.core.strategy.matrix.os=["ubuntu-24.04"];}],
+  ["native workflow negatives cannot be filtered to one case",w=>{const s=w.jobs.core.steps.find(s=>s.run?.includes('node --test tests/workflow.test.mjs'));s.run=s.run.replace('node --test tests/workflow.test.mjs','node --test --test-name-pattern="real shell:" tests/workflow.test.mjs');}],
   ["native tests cannot be replaced by successful echo",w=>{w.jobs.core.steps.find(s=>s.run?.includes('ctest --test-dir')).run='echo PASS';}],
   ["native inventory cannot be bypassed",w=>{w.jobs.core.steps.find(s=>s.run?.startsWith('node scripts/check-ctest.mjs')).if=false;}],
   ["publisher admission suite cannot be bypassed",w=>{w.jobs.core.steps.find(s=>s.run?.includes('test_pages_*.py')).if=false;}],

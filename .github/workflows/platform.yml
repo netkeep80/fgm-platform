@@ -137,7 +137,7 @@ jobs:
       - name: Install the root workspace and verify Core and Renderer contracts
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          node --test --test-name-pattern="real shell:" tests/workflow.test.mjs
+          node --test tests/workflow.test.mjs
           node --test core/tests/fgm-0.test.mjs core/tests/fgm-space.test.mjs core/tests/fgm-visual.test.mjs core/tests/fgm-geometry.test.mjs core/tests/fgm-serialization.test.mjs
           npm run test:node --workspace renderer
           node --test renderer/tests/studio-bundle.test.mjs
