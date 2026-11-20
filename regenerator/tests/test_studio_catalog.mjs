@@ -79,6 +79,58 @@ assert.equal(report.source.dataset_label, "BARN");
 assert.equal(report.source.local_index, 0);
 assert.equal(report.right_half, true);
 
+
+const thumbMcd=Buffer.alloc(62*4);
+thumbMcd[0]=0;thumbMcd[62]=1;thumbMcd[124]=2;thumbMcd[186]=9;
+const thumbPck=Buffer.from([0,254,20,10,255,0,254,10,20,255,0,254,5,30,255]);
+const thumbTab=Buffer.from([0,0,5,0,10,0]);
+const thumbPalette=Buffer.alloc(3864);
+for(const [index,color] of [[10,[63,0,0]],[20,[0,63,0]],[30,[0,0,63]]])
+  thumbPalette.set(color,4*774+index*3);
+const thumbFiles=(tab=thumbTab,palette=thumbPalette,pck=thumbPck)=>[
+  ["mcd",thumbMcd],["pck",pck],["tab",tab],["palette",palette]
+].map(append);
+const getThumb=(records,extra={})=>request("catalog-thumbnails",{
+  dataset:"FOREST",records,frameSlot:0,tabBits:16,paletteIndex:4,...extra
+});
+const badTab=Buffer.from(thumbTab);badTab[0]=1;
+const badPalette=Buffer.from(thumbPalette);badPalette[4*774+30*3]=64;
+const badPck=Buffer.from(thumbPck);badPck[4]=0;
+const thumbRequests=[
+  request("clear"),...thumbFiles(),
+  getThumb([0,1,2]),getThumb([3]),getThumb([0,0]),
+  getThumb(Array.from({length:9},(_,i)=>i)),getThumb([0],{frameSlot:8}),
+  request("clear"),...thumbFiles(badTab),getThumb([0]),
+  request("clear"),...thumbFiles(thumbTab,badPalette),getThumb([2]),
+  request("clear"),...thumbFiles(thumbTab,thumbPalette,badPck),getThumb([0])
+];
+const nativeThumbnails=spawnSync(native,{
+  input:thumbRequests.map(JSON.stringify).join("\n")+"\n",encoding:"utf8",maxBuffer:1024*1024});
+assert.equal(nativeThumbnails.status,0,nativeThumbnails.stderr);
+const thumbnailReplies=nativeThumbnails.stdout.trimEnd().split("\n").map(JSON.parse);
+assert.equal(thumbnailReplies.length,thumbRequests.length);
+const valid=thumbnailReplies[5].thumbnails;
+assert.equal(valid.schema,"fgmr-ufo-catalog-thumbnails/1");
+assert.equal(valid.dataset,"FOREST");assert.equal(valid.frameSlot,0);
+assert.equal(valid.palette_rgb8[10][0],252);
+assert.equal(valid.palette_rgb8[20][1],252);
+assert.equal(valid.palette_rgb8[30][2],252);
+for(const [index,x,color] of [[0,20,10],[1,10,20],[2,5,30]]){
+  const item=valid.items[index];
+  assert.equal(item.record,index);
+  assert.equal(item.frameId,index);
+  assert.equal(item.indices_hex.length,2560);
+  assert.equal(parseInt(item.indices_hex.slice(x*2,x*2+2),16),color);
+}
+assert.equal(thumbnailReplies[6].thumbnails.items[0].error,"E_R04_FRAME_INDEX");
+assert.equal(thumbnailReplies[7].error,"E_STUDIO_THUMB_RECORD");
+assert.equal(thumbnailReplies[8].error,"E_STUDIO_THUMB_LIMIT");
+assert.equal(thumbnailReplies[9].error,"E_R04_ARGUMENTS");
+assert.equal(thumbnailReplies[15].thumbnails.items[0].error,"E_R04_TAB_OFFSET");
+assert.equal(thumbnailReplies[21].thumbnails.items[0].error,"E_R04_PALETTE_RGB6");
+assert.equal(thumbnailReplies[27].thumbnails.items[0].error,"E_R04_FRAME_TERMINATOR");
+console.log("STUDIO_R04_CATALOG_THUMB_NATIVE_PASS");
+
 if (workerPath) {
   const {Worker} = await import("node:worker_threads");
   const {once} = await import("node:events");
@@ -94,6 +146,15 @@ if (workerPath) {
       worker.postMessage(input);
       assert.deepEqual(await reply,[replies[i]],"native/WASM reply "+i);
     }
+    for(const [i,item] of thumbRequests.entries()){
+      const reply=once(worker,"message");
+      worker.postMessage(JSON.stringify(item));
+      const [raw]=await reply;
+      const was=JSON.parse(raw),expected=thumbnailReplies[i];
+      assert.deepEqual(was.thumbnails,expected.thumbnails,"R04 native/WASM thumbnail "+i);
+      assert.equal(was.error,expected.error,"R04 native/WASM error "+i);
+    }
+    console.log("STUDIO_R04_CATALOG_THUMB_WASM_PASS");
   } finally {
     await worker.terminate();
   }
