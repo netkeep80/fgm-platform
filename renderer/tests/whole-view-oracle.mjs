@@ -1,5 +1,5 @@
 // Independent TEST-ONLY world-space ray / voxel-box oracle. No FGM or LOFT interpreter.
-export function reference(voxels,camera,width=420,height=315){
+export function reference(voxels,camera,width=420,height=315,depth="nearest"){
   const {yaw,pitch,distance}=camera;
   const c=Math.cos(yaw),s=Math.sin(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch);
   const basis=[[c,-s,0],[s*sp,c*sp,-cp],[s*cp,c*cp,sp]];
@@ -18,28 +18,29 @@ export function reference(voxels,camera,width=420,height=315){
     const dir=basis[2].map(x=>-x);
     let nearest=null,edge=false;
     for(const voxel of voxels){
-      let enter=-Infinity,exit=Infinity,face=-1;
+      let enter=-Infinity,exit=Infinity,enterFace=-1,exitFace=-1;
       for(let axis=0;axis<3;axis++){
         const a=(voxel[axis]-origin[axis])/dir[axis],b=(voxel[axis]+1-origin[axis])/dir[axis];
         const lo=Math.min(a,b),hi=Math.max(a,b);
-        if(lo>enter){enter=lo;face=axis}exit=Math.min(exit,hi);
+        if(lo>enter){enter=lo;enterFace=axis}if(hi<exit){exit=hi;exitFace=axis}
       }
       if(exit<enter||exit<0)continue;
-      const hit=origin.map((n,i)=>n+enter*dir[i]);
+      const t=depth==="nearest"?enter:exit,face=depth==="nearest"?enterFace:exitFace;
+      const hit=origin.map((n,i)=>n+t*dir[i]);
       const margin=Math.min(...hit.filter((_,i)=>i!==face).map((n,j)=>{
         const axis=[0,1,2].filter(i=>i!==face)[j];return Math.min(n-voxel[axis],voxel[axis]+1-n);
       }));
       if(margin<.025)edge=true;
-      if(nearest&&enter>=nearest.t)continue;
-      const center=voxel.map(x=>x+.5);center[face]=voxel[face]+(dir[face]<0?1:0);
-      nearest={t:enter,color:dot(center,basis[2])>0?[102,140,156]:[81,116,133]};
+      if(nearest&&(depth==="nearest"?t>=nearest.t:t<=nearest.t))continue;
+      const center=voxel.map(x=>x+.5);center[face]=voxel[face]+((dir[face]<0)===(depth==="nearest")?1:0);
+      nearest={t,color:dot(center,basis[2])>0?[102,140,156]:[81,116,133]};
     }
     return {color:nearest?.color??[16,27,43],edge};
   };
   return {point};
 }
-export function compare(pixels,voxels,camera,width=420,height=315){
-  const oracle=reference(voxels,camera,width,height);
+export function compare(pixels,voxels,camera,width=420,height=315,depth="nearest"){
+  const oracle=reference(voxels,camera,width,height,depth);
   let checked=0,bad=0,foreground=0,background=0;
   for(let y=2;y<height;y+=3)for(let x=2;x<width;x+=3){
     const expected=oracle.point(x,y);if(expected.edge)continue;

@@ -30,15 +30,17 @@ for(let x=14;x<=17;x++)for(let y=14;y<=17;y++){
 }
 for(let z=4;z<=8;z++)voxels.push([14,14,z]);
 voxels.push([17,15,4],[17,15,5],[17,16,4]);
+// Object-local geometry crosses the origin and cell seams; the world anchor is independent.
+for(const v of voxels){v[0]-=16;v[1]-=16;v[2]-=3}
 const parts=['floor','west_wall','north_wall','object'],groups=new Map();
-for(const v of voxels){const tile=[Math.floor(v[0]/16),Math.floor(v[1]/16),0],key=tile.join(',');
+for(const v of voxels){const tile=[Math.floor((v[0]+16)/16),Math.floor((v[1]+16)/16),0],key=tile.join(',');
   if(!groups.has(key))groups.set(key,{tile,points:[]});groups.get(key).points.push(v);}
 const receipt={schema:'fgm-regenerator/verified-membership-input-v1',status:'verified_explicit_membership',
-  instance:'novel_test',prototype:'synthetic',provenance:{kind:'synthetic-test'},anchor_xyz:[0,0,0],cell_bindings:[]};
+  instance:'novel_test',prototype:'synthetic',provenance:{kind:'synthetic-test'},anchor_xyz:[1,1,0],cell_bindings:[]};
 const lofts=[...groups.values()].sort((a,b)=>a.tile[0]-b.tile[0]||a.tile[1]-b.tile[1]).map(({tile,points},i)=>{
-  receipt.cell_bindings.push({xyz:tile,local_xyz:tile,part:'object',dataset:'SYNTH',record:1,map_record:i});
+  receipt.cell_bindings.push({xyz:tile,local_xyz:[tile[0]-1,tile[1]-1,0],part:'object',dataset:'SYNTH',record:1,map_record:i});
   const rows=parts.map(()=>Array.from({length:24},()=>Array(16).fill(0)));
-  for(const [x,y,z] of points)rows[3][z][y%16]|=1<<(15-x%16);
+  for(const [x,y,z] of points)rows[3][z][(y+16)%16]|=1<<(15-(x+16)%16);
   return Buffer.from(JSON.stringify({schema:'fgm-regenerator/loft-terrain-v1',voxel_dimensions_xyz:[16,16,24],terrain_only:true,
     tile:{xyz:tile,record_index:i},part_rows:rows,sources:parts.map(part=>part==='object'
       ?{part,present:true,source_index:2,dataset_label:'SYNTH',local_index:1,loft_ids:Array(12).fill(0)}
@@ -74,7 +76,7 @@ try{
   assert.equal(result.views.length,4);
   const frames=await page.locator('#whole-views canvas').evaluateAll(canvases=>canvases.map(c=>Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data)));
   assert.equal(frames.length,4);
-  const stats=[];
+  const stats=[];let invertedDepthErrors=0;
   for(let i=0;i<4;i++){
     const v=result.views[i];assert.equal(v.model_sha256,result.model_sha256);assert.equal(v.mesh_sha256,result.mesh_sha256);
     assert.deepEqual(v.view.camera,{kind:'orbit-3d',yaw:.35+i*Math.PI/2,pitch:.6,distance:1,focusWorld:{x:0,y:0,z:0}});
@@ -83,11 +85,13 @@ try{
     assert.equal(checked.bad,0,JSON.stringify({i,...checked}));
     assert.ok(checked.checked>10000&&checked.foreground>300&&checked.background>300,JSON.stringify(checked));
     stats.push(checked);
+    invertedDepthErrors+=compare(frames[i],voxels,v.view.camera,420,315,"farthest").bad;
     assert.ok(compare(frames[i],voxels,{...v.view.camera,yaw:v.view.camera.yaw+.27}).bad>100,'wrong camera escaped oracle');
   }
+  assert.ok(invertedDepthErrors>100,"inverted depth escaped oracle");
   assert.equal(new Set(result.views.map(v=>v.rgba_sha256)).size,4,'asymmetric object must have four different views');
   // Independently fill the real through-hole: the resulting wrong geometry MUST differ.
-  const filled=[...voxels];for(let x=15;x<=16;x++)for(let y=15;y<=16;y++)for(let z=2;z<=3;z++)filled.push([x,y,z]);
+  const filled=[...voxels];for(let x=-1;x<=0;x++)for(let y=-1;y<=0;y++)filled.push([x,y,0]);
   assert.ok(compare(frames[0],filled,result.views[0].view.camera).bad>20,'filled hole escaped oracle');
   const expectedDownload=page.waitForEvent('download');await page.locator('#whole-view-downloads button').click();
   const downloaded=await expectedDownload;assert.equal(downloaded.suggestedFilename(),'novel-views.json');
@@ -120,5 +124,5 @@ try{
   assert.equal(await page.locator('#whole-views canvas').count(),0);
   assert.equal(await page.locator('#whole-view-receipt').textContent(),'');
   assert.deepEqual(errors,[]);network.assertLocal();
-  console.log('WHOLE_NOVEL_VIEWS_CPU_ORACLE_PASS',JSON.stringify({stats,cells:4,c05:24576,wrongCameras:4,filledHole:'REJECTED',membership:'REJECTED',gpuCancel:'STALE_DISCARDED',stageA:'NOT_ACCEPTED'}));
+  console.log('WHOLE_NOVEL_VIEWS_CPU_ORACLE_PASS',JSON.stringify({stats,invertedDepthErrors,cells:4,c05:24576,wrongCameras:4,filledHole:'REJECTED',membership:'REJECTED',gpuCancel:'STALE_DISCARDED',stageA:'NOT_ACCEPTED'}));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
