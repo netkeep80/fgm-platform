@@ -1,7 +1,9 @@
 #include "studio-catalog.hpp"
+#include "sprite-facts.hpp"
 
 #include <algorithm>
 #include <array>
+#include <set>
 #include <tuple>
 
 #include <nlohmann/json.hpp>
@@ -190,4 +192,46 @@ Json catalog_map(std::string_view map_id, const Files& files) {
             {"dimensions",{facts.map.sizeX,facts.map.sizeY,facts.map.sizeZ}},
             {"elements",std::move(result)}};
 }
+
+Json catalog_thumbnails(std::string_view dataset, const Files& files, const Json& records,
+                        unsigned slot, unsigned tab_bits, std::size_t palette_index) {
+    require(!dataset.empty() && files.size()==4 &&
+            files.contains("mcd") && files.contains("pck") &&
+            files.contains("tab") && files.contains("palette"),
+            "E_STUDIO_THUMB_BINDING");
+    require(records.is_array() && !records.empty() && records.size()<=8,
+            "E_STUDIO_THUMB_LIMIT");
+    require(slot<=7 && (tab_bits==16 || tab_bits==32), "E_R04_ARGUMENTS");
+    std::set<std::size_t> seen;
+    Json items=Json::array(), colors=nullptr;
+    for (const auto& record_value:records) {
+        require(record_value.is_number_unsigned() &&
+                record_value.get<std::uint64_t>()<=65535, "E_STUDIO_THUMB_RECORD");
+        const auto record=record_value.get<std::size_t>();
+        require(seen.insert(record).second, "E_STUDIO_THUMB_RECORD");
+        try {
+            // The only PCK/TAB decoder is the existing canonical C++ R04 implementation.
+            const auto facts=Json::parse(r04::spriteFacts(
+                files.at("pck"),files.at("tab"),files.at("palette"),files.at("mcd"),
+                tab_bits,palette_index,record));
+            const auto frame_id=facts.at("mcd_frame_slots").at(slot).get<unsigned>();
+            const auto& frames=facts.at("frames");
+            const auto it=std::find_if(frames.begin(),frames.end(),
+                [frame_id](const Json& frame) { return frame.at("id")==frame_id; });
+            require(it!=frames.end(),"E_STUDIO_THUMB_FRAME");
+            if (colors.is_null()) colors=facts.at("palette_rgb8");
+            items.push_back({{"record",record},{"frameId",frame_id},
+                             {"indices_hex",it->at("indices_hex")}});
+        } catch (const std::runtime_error& error) {
+            // Errors belong to the exact record, not to unrelated valid menu entries.
+            const std::string_view code=error.what();
+            require(code.starts_with("E_R04_"),"E_STUDIO_THUMB_FRAME");
+            items.push_back({{"record",record},{"error",error.what()}});
+        }
+    }
+    return {{"schema","fgmr-ufo-catalog-thumbnails/1"},{"dataset",dataset},
+            {"frameSlot",slot},{"palette_rgb8",std::move(colors)},
+            {"items",std::move(items)}};
+}
+
 } // namespace fgmr::studio

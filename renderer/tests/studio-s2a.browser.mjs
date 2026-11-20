@@ -43,6 +43,8 @@ try{
     globalThis.__studioReleaseStep=null;
     globalThis.__studioGateCatalog=false;
     globalThis.__studioReleaseCatalog=null;
+    globalThis.__studioGateThumb=false;globalThis.__studioThumbGated=false;
+    globalThis.__studioReleaseThumb=null;
     globalThis.__studioReads={};
     globalThis.__studioFileReadCalls=[];
     const readFileBytes=File.prototype.arrayBuffer;
@@ -63,6 +65,11 @@ try{
         const request=typeof data==="string"?JSON.parse(data):null;
         if(globalThis.__studioGateCatalog && request?.action==="catalog-map") {
           globalThis.__studioReleaseCatalog=()=>super.postMessage(data,...args);
+          return;
+        }
+        if(globalThis.__studioGateThumb && request?.action==="catalog-thumbnails") {
+          globalThis.__studioThumbGated=true;
+          globalThis.__studioReleaseThumb=()=>super.postMessage(data,...args);
           return;
         }
         if(globalThis.__studioGateStep && request?.action==="step") {
@@ -451,10 +458,49 @@ try{
       assert.match(await page.locator("#status").textContent(),/E_R02_MAP_LENGTH/);
       const before=await page.evaluate(()=>window.__studioReads);
       await mapMenu.selectOption("CULTA00");
-      const door=elementMenu.getByRole("option",{name:/Дверь/});
-      await door.waitFor({state:"attached"});
-      const key=await door.getAttribute("value");
-      await elementMenu.selectOption(key);
+      await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
+      assert.equal(await elementMenu.getAttribute("role"),"combobox");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      await elementMenu.click();
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"true");
+      const item=dataset=>page.locator('#catalog-element-options [role="option"]')
+        .filter({hasText:new RegExp(dataset+" №")}).first();
+      const rgb=async (row,x)=>row.locator("canvas").evaluate((canvas,x)=>{
+        const v=canvas.getContext("2d").getImageData(x,0,1,1).data;
+        return Array.from(v);
+      },x);
+      await page.waitForFunction(()=>{
+        const rows=[...document.querySelectorAll('#catalog-element-options [role="option"]')];
+        return rows.length>=4 && rows.every(r=>!r.querySelector("canvas").hidden);
+      },null,{timeout:30000});
+      assert.deepEqual(await rgb(item("BLANKS"),5),[0,0,252,255]);
+      assert.deepEqual(await rgb(item("CULTIVAT"),10),[0,252,0,255]);
+      const fullDoor=page.locator('#catalog-element-options [role="option"]')
+        .filter({hasText:/Дверь/}).filter({hasNotText:/правая половина/}).first();
+      assert.deepEqual(await rgb(fullDoor,5),[252,0,0,255]);
+      assert.deepEqual(await rgb(fullDoor,20),[252,0,0,255]);
+      const rightDoor=page.locator('#catalog-element-options [role="option"]')
+        .filter({hasText:/Дверь.*правая половина/}).first();
+      assert.deepEqual(await rgb(rightDoor,5),[0,0,0,0]);
+      assert.deepEqual(await rgb(rightDoor,20),[252,0,0,255]);
+      console.log("STUDIO_R04_THUMB_PRESELECT_PIXELS_PASS");
+      assert.equal(await elementMenu.evaluate(el=>el.value),"");
+      await elementMenu.press("End");
+      assert.ok(await elementMenu.getAttribute("aria-activedescendant"));
+      await elementMenu.press("Home");
+      await elementMenu.press("Escape");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      assert.equal(await elementMenu.evaluate(el=>el.value),"");
+      await elementMenu.press("ArrowDown");
+      await elementMenu.press("Enter");
+      assert.notEqual(await elementMenu.evaluate(el=>el.value),"");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      assert.equal(await page.locator("#catalog-element-icon").isVisible(),true);
+      await elementMenu.click();
+      const door=page.locator('#catalog-element-options [role="option"]').filter({hasText:/Дверь/}).first();
+      await door.waitFor({state:"visible"});
+      const key=await door.getAttribute("data-index");
+      await door.click();
       await page.locator("#run").click();
       await waitState("COMPLETED");
       metrics=JSON.parse(await page.locator("#metrics").textContent());
@@ -480,9 +526,107 @@ try{
         try {window.__studioReleaseCatalog?.()} catch {/* terminated Worker */}
       });
       await mapMenu.selectOption("CULTA00");
-      await door.waitFor({state:"attached"});
-      assert.equal(await door.getAttribute("value"),key);
+      await elementMenu.click();
+      const doorAfter=page.locator('#catalog-element-options [role="option"]').filter({hasText:/Дверь/}).first();
+      await doorAfter.waitFor({state:"visible"});
+      assert.equal(await doorAfter.getAttribute("data-index"),key);
+      await elementMenu.press("Escape");
       console.log("STUDIO_UFO_CATALOG_BROWSER_PASS");
+
+      // With a fresh selected map, gate a real thumbnail worker before its R04 action.
+      await mapMenu.selectOption("CULTA00");
+      await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
+      await page.evaluate(()=>{window.__studioGateThumb=true;window.__studioThumbGated=false;});
+      await elementMenu.click();
+      await page.waitForFunction(()=>window.__studioThumbGated,null,{timeout:30000});
+      await mapMenu.selectOption("CULTA01");
+      assert.equal(await elementMenu.isDisabled(),true);
+      assert.equal(await page.locator("#catalog-element-options").isVisible(),false);
+      await page.evaluate(()=>{
+        window.__studioGateThumb=false;
+        try{window.__studioReleaseThumb?.()}catch{/* stale Worker terminated */}
+      });
+      await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled,
+        null,{timeout:30000});
+      assert.equal(await elementMenu.evaluate(el=>el.value),"");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      assert.equal(await page.locator("#catalog-element-icon").isVisible(),false);
+      console.log("STUDIO_R04_THUMB_STALE_MAP_PASS");
+
+      for(const [fault,code] of [
+        ["tab","E_R04_TAB_OFFSET"],["pck","E_R04_FRAME_TERMINATOR"],
+        ["palette","E_R04_PALETTE_RGB6"]
+      ]){
+        const badRoot=await mkdtemp(join(tmpdir(),"studio-ufo-thumbs-"));
+        try{
+          await writeStudioUfoCatalogFixture(badRoot,fault);
+          await page.locator("#directory").setInputFiles(badRoot);
+          await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
+          await mapMenu.selectOption("CULTA00");
+          await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
+          await elementMenu.click();
+          await page.waitForFunction(expected=>
+            [...document.querySelectorAll(".catalog-error")].some(x=>x.textContent===expected),
+            code,{timeout:30000});
+          assert.ok(await page.locator(".catalog-error").filter({hasText:code}).count()>0);
+          await elementMenu.press("Escape");
+        }finally{await rm(badRoot,{recursive:true,force:true})}
+      }
+      console.log("STUDIO_R04_THUMB_CORRUPT_ASSETS_PASS");
+
+      // Large-list UX is a separate synthetic DOM stress test. Actual pixel
+      // provenance was already proved above with real C++/WASM on local files.
+      const stress=await page.evaluate(async()=>{
+        const {ElementSpritePicker}=await import("./ufo-catalog.mjs");
+        const host=document.createElement("div");
+        host.id="sprite-picker-stress";
+        host.className="catalog-picker";
+        host.innerHTML='<button type="button" id="stress-combo"><canvas width="32" height="40" hidden></canvas><span id="catalog-element-text"></span></button>'+
+          '<div class="catalog-list" id="stress-list" role="listbox" aria-label="600 test entries" hidden></div>';
+        document.body.append(host);
+        const button=host.querySelector("#stress-combo");
+        const listbox=host.querySelector("#stress-list");
+        let maximumRequestedBatch=0,requests=0;
+        const picker=new ElementSpritePicker({button,listbox,onChoose:()=>{},
+          decode:async (dataset,records)=>{
+            if(dataset!=="STRESS")throw Error("E_STUDIO_THUMB_BINDING");
+            maximumRequestedBatch=Math.max(maximumRequestedBatch,records.length);
+            requests++;
+            return {schema:"fgmr-ufo-catalog-thumbnails/1",dataset,frameSlot:0,
+              palette_rgb8:Array.from({length:256},()=>[0,0,0]),
+              items:records.map(record=>({record,frameId:0,indices_hex:"00".repeat(1280)}))};
+          }});
+        const entries=Array.from({length:600},(_,i)=>[
+          "stress:"+i,{name:"Объект",dataset:"STRESS",record:i,part:"object",
+                        rightHalf:false,tile:[0,0,0]}]);
+        picker.load(entries);
+        picker.open();
+        const initial=listbox.querySelectorAll('[role="option"]').length;
+        listbox.scrollTop=500*64;
+        picker.render();
+        const afterScroll=[...listbox.querySelectorAll('[role="option"]')]
+          .map(el=>Number(el.dataset.index));
+        const cacheLimitProbe=Array.from({length:80},(_,i)=>i);
+        for(const i of cacheLimitProbe)picker.remember("stress-cache-"+i,{error:"E_R04_FRAME_INDEX"});
+        const bound=picker.cache.size;
+        // Check Home/End without creating all 600 option nodes.
+        button.dispatchEvent(new KeyboardEvent("keydown",{key:"End",bubbles:true,cancelable:true}));
+        const active=picker.active;
+        const afterEnd=listbox.querySelectorAll('[role="option"]').length;
+        button.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true,cancelable:true}));
+        const closed=listbox.hidden;
+        picker.reset();host.remove();
+        return {initial,afterScroll,bound,active,afterEnd,closed,maximumRequestedBatch,requests};
+      });
+      assert.ok(stress.initial>0 && stress.initial<=16);
+      assert.ok(stress.afterScroll.length>0 && stress.afterScroll.length<=16);
+      assert.ok(stress.afterScroll.some(index=>index>=498&&index<=502));
+      assert.equal(stress.bound,48);
+      assert.equal(stress.active,599);
+      assert.ok(stress.afterEnd>0&&stress.afterEnd<=16);
+      assert.equal(stress.closed,true);
+      assert.ok(stress.maximumRequestedBatch<=8);
+      console.log("STUDIO_R04_THUMB_VIRTUALIZED_600_PASS",JSON.stringify(stress));
     } finally {
       await rm(rootDir,{recursive:true,force:true});
     }

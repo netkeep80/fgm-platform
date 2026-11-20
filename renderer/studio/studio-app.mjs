@@ -1,7 +1,7 @@
 // R02/R03/R04/R05/R06/C05 execute in pinned WASM.
 import { syntheticFixture } from "./synthetic.mjs";
 import { paintR05, sha256, verifyR05Observation } from "./r05-view.mjs";
-import { indexGameFolder, resolveFile, catalogElementKey } from "./ufo-catalog.mjs";
+import { indexGameFolder, resolveFile, catalogElementKey, ElementSpritePicker } from "./ufo-catalog.mjs";
 const CORE = "ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b";
 const MAX = 4 * 1024 * 1024, CHUNK = 16384;
 const $ = id => document.getElementById(id);
@@ -9,6 +9,10 @@ const fields = ["map","loft","pck","tab","palette"];
 let selected = new Map(), activeWorker = null, activeController = null, generation = 0, result = null;
 let sourceMode = "empty", catalog = null, inspectedMap = null;
 const mapMenu = $("catalog-map"), elementMenu = $("catalog-element");
+const thumbnailPicker = new ElementSpritePicker({
+  button:elementMenu,listbox:$("catalog-element-options"),decode:decodeCatalogSprites,
+  onChoose:()=>elementMenu.dispatchEvent(new Event("change",{bubbles:true}))
+});
 let yaw = -0.78, pitch = .57, zoom = 1, mesh = null, drag = null, observation = null;
 const view = $("preview"), context = view.getContext("2d");
 const modeControl = $("view-mode");
@@ -44,8 +48,7 @@ function invalidateRun() {
 }
 function resetElements() {
   inspectedMap=null;
-  elementMenu.replaceChildren(new Option("— выбрать элемент —",""));
-  elementMenu.disabled=true;
+  thumbnailPicker.reset();
 }
 function resetCatalog() {
   catalog=null;
@@ -308,11 +311,7 @@ async function inspectSelectedMap() {
       throw Error("E_STUDIO_CATALOG_SCHEMA");
     const elements=new Map(report.elements.map(entry=>[catalogElementKey(map.id,entry),entry]));
     inspectedMap={inputs,datasets,elements};
-    for(const [key,entry] of elements) {
-      const variant=entry.rightHalf?" · правая половина кадра":"";
-      elementMenu.add(new Option(entry.name+" ("+entry.dataset+" № "+entry.record+")"+variant,key));
-    }
-    elementMenu.disabled=!elements.size;
+    thumbnailPicker.load([...elements],{slot:0,paletteIndex:result.paletteIndex});
     $("catalog-summary").textContent=elements.size ? "Выберите элемент для реконструкции." : "В этой карте нет распознанных элементов.";
     setState("READY","Элементы карты готовы");
   } catch(error) {
@@ -321,6 +320,35 @@ async function inspectSelectedMap() {
     closeWorker(worker);
   }
 }
+async function decodeCatalogSprites(dataset,records,signal) {
+  const epoch=generation,snapshot=catalog,current=inspectedMap;
+  if(!snapshot || !current || signal.aborted || !current.datasets.some(x=>x.id===dataset))
+    throw Error("E_STUDIO_CANCELLED");
+  const terrain=snapshot.result.terrain[dataset];
+  if(!terrain)throw Error("E_STUDIO_THUMB_BINDING");
+  const id=current.datasets.find(x=>x.id===dataset).file;
+  const inputs=new Map([
+    ["mcd",current.inputs.get(id)],
+    ["pck",resolveFile(snapshot.index,terrain.pck)],
+    ["tab",resolveFile(snapshot.index,terrain.tab)],
+    ["palette",resolveFile(snapshot.index,snapshot.result.palette)]
+  ]);
+  checkInputSizes(inputs);
+  const worker=new Worker("./engine/worker.mjs",{type:"module"});
+  const call=connection(worker,signal);
+  try{
+    await appendInputs(call,inputs,epoch);
+    ensureCurrent(epoch);
+    const {thumbnails}=await call({
+      action:"catalog-thumbnails",dataset,records,frameSlot:0,
+      tabBits:snapshot.result.tabBits,paletteIndex:snapshot.result.paletteIndex
+    });
+    ensureCurrent(epoch);
+    if(signal.aborted)throw Error("E_STUDIO_CANCELLED");
+    return thumbnails;
+  }finally{worker.terminate()}
+}
+
 function catalogInputSpec() {
   const element=inspectedMap?.elements.get(elementMenu.value);
   if(!element || !catalog)throw Error("E_STUDIO_CATALOG_BINDING");
@@ -340,6 +368,7 @@ function catalogInputSpec() {
 }
 mapMenu.addEventListener("change",()=>void inspectSelectedMap());
 elementMenu.addEventListener("change",()=>{
+  thumbnailPicker.cancelPending();
   invalidateRun();
   const element=inspectedMap?.elements.get(elementMenu.value);
   $("catalog-summary").textContent=element?element.name+" · экземпляров на карте: "+element.instances+".":"Выберите элемент.";

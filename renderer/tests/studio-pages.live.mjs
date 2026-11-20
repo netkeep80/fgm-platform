@@ -64,7 +64,8 @@ export async function verifyPublishedAssets({site, hashes, revision, version, re
   ensure(files.get("index.html").includes(Buffer.from(`<code id="studio-version" title="${title}">Версия ${version}</code>`)), "VERSION_BADGE");
   console.log("PLATFORM_HTTP_ASSETS_PASS: exact Git revision/TREE, version and all independently expected hashes");
   const wholeNovelViews=git('ls-tree','--name-only',revision,'requirements/renderer/FGMV-NOVEL-001.rg.yaml')!=='';
-  return {site, hashes, revision, tree, version, title, cacheKey, wholeNovelViews};
+  const spritePicker=files.get('index.html').includes(Buffer.from('id="catalog-element-options"'));
+  return {site, hashes, revision, tree, version, title, cacheKey, wholeNovelViews, spritePicker};
 }
 
 export async function smokeStudio(verified) {
@@ -106,9 +107,30 @@ export async function smokeStudio(verified) {
       await maps.selectOption("CULTA00");
       assert.equal(await maps.locator("option[value=INTICON]").count(), 0);
       const elements = page.locator("#catalog-element");
-      const door = elements.getByRole("option", {name: /Дверь/});
-      await door.waitFor({state: "attached"});
-      await elements.selectOption(await door.getAttribute("value"));
+      if (verified.spritePicker) {
+        assert.equal(await elements.getAttribute("role"),"combobox");
+        await elements.click();
+        const door = page.locator('#catalog-element-options [role="option"]')
+          .filter({hasText:/Дверь/}).first();
+        await door.waitFor({state:"visible"});
+        await page.waitForFunction(()=>{
+          const rows=[...document.querySelectorAll('#catalog-element-options [role="option"]')];
+          return rows.length>0 && rows.some(x=>/Дверь/.test(x.textContent) &&
+            !x.querySelector("canvas").hidden);
+        },null,{timeout:30000});
+        const pixel=await door.locator("canvas").evaluate(canvas=>
+          Array.from(canvas.getContext("2d").getImageData(20,0,1,1).data));
+        assert.deepEqual(pixel,[252,0,0,255]);
+        await door.click();
+        assert.equal(await elements.getAttribute("aria-expanded"),"false");
+        assert.equal(await page.locator("#catalog-element-icon").isVisible(),true);
+        console.log("PLATFORM_HTTP_R04_CATALOG_THUMB_PASS");
+      } else {
+        // Old signed releases retain the historical native select, not this new UI.
+        const door = elements.getByRole("option", {name: /Дверь/});
+        await door.waitFor({state: "attached"});
+        await elements.selectOption(await door.getAttribute("value"));
+      }
       const result = await reconstruct();
       assert.equal(result.source.dataset_label, "BARN");
       assert.equal(result.source.local_index, 0);
