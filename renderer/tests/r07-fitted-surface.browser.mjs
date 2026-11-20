@@ -42,6 +42,14 @@ const importFit=async bytes=>{
 };
 try{
   await page.addInitScript(()=>{
+    const arrayBuffer=File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer=async function(...args){
+      const bytes=await arrayBuffer.apply(this,args);
+      if(this.name==='fit-preview.json'&&window.__holdFitRead){
+        window.__holdFitRead=false;window.__fitReadHeld=true;await new Promise(r=>window.__releaseFitRead=r);
+      }
+      return bytes;
+    };
     const original=GPUBuffer.prototype.mapAsync;
     GPUBuffer.prototype.mapAsync=async function(...args){
       await original.apply(this,args);
@@ -81,17 +89,37 @@ try{
     assert.equal(checked.bad,0,JSON.stringify({i,...checked}));assert.ok(checked.checked>13000&&checked.foreground>500);
     stats.push(checked);
     oldMeshErrors+=compareBoxes(frames[i],expected.baseline_boxes,v.view.camera).bad;
-    filledHoleErrors+=compareBoxes(frames[i],[...expected.boxes,[[14.49,6.49,5.51],[17.51,9.51,10.49]]],v.view.camera).bad;
+    filledHoleErrors+=compareBoxes(frames[i],[...expected.boxes,[[14.49,6.49,5.51],[17.51,9.51,7.49]]],v.view.camera).bad;
     assert.ok(compareBoxes(frames[i],expected.boxes,{...v.view.camera,yaw:v.view.camera.yaw+.27}).bad>100,'wrong camera escaped');
   }
-  assert.ok(oldMeshErrors>100&&filledHoleErrors>100,JSON.stringify({oldMeshErrors,filledHoleErrors}));
+  assert.ok(oldMeshErrors>100&&filledHoleErrors>20,JSON.stringify({oldMeshErrors,filledHoleErrors}));
   assert.equal(new Set(result.views.map(v=>v.rgba_sha256)).size,4);
   // The downloaded mesh bytes are the same native/WASM-derived geometry shown by the renderer.
   for(const [name,digest] of [['model.fgm.json',expected.model_sha256],['preview.obj',expected.mesh_sha256]]){
     const pending=page.waitForEvent('download');await page.locator('#whole-downloads').getByRole('button',{name,exact:true}).click();
     const download=await pending;assert.equal(sha(await readFile(await download.path())),digest);
   }
-  await mkdir('build',{recursive:true});await page.locator('#view').screenshot({path:'build/r07-fitted-surface.png'});
+  await mkdir('build',{recursive:true});await page.locator('#whole-views').screenshot({path:'build/r07-fitted-surface.png'});
+  // A selected file still being read must never silently select the baseline path.
+  await page.evaluate(()=>window.__holdFitRead=true);
+  await page.locator('#whole-fit').setInputFiles({name:'fit-preview.json',mimeType:'application/json',buffer:fitted});
+  await page.waitForFunction(()=>window.__fitReadHeld);
+  assert.equal(await page.locator('#whole-run').isDisabled(),true);
+  assert.equal(await page.locator('#whole-fit-expected').isDisabled(),true);
+  await page.locator('#whole-material').fill('stone'); // invalidates this pending input epoch
+  await page.evaluate(()=>window.__releaseFitRead());
+  await page.waitForFunction(()=>document.querySelector('#whole-status').textContent.includes('E_WHOLE_FIT_RESELECT'));
+  assert.equal(await page.locator('#whole-run').isDisabled(),true);
+  assert.equal(await page.locator('#whole-views canvas').count(),0);
+  // Explicitly choosing baseline discards a pending R07 selection and its late read.
+  await page.evaluate(()=>{window.__holdFitRead=true;window.__fitReadHeld=false});
+  await page.locator('#whole-fit').setInputFiles({name:'fit-preview.json',mimeType:'application/json',buffer:fitted});
+  await page.waitForFunction(()=>window.__fitReadHeld);
+  await page.locator('#whole-fit-clear').click();await page.evaluate(()=>window.__releaseFitRead());
+  await page.waitForTimeout(50);assert.equal(await page.locator('#whole-run').isDisabled(),false);
+  assert.equal(await page.locator('#whole-fit').inputValue(),'');
+  await run();assert.equal((await receipt()).model_sha256,expected.baseline_sha256);
+  await importFit(fitted);
   // Wrong independent digest cannot reach the worker result; old frames are removed.
   await page.locator('#whole-fit-expected').fill('0'.repeat(64));await run();
   assert.match(await page.locator('#whole-status').textContent(),/^ERROR.*E_WHOLE_FIT_DIGEST/);
@@ -113,5 +141,5 @@ try{
   assert.deepEqual(errors,[]);network.assertLocal();
   console.log('R07_FITTED_SURFACE_WASM_WEBGPU_PASS',JSON.stringify({stats,oldMeshErrors,filledHoleErrors,
     c05:12288,before:expected.before.micro,after:expected.after.micro,shaBinding:'native_WASM_download_PARITY',
-    cancellation:'STALE_DISCARDED',stageA:'NOT_ACCEPTED',privateAcceptance:'PENDING'}));
+    cancellation:'STALE_DISCARDED',pendingFitRead:'NO_SILENT_BASELINE_FALLBACK',stageA:'NOT_ACCEPTED',privateAcceptance:'PENDING'}));
 }finally{await browser.close();await new Promise(r=>server.close(r));await rm(temp,{recursive:true,force:true});}

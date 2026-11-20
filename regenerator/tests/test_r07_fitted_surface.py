@@ -15,9 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import r07_whole_joint_fit as joint
 
 STUDIO, OBSERVER = map(Path, sys.argv[1:3])
-BOXES = [([12, 4, 6], [20, 6, 10]), ([12, 6, 6], [14, 12, 10]),
-         ([18, 6, 6], [20, 12, 10]), ([14, 10, 6], [18, 12, 10]),
-         ([12, 4, 10], [14, 6, 13])]
+BOXES = [([12, 4, 6], [20, 6, 7]), ([12, 6, 6], [14, 12, 7]),
+         ([18, 6, 6], [20, 12, 7]), ([14, 10, 6], [18, 12, 7]),
+         ([12, 4, 7], [14, 6, 10])]
 PARTS = ["floor", "west_wall", "north_wall", "object"]
 CORE = "ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b"
 
@@ -168,7 +168,7 @@ def geometry_oracle(obj, boxes):
                 expected_area += size[(axis+1)%3]*size[(axis+2)%3]
     assert abs(area-expected_area) < 1e-7, (area, expected_area)
     assert abs(volume-expected_volume) < 1e-7, (volume, expected_volume)
-    assert not inside([16, 8, 8], boxes), "fixture through-hole filled"
+    assert not inside([16, 8, 6.5], boxes), "fixture through-hole filled"
     # Independent slab distances vs actual triangle ray intersections, including
     # background/hole rays, nearest occlusion and the farthest boundary.
     rays = 0
@@ -274,7 +274,8 @@ def main(root):
         reject("fabricated metric", bad, "E_FIT_METRICS")
         for delta, code in ((.98, "E_B0_C05_ALL_CELLS_MISMATCH"), (-.49, "E_FIT_REGRESSION")):
             bad = copy.deepcopy(payload)
-            changed = joint.candidate(model, len(BOXES), delta, package)
+            changed = joint.candidate(model, len(BOXES), (-.49, -.49, 0) if delta < 0 else delta,
+                                      package, kind="axis_extent" if delta < 0 else "isotropic_extent")
             bad["winner_package"] = changed.decode()
             bad["winner_sha256"] = joint.sha(changed)
             reject("candidate "+str(delta), bad, code)

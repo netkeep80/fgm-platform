@@ -30,6 +30,7 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 #status[data-state=COMPLETED]{border-color:#3b9a79}#status[data-state=ERROR]{border-color:#c47459}
 #downloads{display:flex;flex-wrap:wrap;gap:6px}#downloads button,#whole-downloads button{font-size:12px}#whole-downloads{display:flex;flex-wrap:wrap;gap:6px}#whole-status[data-state=ERROR]{color:#ffad91}#whole-status[data-state=COMPLETED]{color:#91d6bb}
 #whole-views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px}#whole-views figure{margin:0}#whole-views canvas{min-height:0;max-height:none;width:100%;aspect-ratio:4/3}#whole-views figcaption{font-size:12px;color:#bed0e0}#whole-view-status{padding:12px;color:#bed0e0}
+.r07-observation{display:flex;gap:6px;flex-wrap:wrap}.r07-observation figure{margin:0}.r07-observation figcaption{font-size:12px}.r07-observation canvas{width:80px;height:100px;min-height:0;flex:none}
 .catalog-picker{position:relative;min-width:0}
 #catalog-element{display:flex;align-items:center;gap:8px;text-align:left;width:100%;min-height:54px;background:#1a2b3a;border-color:#526b83}
 #catalog-element-text{flex:1;overflow-wrap:anywhere}
@@ -95,6 +96,7 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 <label for="whole-fit">Результат native R07 (необязательно): fit-preview.json</label><input id="whole-fit" type="file" accept=".json">
 <label for="whole-fit-expected">SHA-256 файла результата native R07</label><input id="whole-fit-expected" type="text" spellcheck="false">
 <p id="whole-fit-source">Будет показана исходная модель BuildWholeObject.</p>
+<button id="whole-fit-clear" type="button" disabled>Использовать исходную модель</button>
 <div class="row"><button id="whole-run" class="primary" type="button" disabled>Собрать объект</button><button id="whole-cancel" type="button" disabled>Прервать</button></div>
 <p id="whole-status" data-state="READY" role="status">READY · выберите входные данные</p>
 <label for="whole-cell">Производный SliceByCell</label>

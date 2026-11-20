@@ -8,6 +8,7 @@ const SHA=/^[a-f0-9]{64}$/;
 const encoder=new TextEncoder();
 let inputs=null,worker=null,controller=null,epoch=0,output=null,session=null;
 let fittedInput=null;
+let fittedState="none",fitSelection=0;
 let sceneRevision=null;
 let yaw=-0.8,pitch=0.6,zoom=1,drag=null;
 let canvas=$("whole-preview"),ctx=canvas.getContext("2d");
@@ -16,8 +17,10 @@ function status(state,message){
   $("whole-status").textContent=state+" · "+message;
 }
 function enable(){
-  $("whole-run").disabled=!inputs||!!worker;
+  $("whole-run").disabled=!inputs||!!worker||!["none","ready"].includes(fittedState);
   $("whole-cancel").disabled=!worker;
+  $("whole-fit-expected").disabled=fittedState==="loading";
+  $("whole-fit-clear").disabled=fittedState==="none";
 }
 function showWhole(show){
   canvas.hidden=!show;
@@ -159,21 +162,38 @@ $("whole-files").addEventListener("change",async event=>{
   event.target.value="";
 });
 function clearFitted(){
+  ++fitSelection;fittedState="none";
   fittedInput=null;$("whole-fit").value="";$("whole-fit-expected").value="";
   $("whole-fit-source").textContent="Будет показана исходная модель BuildWholeObject.";
 }
+$("whole-fit-clear").addEventListener("click",()=>{
+  reset();clearFitted();status("READY","Выбрана исходная модель BuildWholeObject");enable();
+});
 $("whole-fit").addEventListener("change",async event=>{
   reset();fittedInput=null;$("whole-fit-expected").value="";
-  const current=epoch,file=event.target.files?.[0];
+  const current=epoch,selection=++fitSelection,file=event.target.files?.[0];
+  fittedState=file?"loading":"none";enable();
+  if(file)status("VALIDATING","Чтение выбранного результата native R07");
+  $("whole-fit-source").textContent=file?"Чтение результата native R07…":"Будет показана исходная модель BuildWholeObject.";
   try{
     if(!file){clearFitted();status("READY","Выбрана исходная модель");return}
     if(file.size<1||file.size>262144)throw Error("E_WHOLE_FIT_LIMIT");
     const bytes=new Uint8Array(await file.arrayBuffer());
     if(current!==epoch)return;
-    fittedInput=bytes;
+    fittedInput=bytes;fittedState="ready";
     $("whole-fit-source").textContent="Выбран native R07; укажите независимо записанный SHA-256.";
     status("READY","R07-кандидат выбран; baseline будет построен заново и сверён");enable();
   }catch(e){if(current===epoch)status("ERROR",e.message)}
+  finally{
+    if(selection===fitSelection){
+      if(fittedState==="loading"){
+        fittedState="invalid";
+        $("whole-fit-source").textContent="Результат R07 не прочитан; выберите файл заново или исходную модель.";
+        if(current!==epoch)status("ERROR","E_WHOLE_FIT_RESELECT");
+      }
+      enable();
+    }
+  }
 });
 for(const id of ["whole-expected","whole-material","whole-fit-expected"]){
   $(id).addEventListener("input",()=>{
@@ -394,14 +414,17 @@ function showFitObservations(fit){
   for(const obs of fit.observations){
     const title=document.createElement("p");title.textContent="Клетка "+obs.tile.join(",")+" · исходный силуэт / до R07 / после R07";
     $("whole-fit-observations").append(title);
-    for(const key of ["observed_pixels_xy","before_pixels_xy","after_pixels_xy"]){
+    const row=document.createElement("div");row.className="r07-observation";
+    for(const [key,label] of [["observed_pixels_xy","Исходный"],["before_pixels_xy","До R07"],["after_pixels_xy","После R07"]]){
       const image=document.createElement("canvas");image.width=96;image.height=120;
-      image.style.width="96px";image.style.minHeight="0";image.setAttribute("aria-label",key);
+      image.setAttribute("aria-label",key);
       const context=image.getContext("2d");context.fillStyle="#101b2b";context.fillRect(0,0,96,120);
       context.fillStyle=key==="observed_pixels_xy"?"#e6c478":"#91d6bb";
       for(const [x,y] of obs[key]??[])context.fillRect((x-obs.sprite_origin_xy[0])*3,(y-obs.sprite_origin_xy[1])*3,3,3);
-      $("whole-fit-observations").append(image);
+      const figure=document.createElement("figure"),caption=document.createElement("figcaption");
+      caption.textContent=label;figure.append(image,caption);row.append(figure);
     }
+    $("whole-fit-observations").append(row);
   }
 }
 $("whole-cell").addEventListener("change",slice);
