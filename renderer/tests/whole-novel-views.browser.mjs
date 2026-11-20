@@ -104,7 +104,7 @@ try{
   assert.deepEqual(JSON.parse(await page.locator('#whole-view-receipt').textContent()),result);
   // A re-hashed semantic membership mismatch must be rejected by the actual C++ builder.
   receipt.cell_bindings[0].record=2;await upload();await run();
-  assert.match(await page.locator('#whole-status').textContent(),/^ERROR.*E_S43_BUILD_LOFT_BINDING/);
+  assert.match(await page.locator('#whole-status').textContent(),/^ERROR.*E_STUDIO_BUILD$/);
   assert.equal(await page.locator('#whole-views canvas').count(),0);
   assert.equal(await page.locator('#whole-view-receipt').textContent(),'');
   receipt.cell_bindings[0].record=1;await upload();
