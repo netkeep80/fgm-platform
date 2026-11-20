@@ -483,6 +483,7 @@ try{
         .filter({hasText:/Дверь.*правая половина/}).first();
       assert.deepEqual(await rgb(rightDoor,5),[0,0,0,0]);
       assert.deepEqual(await rgb(rightDoor,20),[252,0,0,255]);
+      console.log("STUDIO_R04_THUMB_PRESELECT_PIXELS_PASS");
       assert.equal(await elementMenu.evaluate(el=>el.value),"");
       await elementMenu.press("End");
       assert.ok(await elementMenu.getAttribute("aria-activedescendant"));
