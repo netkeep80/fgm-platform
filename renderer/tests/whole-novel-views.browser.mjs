@@ -93,6 +93,8 @@ try{
   // Independently fill the real through-hole: the resulting wrong geometry MUST differ.
   const filled=[...voxels];for(let x=-1;x<=0;x++)for(let y=-1;y<=0;y++)filled.push([x,y,0]);
   assert.ok(compare(frames[0],filled,result.views[0].view.camera).bad>20,'filled hole escaped oracle');
+  console.log('WHOLE_NOVEL_VIEWS_CPU_COMPARISON_PASS',JSON.stringify({stats,invertedDepthErrors}));
+  await page.locator('#whole-panel details summary').click();
   const expectedDownload=page.waitForEvent('download');await page.locator('#whole-view-downloads button').click();
   const downloaded=await expectedDownload;assert.equal(downloaded.suggestedFilename(),'novel-views.json');
   assert.deepEqual(JSON.parse(await readFile(await downloaded.path(),'utf8')),result);
