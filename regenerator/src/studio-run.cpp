@@ -2,6 +2,7 @@
 #include "studio-catalog.hpp"
 #include "sha256.hpp"
 #include "whole-sampling.hpp"
+#include "fitted-surface.hpp"
 
 #include <algorithm>
 #include <array>
@@ -57,15 +58,15 @@ constexpr std::array build_artifacts{
     std::pair{"input-proof.json",&WholeBuildResult::input_proof},
 };
 
-BuildSpec build_spec(const Json& input, const Json& budget, const Files& staged) {
-    require(fields(input,{"receipt","lofts"}),"E_STUDIO_BINDING");
+BuildSpec build_spec(const Json& input, const Json& budget, const Files& staged,bool fitted=false) {
+    require(fitted?fields(input,{"receipt","lofts","fitted"}):fields(input,{"receipt","lofts"}),"E_STUDIO_BINDING");
     const auto& lofts=input["lofts"];
     require(lofts.is_array() && lofts.size()>=whole_build_min_cells &&
             lofts.size()<=whole_build_max_cells,"E_STUDIO_LIMIT");
     require(budget.is_number_unsigned() && budget==voxel_count*lofts.size(),"E_STUDIO_BUDGET");
     std::size_t total=0;
     std::set<std::string> used;
-    const auto binding=[&](const Json& alias) {
+    const auto binding=[&](const Json& alias,std::size_t limit=build_source_limit) {
         require(fields(alias,{"file","sha256"}) && alias["sha256"].is_string(),"E_STUDIO_BINDING");
         auto file=identifier(alias["file"]);
         const auto& sha=alias["sha256"].get_ref<const std::string&>();
@@ -75,12 +76,13 @@ BuildSpec build_spec(const Json& input, const Json& budget, const Files& staged)
         const auto entry=staged.find(file);
         require(entry!=staged.end() && used.insert(file).second,"E_STUDIO_BINDING");
         const auto size=entry->second.size();
-        require(size<=build_source_limit && size<=build_input_limit-total,"E_STUDIO_LIMIT");
+        require(size<=limit && size<=(fitted?2*build_input_limit:build_input_limit)-total,"E_STUDIO_LIMIT");
         total+=size;
         return BuildBinding{std::move(file),sha};
     };
     BuildSpec spec{binding(input["receipt"]),{}};
     for (const auto& loft : lofts) spec.lofts.push_back(binding(loft));
+    if(fitted)spec.fitted=binding(input["fitted"],256*1024);
     require(used.size()==staged.size(),"E_STUDIO_BINDING");
     return spec;
 }
@@ -93,6 +95,7 @@ WholeBuildResult build_from_files(const BuildSpec& spec, const Files& files, std
     std::vector<WholeBuildSource> lofts;
     for (const auto& item : spec.lofts) lofts.push_back(source(item));
     auto result=build_whole_object(source(spec.receipt),lofts,material,build_limits);
+    if(spec.fitted)result=fitted_surface(std::move(result),source(*spec.fitted));
     std::size_t total=0;
     for (const auto& item : build_artifacts) total+=(result.*item.second).size();
     require(total<=build_output_limit,"E_STUDIO_LIMIT");
@@ -304,7 +307,8 @@ std::string Runner::call(std::string_view input) {
                 staged_size_=0;
                 return begin_run();
             }
-            if (spec.is_object() && spec.contains("algorithm") && spec["algorithm"]=="r06-whole-build/1") {
+            if (spec.is_object() && spec.contains("algorithm") &&
+                (spec["algorithm"]=="r06-whole-build/1"||spec["algorithm"]=="r07-whole-preview/1")) {
                 require(fields(spec,{"algorithm","coreRevision","budget","sourceBindings","parameters"}),
                         "E_STUDIO_REQUEST");
                 require(spec["coreRevision"]==FGMR_CORE_REVISION,"E_STUDIO_VERSION");
@@ -316,7 +320,7 @@ std::string Runner::call(std::string_view input) {
                         std::ranges::all_of(next.material,[](char ch) {
                             return (ch>='a'&&ch<='z')||(ch>='0'&&ch<='9')||ch=='_';
                         }),"E_STUDIO_MATERIAL");
-                next.build=build_spec(spec["sourceBindings"],spec["budget"],staged_);
+                next.build=build_spec(spec["sourceBindings"],spec["budget"],staged_,spec["algorithm"]=="r07-whole-preview/1");
                 next.files=std::move(staged_);
                 staged_.clear();
                 staged_size_=0;
@@ -452,8 +456,9 @@ std::string Runner::call(std::string_view input) {
                 try {
                     build_result_=build_from_files(*spec.build,spec.files,spec.material);
                 } catch (const std::runtime_error& error) {
-                    return failure(std::string_view(error.what())=="E_S43_BUILD_LIMIT"
-                                   ? "E_STUDIO_LIMIT" : "E_STUDIO_BUILD");
+                    const std::string_view code=error.what();
+                    if(code.starts_with("E_FIT_")||code.starts_with("E_B0_"))return failure(code.data());
+                    return failure(code=="E_S43_BUILD_LIMIT" ? "E_STUDIO_LIMIT" : "E_STUDIO_BUILD");
                 }
                 state_=State::completed;
                 return response().dump();

@@ -7,6 +7,8 @@ const NAMES=["model.fgm.json","slices.json","preview.obj","report.json","input-p
 const SHA=/^[a-f0-9]{64}$/;
 const encoder=new TextEncoder();
 let inputs=null,worker=null,controller=null,epoch=0,output=null,session=null;
+let fittedInput=null;
+let fittedState="none",fitSelection=0;
 let sceneRevision=null;
 let yaw=-0.8,pitch=0.6,zoom=1,drag=null;
 let canvas=$("whole-preview"),ctx=canvas.getContext("2d");
@@ -15,8 +17,10 @@ function status(state,message){
   $("whole-status").textContent=state+" · "+message;
 }
 function enable(){
-  $("whole-run").disabled=!inputs||!!worker;
+  $("whole-run").disabled=!inputs||!!worker||!["none","ready"].includes(fittedState);
   $("whole-cancel").disabled=!worker;
+  $("whole-fit-expected").disabled=fittedState==="loading";
+  $("whole-fit-clear").disabled=fittedState==="none";
 }
 function showWhole(show){
   canvas.hidden=!show;
@@ -38,6 +42,7 @@ function reset(){
   $("whole-cell").replaceChildren(new Option("Весь объект","all"));
   $("whole-cell").disabled=true;$("whole-z").disabled=true;
   $("whole-metrics").textContent="Нет результата целого объекта";
+  $("whole-fit-observations").replaceChildren();
   $("whole-slice").textContent="Срезы ещё не построены";
   showWhole(false);
   enable();
@@ -125,6 +130,7 @@ function synthetic(){
   return files;
 }
 $("whole-demo").addEventListener("click",async()=>{
+  clearFitted();
   reset();inputs=null;enable();
   const current=epoch;
   try{
@@ -136,6 +142,7 @@ $("whole-demo").addEventListener("click",async()=>{
   }catch(e){if(epoch===current)status("ERROR",e.message)}
 });
 $("whole-files").addEventListener("change",async event=>{
+  clearFitted();
   reset();inputs=null;$("whole-expected").value="";enable();
   const current=epoch;
   try{
@@ -154,7 +161,41 @@ $("whole-files").addEventListener("change",async event=>{
   }catch(e){if(current===epoch)status("ERROR",e.message)}
   event.target.value="";
 });
-for(const id of ["whole-expected","whole-material"]){
+function clearFitted(){
+  ++fitSelection;fittedState="none";
+  fittedInput=null;$("whole-fit").value="";$("whole-fit-expected").value="";
+  $("whole-fit-source").textContent="Будет показана исходная модель BuildWholeObject.";
+}
+$("whole-fit-clear").addEventListener("click",()=>{
+  reset();clearFitted();status("READY","Выбрана исходная модель BuildWholeObject");enable();
+});
+$("whole-fit").addEventListener("change",async event=>{
+  reset();fittedInput=null;$("whole-fit-expected").value="";
+  const current=epoch,selection=++fitSelection,file=event.target.files?.[0];
+  fittedState=file?"loading":"none";enable();
+  if(file)status("VALIDATING","Чтение выбранного результата native R07");
+  $("whole-fit-source").textContent=file?"Чтение результата native R07…":"Будет показана исходная модель BuildWholeObject.";
+  try{
+    if(!file){clearFitted();status("READY","Выбрана исходная модель");return}
+    if(file.size<1||file.size>262144)throw Error("E_WHOLE_FIT_LIMIT");
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    if(current!==epoch)return;
+    fittedInput=bytes;fittedState="ready";
+    $("whole-fit-source").textContent="Выбран native R07; укажите независимо записанный SHA-256.";
+    status("READY","R07-кандидат выбран; baseline будет построен заново и сверён");enable();
+  }catch(e){if(current===epoch)status("ERROR",e.message)}
+  finally{
+    if(selection===fitSelection){
+      if(fittedState==="loading"){
+        fittedState="invalid";
+        $("whole-fit-source").textContent="Результат R07 не прочитан; выберите файл заново или исходную модель.";
+        if(current!==epoch)status("ERROR","E_WHOLE_FIT_RESELECT");
+      }
+      enable();
+    }
+  }
+});
+for(const id of ["whole-expected","whole-material","whole-fit-expected"]){
   $(id).addEventListener("input",()=>{
     reset();status("READY","Входные параметры изменены; прежний результат сброшен");
   });
@@ -248,7 +289,7 @@ function validate(files,n,expectedReceipt){
      !Array.isArray(slices.cells)||slices.cells.length!==n||
      report.checked_centers!==n*6144||
      proof.reran_b1!==false||proof.rederived_r03!==false||
-     proof.verification_scope!=="transport_integrity_binding_c05"||
+     proof.verification_scope!==(report.fit?"transport_integrity_binding_c05_r07_derivation_and_metric_replay":"transport_integrity_binding_c05")||
      proof.receipt_sha256!==expectedReceipt)
     throw Error("E_WHOLE_PROOF");
   for(const cell of slices.cells){
@@ -295,8 +336,8 @@ async function makeViews(checked,files,modelHash,previewHash,runEpoch){
     packages:[{modelKey:"whole",bytes:packageBytes}],geometries:[{geometry:{
       schema:"fgmv-derived-geometry/1",sourcePackageSha256:modelHash,meshSha256:previewHash,meshFormat:"obj/1",
       cellBindings:checked.slices.cells.map(c=>({x:c.local_xyz[0],y:c.local_xyz[1],z:c.local_xyz[2]})),
-      recipe:{schema:"fgmv-geometry-recipe/1",algorithmId:"r06-whole-build",algorithmVersion:"1",
-        parametersSha256:checked.proof.receipt_sha256,deterministicSeed:checked.model.model.seed,detailDepth:0}},bytes:meshBytes}]});
+      recipe:{schema:"fgmv-geometry-recipe/1",algorithmId:checked.report.fit?"r07-continuous-box-union":"r06-whole-build",algorithmVersion:"1",
+        parametersSha256:checked.report.fit?checked.report.fit.input_sha256:checked.proof.receipt_sha256,deterministicSeed:checked.model.model.seed,detailDepth:0}},bytes:meshBytes}]});
   if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
   sceneRevision=loaded.sceneRevision;
   // Diagnostic fallback is explicitly NOT a novel-view depth proof.
@@ -321,8 +362,9 @@ async function makeViews(checked,files,modelHash,previewHash,runEpoch){
       instance:checked.report.instance,prototype:checked.report.prototype,status:"CONDITIONAL_ON_B1_WITNESS",
       cells:checked.slices.cells.map(({xyz,local_xyz,part})=>({xyz,local_xyz,part}))},
     c05:{checked_centers:checked.report.checked_centers,scope:"voxel_centers_only",match:true},
+    ...(checked.report.fit?{fit:checked.report.fit}:{}),
     evidence:{OBSERVED:"source_bound_voxel_occupancy_conditional_on_inputs",
-      INFERRED:"global_voxel_boundary_surface_not_original_visual_observation",
+      INFERRED:checked.report.fit?"continuous_R07_box_union_not_authenticated_hidden_geometry":"global_voxel_boundary_surface_not_original_visual_observation",
       UNKNOWN:"hidden_surface_shape_and_appearance",UNRESOLVED:"independent_object_membership"},
     stage_a:"NOT_ACCEPTED",private_acceptance:"PENDING",backend:"webgpu",
     camera_contract:"renderer-session-orbit-3d-autofit/1",coordinate_units:"fgm-voxel",
@@ -365,6 +407,25 @@ function slice(){
   $("whole-slice").textContent="Клетка "+cell.xyz.join(",")+" · local "+
     cell.local_xyz.join(",")+" · Z="+z+" · занято "+cell.occupied+"\n"+lines.join("\n");
   draw();
+}
+// Pixel transport only: positions and silhouettes were replayed by the shared C++ R07 observer.
+function showFitObservations(fit){
+  if(!fit)return;
+  for(const obs of fit.observations){
+    const title=document.createElement("p");title.textContent="Клетка "+obs.tile.join(",")+" · исходный силуэт / до R07 / после R07";
+    $("whole-fit-observations").append(title);
+    const row=document.createElement("div");row.className="r07-observation";
+    for(const [key,label] of [["observed_pixels_xy","Исходный"],["before_pixels_xy","До R07"],["after_pixels_xy","После R07"]]){
+      const image=document.createElement("canvas");image.width=96;image.height=120;
+      image.setAttribute("aria-label",key);
+      const context=image.getContext("2d");context.fillStyle="#101b2b";context.fillRect(0,0,96,120);
+      context.fillStyle=key==="observed_pixels_xy"?"#e6c478":"#91d6bb";
+      for(const [x,y] of obs[key]??[])context.fillRect((x-obs.sprite_origin_xy[0])*3,(y-obs.sprite_origin_xy[1])*3,3,3);
+      const figure=document.createElement("figure"),caption=document.createElement("figcaption");
+      caption.textContent=label;figure.append(image,caption);row.append(figure);
+    }
+    $("whole-fit-observations").append(row);
+  }
 }
 $("whole-cell").addEventListener("change",slice);
 $("whole-z").addEventListener("input",slice);
@@ -413,13 +474,23 @@ $("whole-run").addEventListener("click",async()=>{
     currentWorker=worker;controller=new AbortController();enable();
     await send({action:"clear"},runEpoch);
     await stage(inputs,runEpoch);
+    const fitted=fittedInput;
+    let fittedHash=null;
+    if(fitted){
+      fittedHash=$("whole-fit-expected").value.trim();
+      if(!SHA.test(fittedHash)||await digest(fitted)!==fittedHash)throw Error("E_WHOLE_FIT_DIGEST");
+      if(epoch!==runEpoch)return;
+      for(let offset=0;offset<fitted.length;offset+=16384)
+        await send({action:"append",file:"fitted",offset,hex:hex(fitted.subarray(offset,offset+16384))},runEpoch);
+    }
     const lofts=names.slice(1).map((_,i)=>({file:"loft"+i,sha256:expected.lofts[i]}));
-    const spec={algorithm:"r06-whole-build/1",coreRevision:CORE,budget:6144*lofts.length,
-      sourceBindings:{receipt:{file:"receipt",sha256:expected.receipt},lofts},
+    const spec={algorithm:fitted?"r07-whole-preview/1":"r06-whole-build/1",coreRevision:CORE,budget:6144*lofts.length,
+      sourceBindings:{receipt:{file:"receipt",sha256:expected.receipt},lofts,
+        ...(fitted?{fitted:{file:"fitted",sha256:fittedHash}}:{})},
       parameters:{material}};
     const started=await send({action:"start",spec},runEpoch);
     if(started.state!=="RUNNING")throw Error("E_WHOLE_STATE");
-    status("RUNNING","C++20 BuildWholeObject, атомарный step; отмена завершает Worker");
+    status("RUNNING",fitted?"C++/WASM: baseline, C05, повтор метрик R07 и непрерывная поверхность; атомарный вызов":"C++20 BuildWholeObject, атомарный step; отмена завершает Worker");
     const stepped=await send({action:"step",runId:started.runId},runEpoch);
     if(stepped.state!=="COMPLETED")throw Error("E_WHOLE_STATE");
     const finalized=await send({action:"finalize",runId:started.runId},runEpoch);
@@ -456,6 +527,17 @@ $("whole-run").addEventListener("click",async()=>{
       checked_centers:checked.report.checked_centers,model_sha256:modelHash,
       verification_scope:checked.proof.verification_scope,
       reran_b1:checked.proof.reran_b1,rederived_r03:checked.proof.rederived_r03},null,2);
+    if(checked.report.fit){
+      const fit=checked.report.fit;
+      $("whole-metrics").textContent=JSON.stringify({model_sha256:modelHash,mesh_sha256:previewHash,
+        baseline_sha256:fit.baseline_sha256,c05:checked.report.checked_centers,
+        before:fit.before,after:fit.after,strict_iou_improvement:fit.strict_iou_improvement,
+        OBSERVED:"Исходная занятость и импортированные силуэты",
+        INFERRED:"Непрерывная геометрия R07, включая скрытые поверхности",
+        UNKNOWN:"Истинная форма скрытых поверхностей",UNRESOLVED:"Независимая принадлежность частей",
+        limitations:fit.raster.completeness,stage_a:"NOT_ACCEPTED",private_acceptance:"PENDING"},null,2);
+      showFitObservations(fit);
+    }
     $("whole-cell").replaceChildren(new Option("Весь объект","all"));
     for(const [i,cell] of checked.slices.cells.entries())
       $("whole-cell").add(new Option("Клетка "+cell.xyz.join(",")+" · "+cell.part,String(i)));
@@ -472,7 +554,7 @@ $("whole-run").addEventListener("click",async()=>{
       $("whole-downloads").append(button);
     }
     showWhole(!!session);slice();
-    status("COMPLETED","Единый OBJ и "+lofts.length+" производных среза; C05 проверен");
+    status("COMPLETED",fitted?"Поверхность native R07; C05 и метрики перепроверены в WASM":"Единый OBJ и "+lofts.length+" производных среза; C05 проверен");
   }catch(error){
     if(epoch===runEpoch){
       output=null;showWhole(false);

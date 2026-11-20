@@ -321,7 +321,7 @@ class JointFit(unittest.TestCase):
         self.assertIn("E_B1_OUTPUT_EXISTS", loser.stderr)
         self.assertEqual({p.name for p in output.iterdir()},
                          {"whole-baseline.fgm.json", "whole-candidate.fgm.json",
-                          "joint-fit-receipt.json"})
+                          "joint-fit-receipt.json", "fit-preview.json"})
         self.assertEqual({p.name for p in self.path.iterdir()}, {"output", "request.json"})
 
     def test_native_c05_exact_lf_or_crlf_and_no_other_failure(self):

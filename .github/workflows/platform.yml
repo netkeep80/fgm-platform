@@ -190,7 +190,7 @@ jobs:
       - name: Build native GPU frame and local Regenerator consumers
         run: |
           cmake -S . -B build/gpu -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DFGMV_BUILD_GPU_DEMO=ON -DWGPU_ROOT="$RUNNER_TEMP/wgpu"
-          cmake --build build/gpu --config Release --parallel 2 --target fgm_boot fgmr-studio-native fgmr-r06-multicell-sample fgmr-r06-whole-build fgmr-r06-sample fgmr-r03 fgmr-r04 fgmr-r07-fit
+          cmake --build build/gpu --config Release --parallel 2 --target fgm_boot fgmr-studio-native fgmr-r06-multicell-sample fgmr-r06-whole-build fgmr-r06-sample fgmr-r03 fgmr-r04 fgmr-r07-fit fgmr-r07-whole-surface
           mkdir -p renderer/build/native "$RUNNER_TEMP/fgm-runtime"
           chmod 700 "$RUNNER_TEMP/fgm-runtime"
           XDG_RUNTIME_DIR="$RUNNER_TEMP/fgm-runtime" build/gpu/renderer/fgm_boot renderer/web/sphere.fgm.json renderer/web/scene.wgsl renderer/build/native/sphere.ppm
@@ -233,6 +233,7 @@ jobs:
           node tests/renderer-depth-oracle.browser.mjs
           node tests/studio-s2a.browser.mjs build/pages-studio --catalog
           node tests/whole-novel-views.browser.mjs build/pages-studio
+          node tests/r07-fitted-surface.browser.mjs build/pages-studio ../build/gpu/regenerator
           STUDIO_REVIEW_SITE=build/pages-studio node --test tests/studio-pages-live.test.mjs
       - name: Kill every real RVI source mutant
         working-directory: raster
@@ -247,6 +248,7 @@ jobs:
             renderer/build/renderer-session-browser.png
             renderer/build/studio-http-smoke.png
             renderer/build/whole-novel-views.png
+            renderer/build/r07-fitted-surface.png
             renderer/build/pages-hashes.json
             renderer/build/rollback-hashes.json
             raster/build/v02/mutations.json

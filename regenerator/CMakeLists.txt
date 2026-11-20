@@ -24,13 +24,20 @@ add_library(fgmr-whole-sample STATIC src/whole-sampling.cpp)
 target_include_directories(fgmr-whole-sample PUBLIC src)
 target_link_libraries(fgmr-whole-sample PUBLIC fgm::cpu PRIVATE nlohmann_json::nlohmann_json)
 add_library(fgmr-sha256 STATIC src/sha256.cpp)
+add_library(fgmr-whole-observation STATIC src/whole-observation.cpp)
+target_include_directories(fgmr-whole-observation PUBLIC src)
+target_link_libraries(fgmr-whole-observation PUBLIC nlohmann_json::nlohmann_json
+  PRIVATE fgmr-whole-sample fgmr-projection fgmr-sha256 fgm::cpu)
+add_library(fgmr-fitted-surface STATIC src/fitted-surface.cpp)
+target_include_directories(fgmr-fitted-surface PUBLIC src)
+target_link_libraries(fgmr-fitted-surface PRIVATE fgmr-whole-observation fgmr-sha256)
 add_library(fgmr-whole-build STATIC src/whole-build.cpp)
 target_include_directories(fgmr-whole-build PUBLIC src)
 target_link_libraries(fgmr-whole-build PRIVATE fgmr-whole-sample fgmr-sha256 nlohmann_json::nlohmann_json)
 add_library(fgmr-studio-run STATIC src/studio-run.cpp src/studio-cell.cpp src/studio-catalog.cpp)
-target_link_libraries(fgmr-studio-run PUBLIC fgmr-occupancy PRIVATE fgmr-terrain fgmr-projection fgmr-whole-sample fgmr-whole-build fgmr-sha256 nlohmann_json::nlohmann_json)
+target_link_libraries(fgmr-studio-run PUBLIC fgmr-occupancy PRIVATE fgmr-terrain fgmr-projection fgmr-whole-sample fgmr-whole-build fgmr-fitted-surface fgmr-sha256 nlohmann_json::nlohmann_json)
 target_compile_definitions(fgmr-studio-run PRIVATE FGMR_CORE_REVISION="${FGMR_CORE_REVISION}")
-foreach(target IN ITEMS fgmr-occupancy fgmr-terrain fgmr-projection fgmr-whole-sample fgmr-sha256 fgmr-whole-build fgmr-studio-run)
+foreach(target IN ITEMS fgmr-occupancy fgmr-terrain fgmr-projection fgmr-whole-sample fgmr-sha256 fgmr-whole-build fgmr-whole-observation fgmr-fitted-surface fgmr-studio-run)
   if(MSVC)
     target_compile_options(${target} PRIVATE /W4 /utf-8 /WX)
   else()
@@ -41,7 +48,7 @@ endforeach()
 if(EMSCRIPTEN)
   add_executable(fgmr-studio src/studio-wasm.cpp)
   target_link_libraries(fgmr-studio PRIVATE fgmr-studio-run)
-  foreach(target IN ITEMS fgm_cpu fgmr-occupancy fgmr-terrain fgmr-projection fgmr-whole-sample fgmr-sha256 fgmr-whole-build fgmr-studio-run fgmr-studio)
+  foreach(target IN ITEMS fgm_cpu fgmr-occupancy fgmr-terrain fgmr-projection fgmr-whole-sample fgmr-sha256 fgmr-whole-build fgmr-whole-observation fgmr-fitted-surface fgmr-studio-run fgmr-studio)
     target_compile_options(${target} PRIVATE -fexceptions)
   endforeach()
   target_link_options(fgmr-studio PRIVATE --no-entry -fexceptions
@@ -170,8 +177,7 @@ endif()
 # R07-S1B1B0: opt-in whole-FGM, strict joint C05 across 2..8 local cells,
 # then separately observed continuous R05 cell silhouettes in one FGM basis.
 add_executable(fgmr-r07-whole-surface src/r07-whole-surface-main.cpp)
-target_link_libraries(fgmr-r07-whole-surface PRIVATE fgmr-whole-sample
-  fgmr-projection fgmr-sha256 fgm::cpu nlohmann_json::nlohmann_json)
+target_link_libraries(fgmr-r07-whole-surface PRIVATE fgmr-whole-observation)
 if(MSVC)
   target_compile_options(fgmr-r07-whole-surface PRIVATE /W4 /utf-8 /WX)
 else()
@@ -228,6 +234,10 @@ if(BUILD_TESTING AND FGMR_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_whole_joint_fit.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/r07_whole_joint_fit.py"
     "$<TARGET_FILE:fgmr-r07-whole-surface>")
+  add_test(NAME r07-fitted-surface COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_fitted_surface.py"
+    "$<TARGET_FILE:fgmr-studio-native>" "$<TARGET_FILE:fgmr-r07-whole-surface>")
+  set_tests_properties(r07-fitted-surface PROPERTIES TIMEOUT 180)
   add_test(NAME rv01-reconstruction-viewer COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rv01.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/export_rv01.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_r07.py"

@@ -244,6 +244,28 @@ class WholeSourcePreflight(unittest.TestCase):
                          "fec273d778681c52c64e692276e11f2bb2e8d06a5ec0813413e303976e7d7a6d")
         self.assertEqual(digest((output / "whole-candidate.fgm.json").read_bytes()),
                          "522b9afccbf423414ac1cd546a57b23c7120ede688f30fd3c3f7d6a09bc392fd")
+        # The local source path exports the EXACT inputs used to build this baseline.
+        # Replay the new import through the real native Studio, without a second parser.
+        commands = [{"v": 1, "action": "clear"}]
+        def stage(name, path):
+            data = path.read_bytes()
+            for offset in range(0, len(data), 16384):
+                commands.append({"v": 1, "action": "append", "file": name, "offset": offset,
+                                 "hex": data[offset:offset+16384].hex()})
+            return {"file": name, "sha256": digest(data)}
+        bindings = {"receipt": stage("receipt", output / "receipt.json"),
+                    "lofts": [stage("loft"+str(i), output / f"loft-{i}.json") for i in range(2)],
+                    "fitted": stage("fitted", output / "fit-preview.json")}
+        commands += [{"v": 1, "action": "start", "spec": {
+            "algorithm": "r07-whole-preview/1", "coreRevision": "ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b",
+            "budget": 12288, "sourceBindings": bindings, "parameters": {"material": "stone"}}},
+            {"v": 1, "action": "step", "runId": 1}, {"v": 1, "action": "finalize", "runId": 1}]
+        replay = subprocess.run([str(STUDIO)], input=b"\n".join(canonical(c) for c in commands)+b"\n",
+                                capture_output=True, timeout=60)
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        replies = [json.loads(line) for line in replay.stdout.splitlines()]
+        self.assertTrue(all("error" not in r for r in replies), replies[-3:])
+        self.assertEqual(replies[-1]["result"]["build"]["artifacts"][0]["sha256"], receipt["winner_sha256"])
 
     def test_axis_fit_moves_one_whole_model_without_changing_c05(self):
         sprite = bytes([0, *analytic_pixel_mask(shift=(0, 0.49, -0.49)), 255])
