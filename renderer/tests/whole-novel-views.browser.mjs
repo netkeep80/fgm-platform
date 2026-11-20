@@ -100,7 +100,8 @@ try{
   assert.deepEqual(JSON.parse(await readFile(await downloaded.path(),'utf8')),result);
   await mkdir('build',{recursive:true});await page.locator('#view').screenshot({path:'build/whole-novel-views.png'});
   // Re-run deterministically: geometry and camera identity stay fixed; same local GPU gives same pixels.
-  await run();assert.deepEqual(JSON.parse(await page.locator('#whole-view-receipt').textContent()),result);
+  await run();assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
+  assert.deepEqual(JSON.parse(await page.locator('#whole-view-receipt').textContent()),result);
   // A re-hashed semantic membership mismatch must be rejected by the actual C++ builder.
   receipt.cell_bindings[0].record=2;await upload();await run();
   assert.match(await page.locator('#whole-status').textContent(),/^ERROR.*E_S43_BUILD_LOFT_BINDING/);

@@ -388,6 +388,7 @@ canvas.addEventListener("wheel",e=>{
 $("whole-run").addEventListener("click",async()=>{
   if(worker||!inputs)return;
   reset();
+  status("VALIDATING","Проверка SHA-256; прежние виды и результат сброшены");
   // Terminate a pending single-cell run before switching to the whole-object viewer.
   if(!$("cancel").disabled)$("cancel").click();
   const runEpoch=epoch;
