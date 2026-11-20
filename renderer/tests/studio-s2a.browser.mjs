@@ -545,8 +545,10 @@ try{
         window.__studioGateThumb=false;
         try{window.__studioReleaseThumb?.()}catch{/* stale Worker terminated */}
       });
-      await page.waitForTimeout(200);
-      assert.equal(await elementMenu.isDisabled(),true);
+      await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled,
+        null,{timeout:30000});
+      assert.equal(await elementMenu.evaluate(el=>el.value),"");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
       assert.equal(await page.locator("#catalog-element-icon").isVisible(),false);
       console.log("STUDIO_R04_THUMB_STALE_MAP_PASS");
 
