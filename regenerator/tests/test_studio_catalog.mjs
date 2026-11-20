@@ -82,8 +82,8 @@ assert.equal(report.right_half, true);
 
 const thumbMcd=Buffer.alloc(62*4);
 thumbMcd[0]=0;thumbMcd[62]=1;thumbMcd[124]=2;thumbMcd[186]=9;
-const thumbPck=Buffer.from([0,254,20,10,255,0,254,10,20,255,0,254,5,30,255]);
-const thumbTab=Buffer.from([0,0,5,0,10,0]);
+const thumbPck=Buffer.from([0,254,5,10,254,14,10,255,0,254,10,20,255,0,254,5,30,255]);
+const thumbTab=Buffer.from([0,0,8,0,13,0]);
 const thumbPalette=Buffer.alloc(3864);
 for(const [index,color] of [[10,[63,0,0]],[20,[0,63,0]],[30,[0,0,63]]])
   thumbPalette.set(color,4*774+index*3);
@@ -95,7 +95,7 @@ const getThumb=(records,extra={})=>request("catalog-thumbnails",{
 });
 const badTab=Buffer.from(thumbTab);badTab[0]=1;
 const badPalette=Buffer.from(thumbPalette);badPalette[4*774+30*3]=64;
-const badPck=Buffer.from(thumbPck);badPck[4]=0;
+const badPck=Buffer.from(thumbPck);badPck[7]=0;
 const thumbRequests=[
   request("clear"),...thumbFiles(),
   getThumb([0,1,2]),getThumb([3]),getThumb([0,0]),
