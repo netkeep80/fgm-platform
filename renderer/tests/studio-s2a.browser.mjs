@@ -43,6 +43,8 @@ try{
     globalThis.__studioReleaseStep=null;
     globalThis.__studioGateCatalog=false;
     globalThis.__studioReleaseCatalog=null;
+    globalThis.__studioGateThumb=false;globalThis.__studioThumbGated=false;
+    globalThis.__studioReleaseThumb=null;
     globalThis.__studioReads={};
     globalThis.__studioFileReadCalls=[];
     const readFileBytes=File.prototype.arrayBuffer;
@@ -63,6 +65,11 @@ try{
         const request=typeof data==="string"?JSON.parse(data):null;
         if(globalThis.__studioGateCatalog && request?.action==="catalog-map") {
           globalThis.__studioReleaseCatalog=()=>super.postMessage(data,...args);
+          return;
+        }
+        if(globalThis.__studioGateThumb && request?.action==="catalog-thumbnails") {
+          globalThis.__studioThumbGated=true;
+          globalThis.__studioReleaseThumb=()=>super.postMessage(data,...args);
           return;
         }
         if(globalThis.__studioGateStep && request?.action==="step") {
@@ -451,10 +458,48 @@ try{
       assert.match(await page.locator("#status").textContent(),/E_R02_MAP_LENGTH/);
       const before=await page.evaluate(()=>window.__studioReads);
       await mapMenu.selectOption("CULTA00");
-      const door=elementMenu.getByRole("option",{name:/Дверь/});
-      await door.waitFor({state:"attached"});
-      const key=await door.getAttribute("value");
-      await elementMenu.selectOption(key);
+      await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
+      assert.equal(await elementMenu.getAttribute("role"),"combobox");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      await elementMenu.click();
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"true");
+      const item=dataset=>page.locator('#catalog-element-options [role="option"]')
+        .filter({hasText:new RegExp(dataset+" №")}).first();
+      const rgb=async (row,x)=>row.locator("canvas").evaluate((canvas,x)=>{
+        const v=canvas.getContext("2d").getImageData(x,0,1,1).data;
+        return Array.from(v);
+      },x);
+      await page.waitForFunction(()=>{
+        const rows=[...document.querySelectorAll('#catalog-element-options [role="option"]')];
+        return rows.length>=4 && rows.every(r=>!r.querySelector("canvas").hidden);
+      },null,{timeout:30000});
+      assert.deepEqual(await rgb(item("BLANKS"),5),[0,0,252,255]);
+      assert.deepEqual(await rgb(item("CULTIVAT"),10),[0,252,0,255]);
+      const fullDoor=page.locator('#catalog-element-options [role="option"]')
+        .filter({hasText:/Дверь/}).filter({hasNotText:/правая половина/}).first();
+      assert.deepEqual(await rgb(fullDoor,5),[252,0,0,255]);
+      assert.deepEqual(await rgb(fullDoor,20),[252,0,0,255]);
+      const rightDoor=page.locator('#catalog-element-options [role="option"]')
+        .filter({hasText:/Дверь.*правая половина/}).first();
+      assert.deepEqual(await rgb(rightDoor,5),[0,0,0,0]);
+      assert.deepEqual(await rgb(rightDoor,20),[252,0,0,255]);
+      assert.equal(await elementMenu.inputValue(),"");
+      await elementMenu.press("End");
+      assert.ok(await elementMenu.getAttribute("aria-activedescendant"));
+      await elementMenu.press("Home");
+      await elementMenu.press("Escape");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      assert.equal(await elementMenu.inputValue(),"");
+      await elementMenu.press("ArrowDown");
+      await elementMenu.press("Enter");
+      assert.notEqual(await elementMenu.inputValue(),"");
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      assert.equal(await page.locator("#catalog-element-icon").isVisible(),true);
+      await elementMenu.click();
+      const door=page.locator('#catalog-element-options [role="option"]').filter({hasText:/Дверь/}).first();
+      await door.waitFor({state:"visible"});
+      const key=await door.getAttribute("data-index");
+      await door.click();
       await page.locator("#run").click();
       await waitState("COMPLETED");
       metrics=JSON.parse(await page.locator("#metrics").textContent());
@@ -480,9 +525,51 @@ try{
         try {window.__studioReleaseCatalog?.()} catch {/* terminated Worker */}
       });
       await mapMenu.selectOption("CULTA00");
-      await door.waitFor({state:"attached"});
-      assert.equal(await door.getAttribute("value"),key);
+      await elementMenu.click();
+      const doorAfter=page.locator('#catalog-element-options [role="option"]').filter({hasText:/Дверь/}).first();
+      await doorAfter.waitFor({state:"visible"});
+      assert.equal(await doorAfter.getAttribute("data-index"),key);
+      await elementMenu.press("Escape");
       console.log("STUDIO_UFO_CATALOG_BROWSER_PASS");
+
+      // With a fresh selected map, gate a real thumbnail worker before its R04 action.
+      await mapMenu.selectOption("CULTA00");
+      await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
+      await page.evaluate(()=>{window.__studioGateThumb=true;window.__studioThumbGated=false;});
+      await elementMenu.click();
+      await page.waitForFunction(()=>window.__studioThumbGated,null,{timeout:30000});
+      await mapMenu.selectOption("CULTA01");
+      assert.equal(await elementMenu.isDisabled(),true);
+      assert.equal(await page.locator("#catalog-element-options").isVisible(),false);
+      await page.evaluate(()=>{
+        window.__studioGateThumb=false;
+        try{window.__studioReleaseThumb?.()}catch{/* stale Worker terminated */}
+      });
+      await page.waitForTimeout(200);
+      assert.equal(await elementMenu.isDisabled(),true);
+      assert.equal(await page.locator("#catalog-element-icon").isVisible(),false);
+      console.log("STUDIO_R04_THUMB_STALE_MAP_PASS");
+
+      for(const [fault,code] of [
+        ["tab","E_R04_TAB_OFFSET"],["pck","E_R04_FRAME_TERMINATOR"],
+        ["palette","E_R04_PALETTE_RGB6"]
+      ]){
+        const badRoot=await mkdtemp(join(tmpdir(),"studio-ufo-thumbs-"));
+        try{
+          await writeStudioUfoCatalogFixture(badRoot,fault);
+          await page.locator("#directory").setInputFiles(badRoot);
+          await mapMenu.locator("option[value=CULTA00]").waitFor();
+          await mapMenu.selectOption("CULTA00");
+          await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
+          await elementMenu.click();
+          await page.waitForFunction(expected=>
+            [...document.querySelectorAll(".catalog-error")].some(x=>x.textContent===expected),
+            code,{timeout:30000});
+          assert.ok(await page.locator(".catalog-error").filter({hasText:code}).count()>0);
+          await elementMenu.press("Escape");
+        }finally{await rm(badRoot,{recursive:true,force:true})}
+      }
+      console.log("STUDIO_R04_THUMB_CORRUPT_ASSETS_PASS");
     } finally {
       await rm(rootDir,{recursive:true,force:true});
     }
