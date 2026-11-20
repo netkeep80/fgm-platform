@@ -573,6 +573,60 @@ try{
         }finally{await rm(badRoot,{recursive:true,force:true})}
       }
       console.log("STUDIO_R04_THUMB_CORRUPT_ASSETS_PASS");
+
+      // Large-list UX is a separate synthetic DOM stress test. Actual pixel
+      // provenance was already proved above with real C++/WASM on local files.
+      const stress=await page.evaluate(async()=>{
+        const {ElementSpritePicker}=await import("./ufo-catalog.mjs");
+        const host=document.createElement("div");
+        host.id="sprite-picker-stress";
+        host.className="catalog-picker";
+        host.innerHTML='<button type="button" id="stress-combo"><canvas width="32" height="40" hidden></canvas><span id="catalog-element-text"></span></button>'+
+          '<div class="catalog-list" id="stress-list" role="listbox" aria-label="600 test entries" hidden></div>';
+        document.body.append(host);
+        const button=host.querySelector("#stress-combo");
+        const listbox=host.querySelector("#stress-list");
+        let maximumRequestedBatch=0,requests=0;
+        const picker=new ElementSpritePicker({button,listbox,onChoose:()=>{},
+          decode:async (dataset,records)=>{
+            if(dataset!=="STRESS")throw Error("E_STUDIO_THUMB_BINDING");
+            maximumRequestedBatch=Math.max(maximumRequestedBatch,records.length);
+            requests++;
+            return {schema:"fgmr-ufo-catalog-thumbnails/1",dataset,frameSlot:0,
+              palette_rgb8:Array.from({length:256},()=>[0,0,0]),
+              items:records.map(record=>({record,frameId:0,indices_hex:"00".repeat(1280)}))};
+          }});
+        const entries=Array.from({length:600},(_,i)=>[
+          "stress:"+i,{name:"Объект",dataset:"STRESS",record:i,part:"object",
+                        rightHalf:false,tile:[0,0,0]}]);
+        picker.load(entries);
+        picker.open();
+        const initial=listbox.querySelectorAll('[role="option"]').length;
+        listbox.scrollTop=500*64;
+        picker.render();
+        const afterScroll=[...listbox.querySelectorAll('[role="option"]')]
+          .map(el=>Number(el.dataset.index));
+        const cacheLimitProbe=Array.from({length:80},(_,i)=>i);
+        for(const i of cacheLimitProbe)picker.remember("stress-cache-"+i,{error:"E_R04_FRAME_INDEX"});
+        const bound=picker.cache.size;
+        // Check Home/End without creating all 600 option nodes.
+        button.dispatchEvent(new KeyboardEvent("keydown",{key:"End",bubbles:true,cancelable:true}));
+        const active=picker.active;
+        const afterEnd=listbox.querySelectorAll('[role="option"]').length;
+        button.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true,cancelable:true}));
+        const closed=listbox.hidden;
+        picker.reset();host.remove();
+        return {initial,afterScroll,bound,active,afterEnd,closed,maximumRequestedBatch,requests};
+      });
+      assert.ok(stress.initial>0 && stress.initial<=16);
+      assert.ok(stress.afterScroll.length>0 && stress.afterScroll.length<=16);
+      assert.ok(stress.afterScroll.some(index=>index>=498&&index<=502));
+      assert.equal(stress.bound,48);
+      assert.equal(stress.active,599);
+      assert.ok(stress.afterEnd>0&&stress.afterEnd<=16);
+      assert.equal(stress.closed,true);
+      assert.ok(stress.maximumRequestedBatch<=8);
+      console.log("STUDIO_R04_THUMB_VIRTUALIZED_600_PASS",JSON.stringify(stress));
     } finally {
       await rm(rootDir,{recursive:true,force:true});
     }
