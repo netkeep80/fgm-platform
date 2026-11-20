@@ -1,0 +1,46 @@
+format: repo-guard/requirement-v1
+id: FGMR-R07-BOUNDARY-001
+normative: "### FGMR-R07-BOUNDARY-001 — Локальная проверка границы гипотезы целого объекта. После source-bound R07 регенератор должен предоставлять локальную версионированную карточку одной гипотезы ObjectDefinition. Он должен повторить существующий source-fit из неизменного снимка исходных manifest/B1/preflight и SHA-pinned native исполнителей и сравнить точные байты ожидаемого fit receipt. Native R02/R03 должны дать опись всех присутствующих TilePart в выбранных клетках и их полном 26-соседстве, включая части, исключённые из объявления объекта; сосед с той же MCD/LOFT не должен автоматически добавляться к объекту. Существующий Core sampler должен проверить все центры baseline и winner во всех клетках halo; ожидаемая занятость целевой модели вне выбранных клеток равна нулю. Клетки за границей MAP остаются в геометрической проверке и явно отмечаются в описи. Ограничения принятого sampler не должны обходиться скрытым обрезанием halo. Локальная карточка связывает версию гипотезы, состав, source/model/receipt/binary SHA, результаты и ограничения. Отдельное публичное свидетельство должно формироваться по явному allowlist без координат, имён, путей, LOFT/спрайтов/масок/моделей или производных игровых байтов. Публикация каталога должна быть атомарной без замены существующего имени; неверные входы не выдают успешное свидетельство, геометрический отказ маркируется REJECTED и кодом выхода 2. Принадлежность B1 остаётся условной, binary SHA не удостоверяет source-to-binary происхождение, проверка центров не доказывает непрерывные коллизии или швы. Stage A NOT_ACCEPTED и PRIVATE_ACCEPTANCE_PENDING сохраняются. Исполняемая синтетическая проверка через настоящие native инструменты должна воспроизводить одинаковые записи независимого соседа, нулевой halo, нарушение halo при сохранённом selected-cell C05, неверные SHA/replay/границы/протокол, приватность публичного свидетельства, детерминизм и отсутствие перезаписи."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: FGMR-PRODUCT-000}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMR-R07-WHOLE-SOURCE-FIT-001}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMR-R07-WHOLE-SOURCE-001}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: regenerator/scripts/r07_whole_boundary_audit.py}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: regenerator/scripts/r07_whole_joint_fit.py}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: regenerator/CMakeLists.txt}
+  - predicates: [requires]
+    target: {kind: artifact, path: regenerator/scripts/r07_whole_source_fit.py}
+  - predicates: [requires]
+    target: {kind: artifact, path: regenerator/scripts/r07_whole_source_preflight.py}
+  - predicates: [requires]
+    target: {kind: artifact, path: regenerator/src/whole-sampling.cpp}
+  - predicates: [requires]
+    target: {kind: artifact, path: regenerator/src/map-facts.cpp}
+  - predicates: [requires]
+    target: {kind: artifact, path: regenerator/src/loft-voxels.cpp}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: regenerator/tests/test_r07_whole_boundary_audit.py}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: regenerator/tests/test_r07_whole_source_preflight.py}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: regenerator/tests/test_r07_whole_joint_fit.py}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: scripts/check-ctest.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/ctest-gate.test.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: .github/workflows/platform.yml}
+  - predicates: [documents]
+    target: {kind: artifact, path: regenerator/docs/r07-whole-boundary-audit.md}
+  - predicates: [documents]
+    target: {kind: artifact, path: docs/requirements-hierarchy.md}

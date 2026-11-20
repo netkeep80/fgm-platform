@@ -475,27 +475,30 @@ def preview_input(package, winner, receipt, cells):
             "cells": cells, "fit_receipt": receipt}
 
 
-def publish(output, package, winner, receipt, cells=None, whole_inputs=None):
+def publish_files(output, files):
     tmp = Path(tempfile.mkdtemp(prefix=".r07-joint-output-", dir=output.parent))
     try:
-        files = {
-            "whole-baseline.fgm.json": package,
-            "whole-candidate.fgm.json": winner,
-            "joint-fit-receipt.json": canonical(receipt)
-        }
-        if cells is not None:
-            files["fit-preview.json"] = canonical(preview_input(package, winner, receipt, cells))
-        if whole_inputs is not None:
-            files.update(whole_inputs)
         for name, data in files.items():
-            # Prepared B1/R03 byte hashes are part of the canonical baseline.
-            # Preserve these exact bytes; legacy fit outputs retain their newline.
-            (tmp / name).write_bytes(data if whole_inputs and name in whole_inputs else data + b"\n")
+            need(Path(name).name == name and name not in (".", ".."), "E_B1_OUTPUT_NAME")
+            (tmp / name).write_bytes(data)
         check_output(output)
         rename_without_replacement(tmp, output)
     finally:
         if tmp.exists():
             shutil.rmtree(tmp)
+
+
+def publish(output, package, winner, receipt, cells=None, whole_inputs=None):
+    files = {
+        "whole-baseline.fgm.json": package + b"\n",
+        "whole-candidate.fgm.json": winner + b"\n",
+        "joint-fit-receipt.json": canonical(receipt) + b"\n"
+    }
+    if cells is not None:
+        files["fit-preview.json"] = canonical(preview_input(package, winner, receipt, cells)) + b"\n"
+    if whole_inputs is not None:
+        files.update(whole_inputs)
+    publish_files(output, files)
 
 
 def execute(request, binary, binary_sha, output):

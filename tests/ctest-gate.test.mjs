@@ -11,10 +11,10 @@ const names=['core-c05-parity','core-external-consumer','fgm_cpu'];
 const report=(ns=names)=>({kind:'ctestInfo',version:{major:1,minor:0},
   tests:ns.map(name=>({name,command:['synthetic-command'],properties:[]}))});
 
-test('Platform requires all 31 tests and rejects omissions and disabled subjects',()=>{
+test('Platform requires all 32 tests and rejects omissions and disabled subjects',()=>{
   const all=REQUIRED_SUITES.platform;
-  assert.equal(all.length,31);
-  assert.equal(assertCTestSuite(report(all),'platform').length,31);
+  assert.equal(all.length,32);
+  assert.equal(assertCTestSuite(report(all),'platform').length,32);
   for(const name of all){
     assert.throws(()=>assertCTestSuite(report(all.filter(n=>n!==name)),'platform'),/CTEST_SUITE_MISMATCH/);
     const r=report(all);r.tests.find(t=>t.name===name).properties=[{name:'DISABLED',value:true}];

@@ -238,6 +238,13 @@ if(BUILD_TESTING AND FGMR_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_fitted_surface.py"
     "$<TARGET_FILE:fgmr-studio-native>" "$<TARGET_FILE:fgmr-r07-whole-surface>")
   set_tests_properties(r07-fitted-surface PROPERTIES TIMEOUT 180)
+  add_test(NAME r07-whole-boundary-audit COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r07_whole_boundary_audit.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/r07_whole_boundary_audit.py"
+    "$<TARGET_FILE:fgmr-r02>" "$<TARGET_FILE:fgmr-r03>" "$<TARGET_FILE:fgmr-studio-native>"
+    "$<TARGET_FILE:fgmr-r06-whole-build>" "$<TARGET_FILE:fgmr-r07-whole-surface>"
+    "$<TARGET_FILE:fgmr-r06-multicell-sample>")
+  set_tests_properties(r07-whole-boundary-audit PROPERTIES TIMEOUT 300)
   add_test(NAME rv01-reconstruction-viewer COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rv01.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/export_rv01.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_r07.py"
