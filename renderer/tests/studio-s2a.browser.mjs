@@ -29,7 +29,7 @@ const server=createServer(async(request,response)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const url="http://127.0.0.1:"+server.address().port;
-const browser=await chromium.launch({headless:true,executablePath:process.env.FGM_CHROMIUM,args:["--no-sandbox"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.FGM_CHROMIUM,args:["--no-sandbox","--enable-unsafe-webgpu","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 const network=await localBrowserContext(browser);
 try{
   const page=await network.context.newPage();
@@ -317,6 +317,8 @@ try{
   const receiptBytes=Buffer.from(JSON.stringify(receipt));
   await page.locator("#whole-files").setInputFiles([
     {name:"receipt.json",mimeType:"application/json",buffer:receiptBytes},...inputFiles]);
+  await page.waitForFunction(()=>document.querySelector("#whole-status").dataset.state==="READY"&&
+    !document.querySelector("#whole-run").disabled,null,{timeout:60000});
   await page.locator("#whole-expected").fill(JSON.stringify({
     lofts:inputFiles.map(f=>hashLocal(f.buffer)),receipt:hashLocal(receiptBytes)}));
   await page.locator("#whole-run").click();

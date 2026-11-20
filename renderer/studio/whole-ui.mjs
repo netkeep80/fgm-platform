@@ -1,13 +1,15 @@
 // R06 whole-object UI: transport/view only. The canonical builder is pinned C++20/WASM.
 import {sha256} from "./r05-view.mjs";
+import {createRendererSessionV1} from "./renderer-session.mjs";
 const $=id=>document.getElementById(id);
 const CORE="ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b";
 const NAMES=["model.fgm.json","slices.json","preview.obj","report.json","input-proof.json"];
 const SHA=/^[a-f0-9]{64}$/;
 const encoder=new TextEncoder();
-let inputs=null,worker=null,controller=null,epoch=0,output=null;
+let inputs=null,worker=null,controller=null,epoch=0,output=null,session=null;
+let sceneRevision=null;
 let yaw=-0.8,pitch=0.6,zoom=1,drag=null;
-const canvas=$("whole-preview"),ctx=canvas.getContext("2d");
+let canvas=$("whole-preview"),ctx=canvas.getContext("2d");
 function status(state,message){
   $("whole-status").dataset.state=state;
   $("whole-status").textContent=state+" · "+message;
@@ -25,6 +27,13 @@ function reset(){
   if(controller)controller.abort();
   if(worker)worker.terminate();
   worker=null;controller=null;output=null;
+  if(session)void session.dispose();
+  session=null;sceneRevision=null;
+  $("whole-views").replaceChildren();
+  $("whole-view-downloads").replaceChildren();
+  $("whole-view-receipt").textContent="";
+  $("whole-view-status").textContent="Четыре глобальных вида ещё не построены";
+  ctx.clearRect(0,0,canvas.width,canvas.height);
   $("whole-downloads").replaceChildren();
   $("whole-cell").replaceChildren(new Option("Весь объект","all"));
   $("whole-cell").disabled=true;$("whole-z").disabled=true;
@@ -253,59 +262,98 @@ function validate(files,n,expectedReceipt){
   }
   return {model,slices,report,proof};
 }
-function geometry(obj){
-  const vertices=[],faces=[];
-  for(const line of obj.split(/\r?\n/)){
-    if(line.startsWith("v ")){
-      const v=line.slice(2).trim().split(/\s+/).map(Number);
-      if(v.length!==3||v.some(x=>!Number.isFinite(x)))throw Error("E_WHOLE_OBJ");
-      vertices.push(v);
-    }else if(line.startsWith("f ")){
-      const f=line.slice(2).trim().split(/\s+/).map(x=>Number(x.split("/")[0])-1);
-      if(f.length<3||f.length>4||f.some(x=>!Number.isInteger(x)||x<0||x>=vertices.length))
-        throw Error("E_WHOLE_OBJ");
-      faces.push(f);
-    }
-    if(vertices.length>200000||faces.length>200000)throw Error("E_WHOLE_OBJ_LIMIT");
+// Existing RendererSession owns projection, depth, resource limits and stale-frame rules.
+// This adapter never interprets FGM or decodes LOFT and has no geometry math.
+function view(revision,yawValue,pitchValue,distance,width=420,height=315){
+  return {schema:"fgmv-view-state/1",revision,
+    camera:{kind:"orbit-3d",yaw:yawValue,pitch:pitchValue,distance,focusWorld:{x:0,y:0,z:0}},
+    viewport:{width,height,pixelRatio:1},showCellGrid:false};
+}
+async function frame(activeSession,scene,viewState,runEpoch){
+  if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
+  const v=activeSession.setView(viewState);
+  const result=await activeSession.renderFrame({expectedSceneRevision:scene,
+    expectedViewRevision:v.viewRevision,sessionEpoch:v.sessionEpoch});
+  if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
+  if(result.status!=="rendered")throw Error("E_WHOLE_VIEW_FRAME");
+  if(activeSession!==session)throw Error("E_WHOLE_CANCELLED");
+}
+async function makeViews(checked,files,modelHash,previewHash,runEpoch){
+  // An unresolved factory owns an unattached canvas; only the current run attaches it.
+  // The runtime then owns the displayed canvas, including failure/device-loss clearing.
+  const target=canvas.cloneNode(false);
+  const active=await createRendererSessionV1({canvas:target,preferredBackend:"webgpu",fallbackPolicy:"allow-diagnostic"});
+  if(runEpoch!==epoch){await active.dispose();throw Error("E_WHOLE_CANCELLED")}
+  canvas.replaceWith(target);canvas=target;ctx=canvas.getContext("2d");bindPreview(canvas);
+  session=active;
+  const packageBytes=encoder.encode(files["model.fgm.json"]),meshBytes=encoder.encode(files["preview.obj"]);
+  const identity="whole-"+modelHash;
+  const loaded=await active.loadScene({snapshot:{schema:"fgmv-scene-snapshot/1",revision:identity,
+    models:[{key:"whole",package:{format:"fgm-package/1",packageSha256:modelHash,byteLength:packageBytes.length}}],
+    instances:[{instanceId:identity,modelKey:"whole",stateRevision:"static",
+      placement:{translation:{x:0,y:0,z:0},quarterTurnsZ:0,units:"fgm-voxel"}}]},
+    packages:[{modelKey:"whole",bytes:packageBytes}],geometries:[{geometry:{
+      schema:"fgmv-derived-geometry/1",sourcePackageSha256:modelHash,meshSha256:previewHash,meshFormat:"obj/1",
+      cellBindings:checked.slices.cells.map(c=>({x:c.local_xyz[0],y:c.local_xyz[1],z:c.local_xyz[2]})),
+      recipe:{schema:"fgmv-geometry-recipe/1",algorithmId:"r06-whole-build",algorithmVersion:"1",
+        parametersSha256:checked.proof.receipt_sha256,deterministicSeed:checked.model.model.seed,detailDepth:0}},bytes:meshBytes}]});
+  if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
+  sceneRevision=loaded.sceneRevision;
+  // Diagnostic fallback is explicitly NOT a novel-view depth proof.
+  if(active.capabilities.backendKind!=="webgpu")return null;
+  const views=[],cards=[];
+  for(let i=0;i<4;i++){
+    const state=view("novel-"+i,0.35+i*Math.PI/2,0.6,1);
+    await frame(active,sceneRevision,state,runEpoch);
+    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    const image=document.createElement("canvas");image.width=canvas.width;image.height=canvas.height;
+    image.getContext("2d").putImageData(new ImageData(pixels.slice(),image.width,image.height),0,0);
+    const frameSha=await digest(pixels);
+    if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
+    views.push({id:"novel-"+i,model_sha256:modelHash,mesh_sha256:previewHash,view:state,rgba_sha256:frameSha});
+    const figure=document.createElement("figure"),caption=document.createElement("figcaption");
+    image.dataset.view=String(i);image.setAttribute("aria-label","Новый глобальный вид "+(i+1));
+    caption.textContent="Вид "+(i+1)+" · yaw "+state.camera.yaw.toFixed(3)+" · INFERRED";
+    figure.append(image,caption);cards.push(figure);
   }
-  return {vertices,faces};
+  const receipt={schema:"fgmv-whole-novel-views/1",model_sha256:modelHash,mesh_sha256:previewHash,
+    membership:{schema:"fgm-regenerator/verified-membership-input-v1",sha256:checked.proof.receipt_sha256,
+      instance:checked.report.instance,prototype:checked.report.prototype,status:"CONDITIONAL_ON_B1_WITNESS",
+      cells:checked.slices.cells.map(({xyz,local_xyz,part})=>({xyz,local_xyz,part}))},
+    c05:{checked_centers:checked.report.checked_centers,scope:"voxel_centers_only",match:true},
+    evidence:{OBSERVED:"source_bound_voxel_occupancy_conditional_on_inputs",
+      INFERRED:"global_voxel_boundary_surface_not_original_visual_observation",
+      UNKNOWN:"hidden_surface_shape_and_appearance",UNRESOLVED:"independent_object_membership"},
+    stage_a:"NOT_ACCEPTED",private_acceptance:"PENDING",backend:"webgpu",
+    camera_contract:"renderer-session-orbit-3d-autofit/1",coordinate_units:"fgm-voxel",
+    raster_scope:"local_GPU_pixels_not_cross_device_identity",views};
+  return {receipt,cards};
 }
 function draw(){
-  if(!output)return;
-  const {vertices,faces}=output.mesh,w=canvas.width,h=canvas.height;
-  ctx.fillStyle="#101b2b";ctx.fillRect(0,0,w,h);
-  if(!vertices.length)return;
-  const c=Math.cos(yaw),s=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
-  const point=([x,y,z])=>{const horizontal=x*c-y*s,depth=x*s+y*c;return [horizontal,depth*sp-z*cp,depth*cp+z*sp]};
-  const transformed=vertices.map(point);
-  const ex=[Infinity,Infinity,-Infinity,-Infinity];
-  for(const p of transformed){ex[0]=Math.min(ex[0],p[0]);ex[1]=Math.min(ex[1],p[1]);ex[2]=Math.max(ex[2],p[0]);ex[3]=Math.max(ex[3],p[1])}
-  const scale=Math.min(w/(ex[2]-ex[0]+2),h/(ex[3]-ex[1]+2))*0.79*zoom;
-  const center=[(ex[0]+ex[2])/2,(ex[1]+ex[3])/2];
-  const projected=v=>{const p=point(v);return [w/2+(p[0]-center[0])*scale,h/2+(p[1]-center[1])*scale]};
-  const painter=faces.map(f=>({f,depth:f.reduce((sum,i)=>sum+transformed[i][2],0)/f.length}))
-    .sort((a,b)=>a.depth-b.depth);
-  for(const {f,depth} of painter){
-    ctx.beginPath();
-    f.forEach((i,j)=>{const p=transformed[i],x=w/2+(p[0]-center[0])*scale,
-      y=h/2+(p[1]-center[1])*scale;j?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-    ctx.closePath();ctx.fillStyle=depth>0?"#668c9c":"#517485";
-    ctx.fill();ctx.strokeStyle="#91b7c1";ctx.lineWidth=.7;ctx.stroke();
+  if(!output||!session||!sceneRevision)return;
+  const active=session,runEpoch=epoch;
+  const index=$("whole-cell").value;
+  const state=view("interactive-"+String(++draw.counter),yaw,pitch,1/zoom,840,630);
+  state.showCellGrid=true;
+  if(index!=="all"){
+    const cell=output.slices.cells[Number(index)];
+    state.selectedCell={x:cell.local_xyz[0],y:cell.local_xyz[1],z:cell.local_xyz[2]};
   }
-  for(const [i,cell] of output.slices.cells.entries()){
-    const [a,b,d]=cell.local_xyz,x=a*16,y=b*16,z=d*24;
-    const corners=[[x,y,z],[x+16,y,z],[x+16,y+16,z],[x,y+16,z]].map(projected);
-    const selected=$("whole-cell").value===String(i);
-    ctx.strokeStyle=selected?"#ffca62":"#a4b9c7";ctx.lineWidth=selected?2.5:1.2;
-    ctx.beginPath();corners.forEach(([px,py],j)=>j?ctx.lineTo(px,py):ctx.moveTo(px,py));
-    ctx.closePath();ctx.stroke();
-    if(selected){
-      const top=[[x,y,z+24],[x+16,y,z+24],[x+16,y+16,z+24],[x,y+16,z+24]].map(projected);
-      ctx.beginPath();top.forEach(([px,py],j)=>j?ctx.lineTo(px,py):ctx.moveTo(px,py));
-      ctx.closePath();
-      for(let j=0;j<4;j++){ctx.moveTo(...corners[j]);ctx.lineTo(...top[j])}ctx.stroke();
-    }
-  }
+  void frame(active,sceneRevision,state,runEpoch).catch(e=>{
+    if(epoch===runEpoch&&session===active&&e.message!=="E_WHOLE_VIEW_FRAME")
+      $("whole-view-status").textContent="Кадр недоступен";
+  });
+}
+draw.counter=0;
+function download(name,payload,type="application/json"){
+  const button=document.createElement("button");button.textContent=name;
+  const runEpoch=epoch;
+  button.addEventListener("click",()=>{
+    if(runEpoch!==epoch||!output)return;
+    const url=URL.createObjectURL(new Blob([payload],{type})),link=document.createElement("a");
+    link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),500);
+  });
+  return button;
 }
 function slice(){
   if(!output)return;
@@ -334,17 +382,21 @@ for(const id of ["map","loft","pck","tab","palette","dataset-lines","sprite-data
     if(worker||output){reset();status("READY","Изменены параметры одноклеточного режима")}
   });
 }
-canvas.addEventListener("pointerdown",e=>{if(!output)return;drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId)});
-canvas.addEventListener("pointermove",e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.012;
+function bindPreview(target){
+target.addEventListener("pointerdown",e=>{if(!output)return;drag={x:e.clientX,y:e.clientY};target.setPointerCapture(e.pointerId)});
+target.addEventListener("pointermove",e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.012;
   pitch=Math.max(-1.3,Math.min(1.3,pitch+(e.clientY-drag.y)*.01));drag={x:e.clientX,y:e.clientY};draw()});
-canvas.addEventListener("pointerup",()=>drag=null);
-canvas.addEventListener("pointercancel",()=>drag=null);
-canvas.addEventListener("wheel",e=>{
+target.addEventListener("pointerup",()=>drag=null);
+target.addEventListener("pointercancel",()=>drag=null);
+target.addEventListener("wheel",e=>{
   if(!output)return;e.preventDefault();zoom=Math.max(.3,Math.min(4,zoom*(e.deltaY>0?.91:1.1)));draw();
 },{passive:false});
+}
+bindPreview(canvas);
 $("whole-run").addEventListener("click",async()=>{
   if(worker||!inputs)return;
   reset();
+  status("VALIDATING","Проверка SHA-256; прежние виды и результат сброшены");
   // Terminate a pending single-cell run before switching to the whole-object viewer.
   if(!$("cancel").disabled)$("cancel").click();
   const runEpoch=epoch;
@@ -380,9 +432,25 @@ $("whole-run").addEventListener("click",async()=>{
        checked.report.preview_sha256!==previewHash||
        checked.report.slices_sha256!==slicesHash||
        checked.proof.package_sha256!==modelHash)throw Error("E_WHOLE_PROOF");
-    const mesh=geometry(files["preview.obj"]);
+    let novel=null,viewError="WebGPU недоступен";
+    try{novel=await makeViews(checked,files,modelHash,previewHash,runEpoch)}
+    catch(error){
+      // Presentation limits/failures must not discard a valid canonical build.
+      if(epoch!==runEpoch)throw error;
+      if(!["E_SESSION_LIMIT","E_SESSION_OBJ_LIMIT","E_SESSION_BACKEND_UNSUPPORTED","E_WHOLE_VIEW_FRAME"].includes(error.message))throw error;
+      if(session)await session.dispose();session=null;sceneRevision=null;
+      viewError=error.message;
+    }
     if(epoch!==runEpoch)return;
-    output={...checked,files,mesh};
+    output={...checked,files};
+    if(novel){
+      $("whole-views").replaceChildren(...novel.cards);
+      $("whole-view-receipt").textContent=JSON.stringify(novel.receipt,null,2);
+      $("whole-view-downloads").append(download("novel-views.json",JSON.stringify(novel.receipt,null,2)));
+      $("whole-view-status").textContent="4 новых глобальных вида · WebGPU depth · StageA NOT_ACCEPTED · PRIVATE_ACCEPTANCE_PENDING";
+    }else{
+      $("whole-view-status").textContent=viewError+": четыре вида не подтверждены. FGM/OBJ/C05 доступны; preview при наличии диагностического backend.";
+    }
     $("whole-metrics").textContent=JSON.stringify({
       instance:checked.report.instance,cells:lofts.length,occupied:checked.report.occupied,
       checked_centers:checked.report.checked_centers,model_sha256:modelHash,
@@ -403,11 +471,14 @@ $("whole-run").addEventListener("click",async()=>{
       });
       $("whole-downloads").append(button);
     }
-    showWhole(true);slice();
+    showWhole(!!session);slice();
     status("COMPLETED","Единый OBJ и "+lofts.length+" производных среза; C05 проверен");
   }catch(error){
     if(epoch===runEpoch){
       output=null;showWhole(false);
+      if(session)void session.dispose();session=null;sceneRevision=null;
+      $("whole-views").replaceChildren();$("whole-view-downloads").replaceChildren();
+      $("whole-view-receipt").textContent="";
       $("whole-downloads").replaceChildren();
       status("ERROR",/^E_[A-Z0-9_]+$/.test(error.message)?error.message:"E_WHOLE_UI");
     }
