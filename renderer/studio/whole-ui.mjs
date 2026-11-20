@@ -7,9 +7,9 @@ const NAMES=["model.fgm.json","slices.json","preview.obj","report.json","input-p
 const SHA=/^[a-f0-9]{64}$/;
 const encoder=new TextEncoder();
 let inputs=null,worker=null,controller=null,epoch=0,output=null,session=null;
-let sceneRevision=null,sessionCanvas=null;
+let sceneRevision=null;
 let yaw=-0.8,pitch=0.6,zoom=1,drag=null;
-const canvas=$("whole-preview"),ctx=canvas.getContext("2d");
+let canvas=$("whole-preview"),ctx=canvas.getContext("2d");
 function status(state,message){
   $("whole-status").dataset.state=state;
   $("whole-status").textContent=state+" · "+message;
@@ -28,7 +28,7 @@ function reset(){
   if(worker)worker.terminate();
   worker=null;controller=null;output=null;
   if(session)void session.dispose();
-  session=null;sceneRevision=null;sessionCanvas=null;
+  session=null;sceneRevision=null;
   $("whole-views").replaceChildren();
   $("whole-view-downloads").replaceChildren();
   $("whole-view-receipt").textContent="";
@@ -276,16 +276,16 @@ async function frame(activeSession,scene,viewState,runEpoch){
     expectedViewRevision:v.viewRevision,sessionEpoch:v.sessionEpoch});
   if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
   if(result.status!=="rendered")throw Error("E_WHOLE_VIEW_FRAME");
-  if(activeSession!==session||!sessionCanvas)throw Error("E_WHOLE_CANCELLED");
-  canvas.width=sessionCanvas.width;canvas.height=sessionCanvas.height;
-  ctx.drawImage(sessionCanvas,0,0);
+  if(activeSession!==session)throw Error("E_WHOLE_CANCELLED");
 }
 async function makeViews(checked,files,modelHash,previewHash,runEpoch){
-  // Pending or disposed sessions never own the visible canvas of another run.
-  const target=document.createElement("canvas");
+  // An unresolved factory owns an unattached canvas; only the current run attaches it.
+  // The runtime then owns the displayed canvas, including failure/device-loss clearing.
+  const target=canvas.cloneNode(false);
   const active=await createRendererSessionV1({canvas:target,preferredBackend:"webgpu",fallbackPolicy:"allow-diagnostic"});
   if(runEpoch!==epoch){await active.dispose();throw Error("E_WHOLE_CANCELLED")}
-  session=active;sessionCanvas=target;
+  canvas.replaceWith(target);canvas=target;ctx=canvas.getContext("2d");bindPreview(canvas);
+  session=active;
   const packageBytes=encoder.encode(files["model.fgm.json"]),meshBytes=encoder.encode(files["preview.obj"]);
   const identity="whole-"+modelHash;
   const loaded=await active.loadScene({snapshot:{schema:"fgmv-scene-snapshot/1",revision:identity,
@@ -382,14 +382,17 @@ for(const id of ["map","loft","pck","tab","palette","dataset-lines","sprite-data
     if(worker||output){reset();status("READY","Изменены параметры одноклеточного режима")}
   });
 }
-canvas.addEventListener("pointerdown",e=>{if(!output)return;drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId)});
-canvas.addEventListener("pointermove",e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.012;
+function bindPreview(target){
+target.addEventListener("pointerdown",e=>{if(!output)return;drag={x:e.clientX,y:e.clientY};target.setPointerCapture(e.pointerId)});
+target.addEventListener("pointermove",e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.012;
   pitch=Math.max(-1.3,Math.min(1.3,pitch+(e.clientY-drag.y)*.01));drag={x:e.clientX,y:e.clientY};draw()});
-canvas.addEventListener("pointerup",()=>drag=null);
-canvas.addEventListener("pointercancel",()=>drag=null);
-canvas.addEventListener("wheel",e=>{
+target.addEventListener("pointerup",()=>drag=null);
+target.addEventListener("pointercancel",()=>drag=null);
+target.addEventListener("wheel",e=>{
   if(!output)return;e.preventDefault();zoom=Math.max(.3,Math.min(4,zoom*(e.deltaY>0?.91:1.1)));draw();
 },{passive:false});
+}
+bindPreview(canvas);
 $("whole-run").addEventListener("click",async()=>{
   if(worker||!inputs)return;
   reset();
@@ -435,7 +438,7 @@ $("whole-run").addEventListener("click",async()=>{
       // Presentation limits/failures must not discard a valid canonical build.
       if(epoch!==runEpoch)throw error;
       if(!["E_SESSION_LIMIT","E_SESSION_OBJ_LIMIT","E_SESSION_BACKEND_UNSUPPORTED","E_WHOLE_VIEW_FRAME"].includes(error.message))throw error;
-      if(session)await session.dispose();session=null;sceneRevision=null;sessionCanvas=null;
+      if(session)await session.dispose();session=null;sceneRevision=null;
       viewError=error.message;
     }
     if(epoch!==runEpoch)return;
@@ -473,7 +476,7 @@ $("whole-run").addEventListener("click",async()=>{
   }catch(error){
     if(epoch===runEpoch){
       output=null;showWhole(false);
-      if(session)void session.dispose();session=null;sceneRevision=null;sessionCanvas=null;
+      if(session)void session.dispose();session=null;sceneRevision=null;
       $("whole-views").replaceChildren();$("whole-view-downloads").replaceChildren();
       $("whole-view-receipt").textContent="";
       $("whole-downloads").replaceChildren();

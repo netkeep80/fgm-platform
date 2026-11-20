@@ -63,6 +63,10 @@ try{
         await new Promise(r=>window.__releaseView=r);}
     };
     const requestAdapter=navigator.gpu.requestAdapter.bind(navigator.gpu);
+    const createDevice=GPUAdapter.prototype.requestDevice;
+    GPUAdapter.prototype.requestDevice=async function(...args){
+      const device=await createDevice.apply(this,args);window.__lastDevice=device;return device;
+    };
     window.__gateCreate=false;window.__createGated=false;window.__staleDisposed=false;
     navigator.gpu.requestAdapter=async function(...args){
       const adapter=await requestAdapter(...args);
@@ -145,11 +149,15 @@ try{
     Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data));
   const currentPreview=sha(Buffer.from(await previewPixels()));
   const currentReceipt=await page.locator('#whole-view-receipt').textContent();
+  await page.evaluate(()=>window.__replacementDevice=window.__lastDevice);
   await page.evaluate(()=>window.__releaseCreate());
   await page.waitForFunction(()=>window.__staleDisposed,null,{timeout:60000});
   assert.equal(sha(Buffer.from(await previewPixels())),currentPreview,'canceled factory cleared the new preview');
   assert.equal(await page.locator('#whole-view-receipt').textContent(),currentReceipt);
   assert.equal(await page.locator('#whole-views canvas').count(),4);
+  // Current asynchronous device loss must still clear the actual displayed preview.
+  await page.evaluate(async()=>{window.__replacementDevice.destroy();await window.__replacementDevice.lost});
+  assert.ok((await previewPixels()).every((n,i)=>i%4!==3||n===0),'lost current device retained visible pixels');
   // A device-less client keeps its validated FGM/OBJ/C05 and gets no asserted view proof.
   await page.evaluate(()=>navigator.gpu.requestAdapter=async()=>null);
   await run();assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
@@ -158,5 +166,5 @@ try{
   assert.equal(await page.locator('#whole-views canvas').count(),0);
   assert.equal(await page.locator('#whole-view-receipt').textContent(),'');
   assert.deepEqual(errors,[]);network.assertLocal();
-  console.log('WHOLE_NOVEL_VIEWS_CPU_ORACLE_PASS',JSON.stringify({stats,invertedDepthErrors,cells:4,c05:24576,wrongCameras:4,filledHole:'REJECTED',membership:'REJECTED',gpuCancel:'STALE_DISCARDED',pendingFactoryCancel:'NEW_PREVIEW_PRESERVED',unicodeIdentity:'PRESERVED',stageA:'NOT_ACCEPTED'}));
+  console.log('WHOLE_NOVEL_VIEWS_CPU_ORACLE_PASS',JSON.stringify({stats,invertedDepthErrors,cells:4,c05:24576,wrongCameras:4,filledHole:'REJECTED',membership:'REJECTED',gpuCancel:'STALE_DISCARDED',pendingFactoryCancel:'NEW_PREVIEW_PRESERVED',currentDeviceLoss:'DISPLAY_CLEARED',unicodeIdentity:'PRESERVED',stageA:'NOT_ACCEPTED'}));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
