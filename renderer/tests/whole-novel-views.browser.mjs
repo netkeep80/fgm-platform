@@ -145,6 +145,10 @@ try{
   await page.waitForFunction(()=>window.__createGated,null,{timeout:60000});
   await page.locator('#whole-cancel').click();await run();
   assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
+  await page.waitForFunction(()=>{
+    const c=document.querySelector('#whole-preview');
+    return c.width===840&&c.height===630&&c.getContext('2d').getImageData(0,0,1,1).data[3]===255;
+  },null,{timeout:60000});
   const previewPixels=()=>page.locator('#whole-preview').evaluate(c=>
     Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data));
   const currentPreview=sha(Buffer.from(await previewPixels()));
