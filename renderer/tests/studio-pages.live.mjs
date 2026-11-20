@@ -71,10 +71,17 @@ export async function verifyPublishedAssets({site, hashes, revision, version, re
 // The signed allowlist and every positive file SHA are verified separately.
 // GitHub Pages can return 503 on a missing historical route even when all
 // current assets are healthy; never allow 200/redirect/auth or 503 on local HTTP.
+// An observed 503 proves non-success only, not permanent route absence.
 export function assertObsoleteCameraResponse(status, site) {
   const publicPages=siteURL(site).protocol==="https:";
   assert.ok(status===404 || (publicPages && status===503),
     "E_STUDIO_LIVE_OBSOLETE_CAMERA_STATUS:"+status);
+}
+
+export async function selectLegacyFullDoor(elements) {
+  const door = elements.getByRole("option", {name: "Дверь (BARN № 0)", exact: true});
+  await door.waitFor({state: "attached"});
+  await elements.selectOption(await door.getAttribute("value"));
 }
 
 export async function smokeStudio(verified) {
@@ -136,9 +143,7 @@ export async function smokeStudio(verified) {
         console.log("PLATFORM_HTTP_R04_CATALOG_THUMB_PASS");
       } else {
         // Old signed releases retain the historical native select, not this new UI.
-        const door = elements.getByRole("option", {name: "Дверь (BARN № 0)", exact: true});
-        await door.waitFor({state: "attached"});
-        await elements.selectOption(await door.getAttribute("value"));
+        await selectLegacyFullDoor(elements);
       }
       const result = await reconstruct();
       assert.equal(result.source.dataset_label, "BARN");
