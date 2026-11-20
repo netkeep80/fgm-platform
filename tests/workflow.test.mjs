@@ -150,6 +150,7 @@ for(const [name,mutate]of [
   ["native inventory cannot be bypassed",w=>{w.jobs.core.steps.find(s=>s.run?.startsWith('node scripts/check-ctest.mjs')).if=false;}],
   ["publisher admission suite cannot be bypassed",w=>{w.jobs.core.steps.find(s=>s.run?.includes('test_pages_*.py')).if=false;}],
   ["whole-object novel-view CPU oracle must execute",w=>{const s=w.jobs['wasm-browser'].steps.find(s=>s.run?.includes('node tests/whole-novel-views.browser.mjs'));s.run=s.run.replace('node tests/whole-novel-views.browser.mjs','echo PASS');}],
+  ["native R07 fitted-surface WASM oracle must execute",w=>{const s=w.jobs['wasm-browser'].steps.find(s=>s.run?.includes('node tests/r07-fitted-surface.browser.mjs'));s.run=s.run.replace('node tests/r07-fitted-surface.browser.mjs','echo PASS');}],
   ["WASM depth oracle must execute",w=>{const s=w.jobs['wasm-browser'].steps.find(s=>s.run?.includes('node tests/renderer-depth-oracle.browser.mjs'));s.run=s.run.replace('node tests/renderer-depth-oracle.browser.mjs','echo PASS');}],
   ["WASM whole-object parity must execute",w=>{const s=w.jobs['wasm-browser'].steps.find(s=>s.run?.includes('node tests/test_studio_whole.mjs'));s.run=s.run.replace(/node tests\/test_studio_whole[^\n]+/,'echo PASS');}],
   ["compiled RVI mutation testing cannot be disabled",w=>{w.jobs['wasm-browser'].steps.find(s=>s.run==='node scripts/mutate-v02.mjs').if=false;}],

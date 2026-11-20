@@ -15,6 +15,7 @@ struct BuildBinding { std::string file, sha256; };
 struct BuildSpec {
     BuildBinding receipt;
     std::vector<BuildBinding> lofts;
+    std::optional<BuildBinding> fitted{};
 };
 
 class Runner {

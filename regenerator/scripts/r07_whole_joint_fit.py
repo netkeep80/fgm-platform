@@ -467,15 +467,30 @@ def rename_without_replacement(staging, output):
     raise OSError(code, os.strerror(code))
 
 
-def publish(output, package, winner, receipt):
+def preview_input(package, winner, receipt, cells):
+    return {"schema": "fgmr-r07-fit-preview-input/1",
+            "baseline_sha256": sha(package),
+            "membership_sha256": receipt["membership_sha256"],
+            "winner_package": winner.decode("utf-8"), "winner_sha256": sha(winner),
+            "cells": cells, "fit_receipt": receipt}
+
+
+def publish(output, package, winner, receipt, cells=None, whole_inputs=None):
     tmp = Path(tempfile.mkdtemp(prefix=".r07-joint-output-", dir=output.parent))
     try:
-        for name, data in {
+        files = {
             "whole-baseline.fgm.json": package,
             "whole-candidate.fgm.json": winner,
             "joint-fit-receipt.json": canonical(receipt)
-        }.items():
-            (tmp / name).write_bytes(data + b"\n")
+        }
+        if cells is not None:
+            files["fit-preview.json"] = canonical(preview_input(package, winner, receipt, cells))
+        if whole_inputs is not None:
+            files.update(whole_inputs)
+        for name, data in files.items():
+            # Prepared B1/R03 byte hashes are part of the canonical baseline.
+            # Preserve these exact bytes; legacy fit outputs retain their newline.
+            (tmp / name).write_bytes(data if whole_inputs and name in whole_inputs else data + b"\n")
         check_output(output)
         rename_without_replacement(tmp, output)
     finally:
@@ -496,7 +511,7 @@ def execute(request, binary, binary_sha, output):
                         "no_authenticated_B1_membership", "no_cross_cell_occlusion",
                         "no_four_novel_global_3D_views", "no_Stage_A_acceptance",
                         "never_publish_private_assets_or_derived_models"]}
-    publish(output, package, winner, receipt)
+    publish(output, package, winner, receipt, cells)
     return receipt
 
 

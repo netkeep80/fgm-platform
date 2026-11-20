@@ -92,6 +92,9 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 <label for="whole-expected">Независимо зафиксированные SHA-256</label>
 <textarea id="whole-expected" spellcheck="false" placeholder='{"receipt":"sha256","lofts":["sha256","sha256"]}'></textarea>
 <label for="whole-material">Материал</label><input id="whole-material" type="text" value="stone">
+<label for="whole-fit">Результат native R07 (необязательно): fit-preview.json</label><input id="whole-fit" type="file" accept=".json">
+<label for="whole-fit-expected">SHA-256 файла результата native R07</label><input id="whole-fit-expected" type="text" spellcheck="false">
+<p id="whole-fit-source">Будет показана исходная модель BuildWholeObject.</p>
 <div class="row"><button id="whole-run" class="primary" type="button" disabled>Собрать объект</button><button id="whole-cancel" type="button" disabled>Прервать</button></div>
 <p id="whole-status" data-state="READY" role="status">READY · выберите входные данные</p>
 <label for="whole-cell">Производный SliceByCell</label>
@@ -99,6 +102,7 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 <label for="whole-z">Уровень LOFT внутри клетки (0–23)</label><input id="whole-z" type="number" min="0" max="23" value="3" disabled>
 <pre id="whole-slice">Срезы ещё не построены</pre>
 <pre id="whole-metrics">Нет результата целого объекта</pre>
+<div id="whole-fit-observations" aria-label="Сравнение исходных силуэтов до и после native R07"></div>
 <div id="whole-downloads"></div>
 <details><summary>Идентичность и гипотезы 3D-видов</summary><pre id="whole-view-receipt"></pre><div id="whole-view-downloads"></div></details>
 </section>

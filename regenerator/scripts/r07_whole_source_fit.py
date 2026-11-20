@@ -138,7 +138,10 @@ def execute(args):
                       "flattened_sha256": cell["reference_rows_sha256"]}
                      for member, cell in zip(inspected, cells, strict=True)],
     }
-    joint.publish(args.output, package, winner, receipt)
+    whole_inputs = {"receipt.json": membership,
+                    **{f"loft-{i}.json": joint.canonical(result)
+                       for i, (_, result, _) in enumerate(r03_results)}}
+    joint.publish(args.output, package, winner, receipt, cells, whole_inputs)
     return receipt
 
 
