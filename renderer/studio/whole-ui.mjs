@@ -7,7 +7,7 @@ const NAMES=["model.fgm.json","slices.json","preview.obj","report.json","input-p
 const SHA=/^[a-f0-9]{64}$/;
 const encoder=new TextEncoder();
 let inputs=null,worker=null,controller=null,epoch=0,output=null,session=null;
-let sceneRevision=null;
+let sceneRevision=null,sessionCanvas=null;
 let yaw=-0.8,pitch=0.6,zoom=1,drag=null;
 const canvas=$("whole-preview"),ctx=canvas.getContext("2d");
 function status(state,message){
@@ -28,7 +28,7 @@ function reset(){
   if(worker)worker.terminate();
   worker=null;controller=null;output=null;
   if(session)void session.dispose();
-  session=null;sceneRevision=null;
+  session=null;sceneRevision=null;sessionCanvas=null;
   $("whole-views").replaceChildren();
   $("whole-view-downloads").replaceChildren();
   $("whole-view-receipt").textContent="";
@@ -276,16 +276,21 @@ async function frame(activeSession,scene,viewState,runEpoch){
     expectedViewRevision:v.viewRevision,sessionEpoch:v.sessionEpoch});
   if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
   if(result.status!=="rendered")throw Error("E_WHOLE_VIEW_FRAME");
+  if(activeSession!==session||!sessionCanvas)throw Error("E_WHOLE_CANCELLED");
+  canvas.width=sessionCanvas.width;canvas.height=sessionCanvas.height;
+  ctx.drawImage(sessionCanvas,0,0);
 }
 async function makeViews(checked,files,modelHash,previewHash,runEpoch){
-  const active=await createRendererSessionV1({canvas,preferredBackend:"webgpu",fallbackPolicy:"allow-diagnostic"});
+  // Pending or disposed sessions never own the visible canvas of another run.
+  const target=document.createElement("canvas");
+  const active=await createRendererSessionV1({canvas:target,preferredBackend:"webgpu",fallbackPolicy:"allow-diagnostic"});
   if(runEpoch!==epoch){await active.dispose();throw Error("E_WHOLE_CANCELLED")}
-  session=active;
+  session=active;sessionCanvas=target;
   const packageBytes=encoder.encode(files["model.fgm.json"]),meshBytes=encoder.encode(files["preview.obj"]);
   const identity="whole-"+modelHash;
   const loaded=await active.loadScene({snapshot:{schema:"fgmv-scene-snapshot/1",revision:identity,
     models:[{key:"whole",package:{format:"fgm-package/1",packageSha256:modelHash,byteLength:packageBytes.length}}],
-    instances:[{instanceId:checked.report.instance,modelKey:"whole",stateRevision:"static",
+    instances:[{instanceId:identity,modelKey:"whole",stateRevision:"static",
       placement:{translation:{x:0,y:0,z:0},quarterTurnsZ:0,units:"fgm-voxel"}}]},
     packages:[{modelKey:"whole",bytes:packageBytes}],geometries:[{geometry:{
       schema:"fgmv-derived-geometry/1",sourcePackageSha256:modelHash,meshSha256:previewHash,meshFormat:"obj/1",
@@ -430,7 +435,7 @@ $("whole-run").addEventListener("click",async()=>{
       // Presentation limits/failures must not discard a valid canonical build.
       if(epoch!==runEpoch)throw error;
       if(!["E_SESSION_LIMIT","E_SESSION_OBJ_LIMIT","E_SESSION_BACKEND_UNSUPPORTED","E_WHOLE_VIEW_FRAME"].includes(error.message))throw error;
-      if(session)await session.dispose();session=null;sceneRevision=null;
+      if(session)await session.dispose();session=null;sceneRevision=null;sessionCanvas=null;
       viewError=error.message;
     }
     if(epoch!==runEpoch)return;
@@ -468,7 +473,7 @@ $("whole-run").addEventListener("click",async()=>{
   }catch(error){
     if(epoch===runEpoch){
       output=null;showWhole(false);
-      if(session)void session.dispose();session=null;sceneRevision=null;
+      if(session)void session.dispose();session=null;sceneRevision=null;sessionCanvas=null;
       $("whole-views").replaceChildren();$("whole-view-downloads").replaceChildren();
       $("whole-view-receipt").textContent="";
       $("whole-downloads").replaceChildren();

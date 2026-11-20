@@ -36,7 +36,7 @@ const parts=['floor','west_wall','north_wall','object'],groups=new Map();
 for(const v of voxels){const tile=[Math.floor((v[0]+16)/16),Math.floor((v[1]+16)/16),0],key=tile.join(',');
   if(!groups.has(key))groups.set(key,{tile,points:[]});groups.get(key).points.push(v);}
 const receipt={schema:'fgm-regenerator/verified-membership-input-v1',status:'verified_explicit_membership',
-  instance:'novel_test',prototype:'synthetic',provenance:{kind:'synthetic-test'},anchor_xyz:[1,1,0],cell_bindings:[]};
+  instance:'целый объект 🛰',prototype:'synthetic',provenance:{kind:'synthetic-test'},anchor_xyz:[1,1,0],cell_bindings:[]};
 const lofts=[...groups.values()].sort((a,b)=>a.tile[0]-b.tile[0]||a.tile[1]-b.tile[1]).map(({tile,points},i)=>{
   receipt.cell_bindings.push({xyz:tile,local_xyz:[tile[0]-1,tile[1]-1,0],part:'object',dataset:'SYNTH',record:1,map_record:i});
   const rows=parts.map(()=>Array.from({length:24},()=>Array(16).fill(0)));
@@ -62,6 +62,22 @@ try{
       if(window.__gateView){window.__gateView=false;window.__viewGated=true;
         await new Promise(r=>window.__releaseView=r);}
     };
+    const requestAdapter=navigator.gpu.requestAdapter.bind(navigator.gpu);
+    window.__gateCreate=false;window.__createGated=false;window.__staleDisposed=false;
+    navigator.gpu.requestAdapter=async function(...args){
+      const adapter=await requestAdapter(...args);
+      if(window.__gateCreate){
+        window.__gateCreate=false;window.__createGated=true;
+        const requestDevice=adapter.requestDevice.bind(adapter);
+        adapter.requestDevice=async function(...deviceArgs){
+          const device=await requestDevice(...deviceArgs),destroy=device.destroy.bind(device);
+          device.destroy=()=>{destroy();window.__staleDisposed=true};
+          return device;
+        };
+        await new Promise(r=>window.__releaseCreate=r);
+      }
+      return adapter;
+    };
   });
   await page.goto('http://127.0.0.1:'+server.address().port);
   await upload();await run();
@@ -72,6 +88,7 @@ try{
   assert.equal(result.private_acceptance,'PENDING');assert.equal(result.c05.checked_centers,24576);
   assert.equal(result.membership.sha256,sha(input()[0]));
   assert.equal(result.membership.status,'CONDITIONAL_ON_B1_WITNESS');
+  assert.equal(result.membership.instance,'целый объект 🛰');
   assert.deepEqual(Object.keys(result.evidence),['OBSERVED','INFERRED','UNKNOWN','UNRESOLVED']);
   assert.equal(result.views.length,4);
   const frames=await page.locator('#whole-views canvas').evaluateAll(canvases=>canvases.map(c=>Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data)));
@@ -119,6 +136,20 @@ try{
   assert.equal(await page.locator('#whole-view-receipt').textContent(),'');
   await run();assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
   assert.equal(await page.locator('#whole-views canvas').count(),4);
+  // A canceled factory may finish AFTER a replacement run has published its preview.
+  await page.evaluate(()=>window.__gateCreate=true);await page.locator('#whole-run').click();
+  await page.waitForFunction(()=>window.__createGated,null,{timeout:60000});
+  await page.locator('#whole-cancel').click();await run();
+  assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
+  const previewPixels=()=>page.locator('#whole-preview').evaluate(c=>
+    Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data));
+  const currentPreview=sha(Buffer.from(await previewPixels()));
+  const currentReceipt=await page.locator('#whole-view-receipt').textContent();
+  await page.evaluate(()=>window.__releaseCreate());
+  await page.waitForFunction(()=>window.__staleDisposed,null,{timeout:60000});
+  assert.equal(sha(Buffer.from(await previewPixels())),currentPreview,'canceled factory cleared the new preview');
+  assert.equal(await page.locator('#whole-view-receipt').textContent(),currentReceipt);
+  assert.equal(await page.locator('#whole-views canvas').count(),4);
   // A device-less client keeps its validated FGM/OBJ/C05 and gets no asserted view proof.
   await page.evaluate(()=>navigator.gpu.requestAdapter=async()=>null);
   await run();assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
@@ -127,5 +158,5 @@ try{
   assert.equal(await page.locator('#whole-views canvas').count(),0);
   assert.equal(await page.locator('#whole-view-receipt').textContent(),'');
   assert.deepEqual(errors,[]);network.assertLocal();
-  console.log('WHOLE_NOVEL_VIEWS_CPU_ORACLE_PASS',JSON.stringify({stats,invertedDepthErrors,cells:4,c05:24576,wrongCameras:4,filledHole:'REJECTED',membership:'REJECTED',gpuCancel:'STALE_DISCARDED',stageA:'NOT_ACCEPTED'}));
+  console.log('WHOLE_NOVEL_VIEWS_CPU_ORACLE_PASS',JSON.stringify({stats,invertedDepthErrors,cells:4,c05:24576,wrongCameras:4,filledHole:'REJECTED',membership:'REJECTED',gpuCancel:'STALE_DISCARDED',pendingFactoryCancel:'NEW_PREVIEW_PRESERVED',unicodeIdentity:'PRESERVED',stageA:'NOT_ACCEPTED'}));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
