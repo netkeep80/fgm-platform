@@ -26,7 +26,7 @@ const voxels=[];
 // An asymmetric 4-cell ring with a through-hole and vertical occluder; no original data.
 for(let x=14;x<=17;x++)for(let y=14;y<=17;y++){
   if(x>=15&&x<=16&&y>=15&&y<=16)continue;
-  for(let z=2;z<=3;z++)voxels.push([x,y,z]);
+  voxels.push([x,y,3]);
 }
 for(let z=4;z<=8;z++)voxels.push([14,14,z]);
 voxels.push([17,15,4],[17,15,5],[17,16,4]);
@@ -112,6 +112,13 @@ try{
   assert.equal(await page.locator('#whole-view-receipt').textContent(),'');
   await run();assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
   assert.equal(await page.locator('#whole-views canvas').count(),4);
+  // A device-less client keeps its validated FGM/OBJ/C05 and gets no asserted view proof.
+  await page.evaluate(()=>navigator.gpu.requestAdapter=async()=>null);
+  await run();assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);
+  assert.match(await page.locator('#whole-view-status').textContent(),/WebGPU недоступен/);
+  assert.equal(await page.locator('#whole-downloads button').count(),5);
+  assert.equal(await page.locator('#whole-views canvas').count(),0);
+  assert.equal(await page.locator('#whole-view-receipt').textContent(),'');
   assert.deepEqual(errors,[]);network.assertLocal();
   console.log('WHOLE_NOVEL_VIEWS_CPU_ORACLE_PASS',JSON.stringify({stats,cells:4,c05:24576,wrongCameras:4,filledHole:'REJECTED',membership:'REJECTED',gpuCancel:'STALE_DISCARDED',stageA:'NOT_ACCEPTED'}));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
