@@ -18,13 +18,20 @@ export function reference(voxels,camera,width=420,height=315,depth="nearest"){
     const dir=basis[2].map(x=>-x);
     let nearest=null,edge=false;
     for(const voxel of voxels){
-      let enter=-Infinity,exit=Infinity,enterFace=-1,exitFace=-1;
+      let enter=-Infinity,exit=Infinity,enterFace=-1,exitFace=-1,nearEnter=-Infinity,nearExit=Infinity;
       for(let axis=0;axis<3;axis++){
         const a=(voxel[axis]-origin[axis])/dir[axis],b=(voxel[axis]+1-origin[axis])/dir[axis];
         const lo=Math.min(a,b),hi=Math.max(a,b);
         if(lo>enter){enter=lo;enterFace=axis}if(hi<exit){exit=hi;exitFace=axis}
+        const expanded=[(voxel[axis]-.025-origin[axis])/dir[axis],(voxel[axis]+1+.025-origin[axis])/dir[axis]];
+        nearEnter=Math.max(nearEnter,Math.min(...expanded));nearExit=Math.min(nearExit,Math.max(...expanded));
       }
-      if(exit<enter||exit<0)continue;
+      if(exit<enter||exit<0){
+        // Outside silhouette samples can also graze a box. Bound both sides of an edge,
+        // rather than exempting arbitrary pixel errors or increasing RGB tolerance.
+        if(nearExit>=nearEnter&&nearExit>=0)edge=true;
+        continue;
+      }
       const t=depth==="nearest"?enter:exit,face=depth==="nearest"?enterFace:exitFace;
       const hit=origin.map((n,i)=>n+t*dir[i]);
       const margin=Math.min(...hit.filter((_,i)=>i!==face).map((n,j)=>{
@@ -41,12 +48,20 @@ export function reference(voxels,camera,width=420,height=315,depth="nearest"){
 }
 export function compare(pixels,voxels,camera,width=420,height=315,depth="nearest"){
   const oracle=reference(voxels,camera,width,height,depth);
-  let checked=0,bad=0,foreground=0,background=0;
+  let checked=0,bad=0,foreground=0,background=0,boundary_skipped=0;const mismatches=[],boundaryDifferences=[];
   for(let y=2;y<height;y+=3)for(let x=2;x<width;x+=3){
-    const expected=oracle.point(x,y);if(expected.edge)continue;
-    const start=(y*width+x)*4;checked++;
+    const expected=oracle.point(x,y),start=(y*width+x)*4;
+    if(expected.edge){
+      boundary_skipped++;
+      if((pixels[start+3]!==255||expected.color.some((v,i)=>Math.abs(v-pixels[start+i])>1))&&boundaryDifferences.length<8)
+        boundaryDifferences.push({x,y,expected:expected.color,actual:Array.from(pixels.slice(start,start+4))});
+      continue;
+    }
+    checked++;
     if(expected.color[0]===16)background++;else foreground++;
-    if(pixels[start+3]!==255||expected.color.some((v,i)=>Math.abs(v-pixels[start+i])>1))bad++;
+    if(pixels[start+3]!==255||expected.color.some((v,i)=>Math.abs(v-pixels[start+i])>1)){
+      bad++;if(mismatches.length<8)mismatches.push({x,y,expected:expected.color,actual:Array.from(pixels.slice(start,start+4))});
+    }
   }
-  return {checked,bad,foreground,background};
+  return {checked,bad,foreground,background,boundary_skipped,boundaryDifferences,...(bad?{mismatches}: {})};
 }
