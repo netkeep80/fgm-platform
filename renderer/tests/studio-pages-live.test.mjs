@@ -9,7 +9,7 @@ import {join, resolve} from 'node:path';
 import {test} from 'node:test';
 import {gzipSync} from 'node:zlib';
 import {chromium} from 'playwright';
-import {ASSETS, MANIFEST, PLATFORM, siteURL, verifyPublishedAssets, smokeStudio} from './studio-pages.live.mjs';
+import {ASSETS, MANIFEST, PLATFORM, siteURL, verifyPublishedAssets, smokeStudio, assertObsoleteCameraResponse, selectLegacyFullDoor} from './studio-pages.live.mjs';
 import {localBrowserContext} from './local-browser.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -125,6 +125,41 @@ test('HTTP admission binds actual responses to independently expected hashes and
       }
     });
   } finally {await rm(repo, {recursive:true, force:true});}
+});
+
+test('missing historical camera.html is fail-closed except exact Pages 503 CDN response', () => {
+  const published='https://netkeep80.github.io/fgm-platform/';
+  const local='http://127.0.0.1:9911/fgm-platform/';
+  assert.doesNotThrow(()=>assertObsoleteCameraResponse(404,published));
+  assert.doesNotThrow(()=>assertObsoleteCameraResponse(404,local));
+  assert.doesNotThrow(()=>assertObsoleteCameraResponse(503,published));
+  for(const code of [200,201,301,302,401,403,500,502,504]){
+    assert.throws(()=>assertObsoleteCameraResponse(code,published),/E_STUDIO_LIVE_OBSOLETE_CAMERA_STATUS/);
+    assert.throws(()=>assertObsoleteCameraResponse(code,local),/E_STUDIO_LIVE_OBSOLETE_CAMERA_STATUS/);
+  }
+  assert.throws(()=>assertObsoleteCameraResponse(503,local),/E_STUDIO_LIVE_OBSOLETE_CAMERA_STATUS/);
+  assert.throws(()=>assertObsoleteCameraResponse(503,'https://other.github.io/fgm-platform/'),/E_STUDIO_LIVE_URL/);
+});
+
+// The existing Chromium job also exercises the selector used by signed 1.17 fallback.
+if (process.env.STUDIO_REVIEW_SITE) test('legacy fallback selects the full door from two native options', {timeout:30000}, async () => {
+  const browser = await chromium.launch({headless:true, args:['--no-sandbox']});
+  try {
+    const network = await localBrowserContext(browser), page = await network.context.newPage();
+    await page.setContent('<!doctype html><html lang="ru"><select id="catalog-element">' +
+      '<option value="right-half" selected>Дверь (BARN № 0) · правая половина кадра</option>' +
+      '<option value="full-door">Дверь (BARN № 0)</option></select></html>');
+    const elements = page.locator('#catalog-element');
+    assert.equal(await elements.inputValue(), 'right-half');
+    const ambiguous = elements.getByRole('option', {name:/Дверь/});
+    assert.equal(await ambiguous.count(), 2);
+    await assert.rejects(ambiguous.getAttribute('value'), /strict mode violation/);
+    await selectLegacyFullDoor(elements);
+    assert.equal(await elements.inputValue(), 'full-door');
+    assert.equal(await elements.evaluate(select => select.selectedOptions[0].label), 'Дверь (BARN № 0)');
+    network.assertLocal();
+    console.log('PLATFORM_FALLBACK_LEGACY_DOOR_SELECTOR_PASS');
+  } finally {await browser.close();}
 });
 
 // Native jobs run the real HTTP negatives. The existing WASM job supplies its actual prepared package.

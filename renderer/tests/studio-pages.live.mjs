@@ -68,6 +68,22 @@ export async function verifyPublishedAssets({site, hashes, revision, version, re
   return {site, hashes, revision, tree, version, title, cacheKey, wholeNovelViews, spritePicker};
 }
 
+// The signed allowlist and every positive file SHA are verified separately.
+// GitHub Pages can return 503 on a missing historical route even when all
+// current assets are healthy; never allow 200/redirect/auth or 503 on local HTTP.
+// An observed 503 proves non-success only, not permanent route absence.
+export function assertObsoleteCameraResponse(status, site) {
+  const publicPages=siteURL(site).protocol==="https:";
+  assert.ok(status===404 || (publicPages && status===503),
+    "E_STUDIO_LIVE_OBSOLETE_CAMERA_STATUS:"+status);
+}
+
+export async function selectLegacyFullDoor(elements) {
+  const door = elements.getByRole("option", {name: "Дверь (BARN № 0)", exact: true});
+  await door.waitFor({state: "attached"});
+  await elements.selectOption(await door.getAttribute("value"));
+}
+
 export async function smokeStudio(verified) {
   const {site, version: expectedVersion, title, cacheKey} = verified;
   const browser = await chromium.launch({headless: true, args: ["--no-sandbox", "--enable-unsafe-webgpu", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]});
@@ -127,9 +143,7 @@ export async function smokeStudio(verified) {
         console.log("PLATFORM_HTTP_R04_CATALOG_THUMB_PASS");
       } else {
         // Old signed releases retain the historical native select, not this new UI.
-        const door = elements.getByRole("option", {name: /Дверь/});
-        await door.waitFor({state: "attached"});
-        await elements.selectOption(await door.getAttribute("value"));
+        await selectLegacyFullDoor(elements);
       }
       const result = await reconstruct();
       assert.equal(result.source.dataset_label, "BARN");
@@ -161,7 +175,8 @@ export async function smokeStudio(verified) {
     assert.equal(await page.locator("a[href$='/camera.html']").count(), 0);
     const obsolete = await page.request.get(new URL("camera.html?release=" + cacheKey, site).href,
       {maxRedirects: 0});
-    assert.equal(obsolete.status(), 404);
+    assertObsoleteCameraResponse(obsolete.status(), site);
+    if(obsolete.status()===503)console.log("PLATFORM_HTTP_OBSOLETE_CAMERA_CDN_503_NON_SUCCESS");
     assert.deepEqual(pageErrors, []);
     network.assertLocal();
     await mkdir("build", {recursive: true});
