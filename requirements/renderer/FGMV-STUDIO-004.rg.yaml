@@ -1,0 +1,64 @@
+format: repo-guard/requirement-v1
+id: FGMV-STUDIO-004
+normative: "### FGMV-STUDIO-004 — Оригинальные спрайты в раскрытом списке элементов. После выбора локальной папки игры и тактической карты Studio должна показывать рядом с названием каждого доступного элемента оригинальную миниатюру PCK/TAB 32×40 ещё до выбора элемента и реконструкции, включая корректную палитру, прозрачность и правую половину кадра. В закрытом элементе управления должны отображаться миниатюра и имя выбранной записи. Декодирование выполняет существующий нативный R04 через ограниченный пакетный WASM-протокол для локальных ресурсов текущей карты, без повторной реализации PCK/TAB на JavaScript и без сетевой отправки. Элемент выбора должен поддерживать доступное управление клавиатурой, touch/указатель, явно диагностировать повреждённые спрайты, ограничивать число одновременно декодируемых кадров, память и DOM, отбрасывать устаревшие результаты при смене исходных данных."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target:
+      kind: requirement
+      id: FGMV-STUDIO-003
+  - predicates: [depends_on]
+    target:
+      kind: requirement
+      id: FGMR-SPRITE-001
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: regenerator/src/studio-catalog.cpp
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: regenerator/src/studio-catalog.hpp
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: regenerator/src/studio-run.cpp
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: renderer/studio/index.html
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: renderer/studio/studio-app.mjs
+  - predicates: [implemented_by]
+    target:
+      kind: artifact
+      path: renderer/studio/ufo-catalog.mjs
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: regenerator/tests/test_studio_catalog.mjs
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: renderer/tests/studio-ufo-catalog.test.mjs
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: renderer/tests/studio-s2a.browser.mjs
+  - predicates: [verified_by]
+    target:
+      kind: artifact
+      path: renderer/tests/studio-pages.live.mjs
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: regenerator/docs/studio-ufo-catalog.md
+  - predicates: [documents]
+    target:
+      kind: artifact
+      path: renderer/docs/studio-ufo-catalog.md
