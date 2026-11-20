@@ -160,6 +160,7 @@ export class ElementSpritePicker {
   }
   choose(index){
     const item=this.items[index];if(!item)return;
+    this.cancelPending();
     this.button.value=item.key;this.label.textContent=item.label;
     this.active=index;this.close();this.button.focus();
     this.paintSelected();
