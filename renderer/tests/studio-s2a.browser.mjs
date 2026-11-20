@@ -317,6 +317,8 @@ try{
   const receiptBytes=Buffer.from(JSON.stringify(receipt));
   await page.locator("#whole-files").setInputFiles([
     {name:"receipt.json",mimeType:"application/json",buffer:receiptBytes},...inputFiles]);
+  await page.waitForFunction(()=>document.querySelector("#whole-status").dataset.state==="READY"&&
+    !document.querySelector("#whole-run").disabled,null,{timeout:60000});
   await page.locator("#whole-expected").fill(JSON.stringify({
     lofts:inputFiles.map(f=>hashLocal(f.buffer)),receipt:hashLocal(receiptBytes)}));
   await page.locator("#whole-run").click();
