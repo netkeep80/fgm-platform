@@ -1,0 +1,34 @@
+format: repo-guard/requirement-v1
+id: FGMV-NOVEL-001
+normative: "### FGMV-NOVEL-001 — Четыре глобальных вида целого объекта. После успешной сборки 2–8 клеток через существующий WASM BuildWholeObject и проверки C05 всех клеток Studio должна показывать четыре новые глобальные камеры одной неизменной FGM-модели и одной производной поверхности через RendererSession WebGPU с буфером глубины. Камеры имеют общий базис fgm-voxel, фиксированные различные азимуты с шагом четверть оборота и одинаковую высоту обзора; это не исходные спрайты частей. Локальный результат версии 1 должен связывать membership SHA, instance/prototype, состав клеток, package/mesh SHA, камеры и контрольные суммы кадров. Принадлежность остаётся условной гипотезой B1, наблюдённая занятость отличается от предполагаемой непрерывной поверхности и неизвестных скрытых деталей. Stage A не принимается автоматически. При недоступном WebGPU допускается явно обозначенный диагностический preview без подтверждённых четырёх видов. Отмена или изменение входов удаляют все прежние виды и запрещают публикацию устаревших результатов. Исполняемая проверка должна сравнивать четыре реальных WASM/WebGPU вида асимметричного синтетического объекта с независимым CPU ray/box oracle, обнаруживать неверную камеру, заполненное отверстие, ошибочную принадлежность и позднее завершение отменённого GPU readback."
+lifecycle:
+  accepted: false
+  current: false
+  published: false
+relations:
+  - predicates: [derives_from]
+    target: {kind: requirement, id: FGMV-WHOLE-001}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMV-SESSION-006}
+  - predicates: [depends_on]
+    target: {kind: requirement, id: FGMR-PRODUCT-000}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: renderer/studio/whole-ui.mjs}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: renderer/studio/index.html}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: renderer/scripts/build-studio-s2a.mjs}
+  - predicates: [requires]
+    target: {kind: artifact, path: renderer/runtime/renderer-session-v1.ts}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/whole-novel-views.browser.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/whole-view-oracle.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: .github/workflows/platform.yml}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: renderer/tests/studio-pages.live.mjs}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: tests/workflow.test.mjs}
+  - predicates: [documents]
+    target: {kind: artifact, path: renderer/docs/studio-whole-novel-views.md}

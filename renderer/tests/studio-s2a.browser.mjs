@@ -13,7 +13,7 @@ const MIME={".html":"text/html; charset=utf-8",".mjs":"text/javascript; charset=
   ".wasm":"application/wasm",".json":"application/json; charset=utf-8"};
 const allowed=new Set(["/","/index.html","/studio-app.mjs","/synthetic.mjs","/r05-view.mjs",
   "/engine/worker.mjs","/engine/fgmr-studio.mjs","/engine/fgmr-studio.wasm",
-  "/studio-manifest.json","/ufo-catalog.mjs","/whole-ui.mjs","/favicon.ico"]);
+  "/studio-manifest.json","/ufo-catalog.mjs","/whole-ui.mjs","/renderer-session.mjs","/favicon.ico"]);
 const unexpected=[];
 const server=createServer(async(request,response)=>{
   const url=new URL(request.url||"/","http://localhost");
@@ -29,7 +29,7 @@ const server=createServer(async(request,response)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const url="http://127.0.0.1:"+server.address().port;
-const browser=await chromium.launch({headless:true,executablePath:process.env.FGM_CHROMIUM,args:["--no-sandbox"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.FGM_CHROMIUM,args:["--no-sandbox","--enable-unsafe-webgpu","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 const network=await localBrowserContext(browser);
 try{
   const page=await network.context.newPage();

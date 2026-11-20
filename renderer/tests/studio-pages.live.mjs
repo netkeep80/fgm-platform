@@ -9,7 +9,7 @@ import { chromium } from "playwright";
 import { writeStudioUfoCatalogFixture } from "./studio-ufo-catalog.fixture.mjs";
 import { localBrowserContext } from "./local-browser.mjs";
 
-export const ASSETS = Object.freeze(["index.html", "studio-app.mjs", "whole-ui.mjs", "r05-view.mjs",
+export const ASSETS = Object.freeze(["index.html", "studio-app.mjs", "whole-ui.mjs", "renderer-session.mjs", "r05-view.mjs",
   "synthetic.mjs", "ufo-catalog.mjs", "engine/worker.mjs", "engine/fgmr-studio.mjs", "engine/fgmr-studio.wasm"]);
 export const MANIFEST = "studio-manifest.json";
 export const PLATFORM = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -62,13 +62,13 @@ export async function verifyPublishedAssets({site, hashes, revision, version, re
   ensure(files.get("engine/fgmr-studio.wasm").subarray(0, 8).equals(Buffer.from("0061736d01000000", "hex")), "WASM");
   const title = `Platform ${revision} / TREE ${tree}`;
   ensure(files.get("index.html").includes(Buffer.from(`<code id="studio-version" title="${title}">Версия ${version}</code>`)), "VERSION_BADGE");
-  console.log("PLATFORM_HTTP_ASSETS_PASS: exact Git revision/TREE, version and ten independently expected hashes");
+  console.log("PLATFORM_HTTP_ASSETS_PASS: exact Git revision/TREE, version and all independently expected hashes");
   return {site, hashes, revision, tree, version, title, cacheKey};
 }
 
 export async function smokeStudio(verified) {
   const {site, version: expectedVersion, title, cacheKey} = verified;
-  const browser = await chromium.launch({headless: true, args: ["--no-sandbox"]});
+  const browser = await chromium.launch({headless: true, args: ["--no-sandbox", "--enable-unsafe-webgpu", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]});
   try {
     const network = await localBrowserContext(browser, site, verified.hashes);
     const page = await network.context.newPage();
@@ -125,6 +125,11 @@ export async function smokeStudio(verified) {
     assert.equal(whole.cells,4);
     assert.equal(whole.checked_centers,24576);
     assert.equal(await page.locator("#whole-downloads button").count(),5);
+    assert.equal(await page.locator("#whole-views canvas").count(),4);
+    const views=JSON.parse(await page.locator("#whole-view-receipt").textContent());
+    assert.equal(views.model_sha256,whole.model_sha256);
+    assert.equal(views.backend,"webgpu");
+    assert.equal(views.stage_a,"NOT_ACCEPTED");
     console.log("PLATFORM_HTTP_WHOLE_OBJECT_UI_PASS");
     assert.equal(await page.locator("a[href$='/camera.html']").count(), 0);
     const obsolete = await page.request.get(new URL("camera.html?release=" + cacheKey, site).href,

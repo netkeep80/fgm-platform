@@ -29,6 +29,7 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 #status{padding:9px;border:1px solid #58758d;border-radius:5px;overflow-wrap:anywhere}
 #status[data-state=COMPLETED]{border-color:#3b9a79}#status[data-state=ERROR]{border-color:#c47459}
 #downloads{display:flex;flex-wrap:wrap;gap:6px}#downloads button,#whole-downloads button{font-size:12px}#whole-downloads{display:flex;flex-wrap:wrap;gap:6px}#whole-status[data-state=ERROR]{color:#ffad91}#whole-status[data-state=COMPLETED]{color:#91d6bb}
+#whole-views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px}#whole-views figure{margin:0}#whole-views canvas{min-height:0;max-height:none;width:100%;aspect-ratio:4/3}#whole-views figcaption{font-size:12px;color:#bed0e0}#whole-view-status{padding:12px;color:#bed0e0}
 #manual-bindings summary{cursor:pointer;color:#b8c9d8}fieldset{border:0;padding:0;margin:0;min-width:0}
 @media(max-width:1050px){main{grid-template-columns:280px 1fr}aside:last-child{grid-column:1/-1;border:0;border-top:1px solid #405369}}
 @media(max-width:600px){header{flex-wrap:wrap}main{display:flex;flex-direction:column}aside{border:0;border-bottom:1px solid #405369}canvas{min-height:350px}}
@@ -81,6 +82,7 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 <pre id="whole-slice">Срезы ещё не построены</pre>
 <pre id="whole-metrics">Нет результата целого объекта</pre>
 <div id="whole-downloads"></div>
+<details><summary>Идентичность и гипотезы 3D-видов</summary><pre id="whole-view-receipt"></pre><div id="whole-view-downloads"></div></details>
 </section>
 </aside>
 <div id="view">
@@ -95,6 +97,8 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 </select></div>
 <canvas id="preview" width="840" height="630" aria-label="Сравнение реконструкции R05" aria-describedby="hint"></canvas>
 <canvas id="whole-preview" width="840" height="630" aria-label="Общая FGM-модель; игровая клеточная сетка" hidden></canvas>
+<div id="whole-view-status" role="status">Четыре глобальных вида ещё не построены</div>
+<div id="whole-views" aria-label="Четыре глобальных 3D-вида одной модели"></div>
 <div id="hint"></div>
 </div>
 <aside>

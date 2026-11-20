@@ -160,6 +160,7 @@ function checkWorkflowGate(workflow) {
     "node tests/renderer-session-wasm.browser.mjs build/pages-studio",
     "node tests/renderer-depth-oracle.browser.mjs",
     "node tests/studio-s2a.browser.mjs build/pages-studio --catalog",
+    "node tests/whole-novel-views.browser.mjs build/pages-studio",
     "STUDIO_REVIEW_SITE=build/pages-studio node --test tests/studio-pages-live.test.mjs",
     "node scripts/mutate-v02.mjs",
     "python -m unittest discover -s tests -p test_studio_release.py -v",

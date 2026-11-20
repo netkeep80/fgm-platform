@@ -18,7 +18,8 @@ test('current bundle producer: deterministic exact-source assets and typed negat
     await writeFile(join(engine,'fgmr-studio.wasm'),Buffer.from('0061736d01000000','hex'));
     const first=await buildStudio(input,out),bytes=await readFile(join(out,'studio-manifest.json'));
     await buildStudio(input,out);assert.deepEqual(await readFile(join(out,'studio-manifest.json')),bytes);
-    assert.equal(Object.keys(first.assets).length,9);assert.deepEqual(first.platform,{revision:metadata.revision,tree:metadata.tree});
+    assert.equal(Object.keys(first.assets).length,10);assert.deepEqual(first.platform,{revision:metadata.revision,tree:metadata.tree});
+    assert.match(await readFile(join(out,'renderer-session.mjs'),'utf8'),/export const createRendererSessionV1/);
     assert.equal('regenerator' in first,false);assert.equal('regenerator' in first.engine,false);
     metadata.revision='0'.repeat(40);await save();await assert.rejects(buildStudio(input,out),/E_STUDIO_SOURCE_REVISION/);
     metadata.revision=git('rev-parse','HEAD');metadata.tree='0'.repeat(40);await save();await assert.rejects(buildStudio(input,out),/E_STUDIO_SOURCE_REVISION/);

@@ -232,6 +232,7 @@ jobs:
           node tests/renderer-session-wasm.browser.mjs build/pages-studio
           node tests/renderer-depth-oracle.browser.mjs
           node tests/studio-s2a.browser.mjs build/pages-studio --catalog
+          node tests/whole-novel-views.browser.mjs build/pages-studio
           STUDIO_REVIEW_SITE=build/pages-studio node --test tests/studio-pages-live.test.mjs
       - name: Kill every real RVI source mutant
         working-directory: raster
@@ -245,6 +246,7 @@ jobs:
             renderer/build/native/sphere.ppm
             renderer/build/renderer-session-browser.png
             renderer/build/studio-http-smoke.png
+            renderer/build/whole-novel-views.png
             renderer/build/pages-hashes.json
             renderer/build/rollback-hashes.json
             raster/build/v02/mutations.json

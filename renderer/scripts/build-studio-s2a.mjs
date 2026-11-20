@@ -24,7 +24,10 @@ export async function buildStudio(wasmDirectory,outputDirectory=resolve(repo,'re
   ensure(engine.schema==='fgmp-studio-engine/1'&&/^[a-f0-9]{40}$/.test(engine.core)&&
     engine.workerProtocol===1&&engine.wholeBuild==='r06-whole-build/1'&&!('regenerator' in engine),
     'E_STUDIO_ENGINE_CONTRACT');
-  const entries=[...['index.html','studio-app.mjs','whole-ui.mjs','r05-view.mjs','ufo-catalog.mjs','synthetic.mjs']
+  // Compile the existing runtime from this checkout; never ship a stale build copy.
+  execFileSync(process.execPath,[join(repo,'node_modules/typescript/bin/tsc'),'-p',
+    join(repo,'renderer/runtime/tsconfig.json')],{stdio:'pipe'});
+  const entries=[[join(repo,'renderer/build/renderer-session-runtime/runtime/renderer-session-v1.js'),'renderer-session.mjs'],...['index.html','studio-app.mjs','whole-ui.mjs','r05-view.mjs','ufo-catalog.mjs','synthetic.mjs']
     .map(name=>[join(repo,'renderer/studio',name),name]),
     ...['worker.mjs','fgmr-studio.mjs','fgmr-studio.wasm'].map(name=>[join(src,'regenerator',name),'engine/'+name])];
   const files=new Map();let size=0;
