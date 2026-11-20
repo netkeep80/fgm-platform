@@ -123,7 +123,7 @@ def inventory(r02, r03, selection, contents, verified, halo, root):
                        *(arg for d in mcd for arg in ("--mcd", d)),
                        "--tile", ",".join(map(str, world))]
             loft = local.run(r03, request)
-            require(loft.get("schema") == "fgm-regenerator/loft-terrain-v1" and
+            require(type(loft) is dict and loft.get("schema") == "fgm-regenerator/loft-terrain-v1" and
                     loft.get("voxel_dimensions_xyz") == [16, 16, 24] and loft.get("terrain_only") is True and
                     loft.get("tile") == {"xyz": list(world), "record_index": tile["record_index"]} and
                     len(loft.get("sources", [])) == len(loft.get("part_rows", [])) == 4,
@@ -131,7 +131,7 @@ def inventory(r02, r03, selection, contents, verified, halo, root):
             for i, part in enumerate(evidence.PARTS):
                 fact, decoded = tile["parts"][i], loft["sources"][i]
                 rows = loft["part_rows"][i]
-                require(fact["kind"] == decoded.get("part") == part and
+                require(type(fact) is dict and type(decoded) is dict and fact["kind"] == decoded.get("part") == part and
                         fact["present"] is decoded.get("present") and
                         type(rows) is list and len(rows) == 24 and all(type(layer) is list and
                         len(layer) == 16 and all(type(v) is int and 0 <= v <= 65535 for v in layer)
@@ -189,7 +189,8 @@ def execute(args):
     expected = joint.pinned_path(args.fit_receipt, 1024*1024, args.fit_receipt_sha256,
                                  "E_BOUNDARY_FIT_RECEIPT_SHA")
     receipt = joint.parse(expected, "E_BOUNDARY_FIT_RECEIPT")
-    require(receipt.get("schema") in (source_fit.SCHEMA, source_fit.AXIS_SCHEMA), "E_BOUNDARY_SOURCE_FIT_ONLY")
+    require(type(receipt) is dict and receipt.get("schema") in (source_fit.SCHEMA, source_fit.AXIS_SCHEMA),
+            "E_BOUNDARY_SOURCE_FIT_ONLY")
     require((receipt["schema"] == source_fit.AXIS_SCHEMA) == args.axis_fit, "E_BOUNDARY_FIT_MODE")
     verified_bytes = joint.pinned_path(args.verified, 1024*1024, args.verified_sha256, "E_BOUNDARY_B1_SHA")
     prior = joint.pinned_path(args.preflight, 1024*1024, args.preflight_sha256, "E_BOUNDARY_PREFLIGHT_SHA")

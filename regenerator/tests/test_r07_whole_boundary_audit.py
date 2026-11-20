@@ -139,6 +139,14 @@ class ObjectBoundary(unittest.TestCase):
         command[command.index("--fit-receipt-sha256")+1] = "0"*64
         self.rejected("E_BOUNDARY_FIT_RECEIPT_SHA", command)
 
+    def test_nonobject_and_duplicate_receipt_are_typed_rejections(self):
+        for data, code in ((b"[]", "E_BOUNDARY_SOURCE_FIT_ONLY"),
+                           (b'{"schema":1,"schema":2}', "E_B1_DUPLICATE_JSON_KEY")):
+            with self.subTest(data=data):
+                self.fit_receipt.write_bytes(data)
+                self.expected_sha = joint.sha(data)
+                self.rejected(code)
+
     def test_rehashed_false_winner_receipt_is_not_a_source_replay(self):
         receipt = json.loads(self.fit_receipt.read_bytes())
         receipt["winner_sha256"] = "0"*64
@@ -209,6 +217,16 @@ class ObjectBoundary(unittest.TestCase):
                     "schema": "fgm-regenerator/whole-object-sampling-v1", "cells": cells}):
                 with self.assertRaisesRegex(Exception, "E_BOUNDARY_SAMPLER_PROTOCOL"):
                     audit.sample_halo(SAMPLER, package, "stone", halo, self.root, "corrupted")
+
+    def test_nonobject_r03_response_is_a_typed_protocol_rejection(self):
+        selection = audit.s0.load_selection(self.fixture.manifest)
+        contents, _ = audit.s0.source_snapshot(selection, self.fixture.manifest)
+        halo = audit.halo_of(self.fixture.verified["cell_bindings"])
+        root = self.root/"corrupt-r03"
+        root.mkdir()
+        with mock.patch.object(audit.local, "run", return_value=[]):
+            with self.assertRaisesRegex(Exception, "E_BOUNDARY_R03_PROTOCOL"):
+                audit.inventory(R02, R03, selection, contents, self.fixture.verified, halo, root)
 
 
 if __name__ == "__main__":
