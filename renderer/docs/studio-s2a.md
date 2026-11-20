@@ -6,7 +6,7 @@
 
 - Владелец: [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
 - Архитектура: [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
-- Единственный исполнитель R06: принятый fgm-regenerator (историческая запись).
+- Единственный исполнитель R06: модуль [`regenerator/`](../../regenerator/) Platform; прежнее выделение в отдельный Git-репозиторий — исторический факт, не действующая зависимость.
 - Закреплённый C05: `ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b`.
 - Выходная геометрия: проверенный R06 OBJ, а не заново интерпретированная семантика FGM в JavaScript.
 

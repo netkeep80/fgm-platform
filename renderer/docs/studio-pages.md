@@ -111,9 +111,9 @@ Gzip сравнивается по распакованным байтам; пр
 Native Ubuntu/Windows исполняют publisher, origin/ZIP/rollback и HTTP negatives.
 Ubuntu WASM job дополнительно запускает настоящий закреплённый gh attestation verifier против unsigned bundle,
 Chromium smoke и подмену ответа после scan. Тестовые verifier fixtures проверяют отрицательные сценарии admission/control flow, но не заменяют
-положительную проверку подписи и реальной публикации. Для Studio 1.12, 1.13 и 1.14 уже зафиксированы
-подписанные продуктовые Releases и успешные публичные HTTP/WASM проверки; [последний выпуск Studio 1.14](https://github.com/netkeep80/fgm-platform/releases/tag/studio-88cfb3aecedf07bcfb363eea910b4163356e9727)
-подтверждён [production run #44612285253](https://github.com/netkeep80/fgm-platform/actions/runs/44612285253).
+положительную проверку подписи и реальной публикации. Для Studio 1.12–1.15 уже зафиксированы
+подписанные продуктовые Releases и успешные публичные HTTP/WASM проверки; [подтверждённый выпуск Studio 1.15](https://github.com/netkeep80/fgm-platform/releases/tag/studio-d8e46463f282109f0ff15ee9fef71b192d49600f)
+подтверждён [production run #44623246908](https://github.com/netkeep80/fgm-platform/actions/runs/44623246908).
 Отдельно подтверждён [ручной откат на подписанную Studio 1.12](https://github.com/netkeep80/fgm-platform/issues/1#issuecomment-7019384340).
 Дополнительные ручные failure/fallback drills отложены автором до завершения миграции и не являются её блокером.
 

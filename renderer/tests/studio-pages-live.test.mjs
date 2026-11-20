@@ -117,8 +117,8 @@ test('HTTP admission binds actual responses to independently expected hashes and
         revision, version, repo}), /ALLOWLIST/);}
       finally {await server.close();}
     });
-    await t.test('non-site and legacy URLs are rejected', () => {
-      for (const url of ['https://netkeep80.github.io/fgm-renderer/', 'https://github.com/netkeep80/fgm-core/',
+    await t.test('non-site, malformed and unrelated origin URLs are rejected', () => {
+      for (const url of ['https://unrelated.example.invalid/', 'https://github.com/other-owner/other-repository/',
         'https://example.invalid/', 'https://netkeep80.github.io/fgm-platform/?redirect=1',
         'http://127.0.0.1/fgm-platform', 'http://user@127.0.0.1/fgm-platform/']) {
         assert.throws(() => siteURL(url), /URL/);
@@ -141,9 +141,15 @@ if (process.env.STUDIO_REVIEW_SITE) test('prepared Platform package executes the
     try {
       const network = await localBrowserContext(browser, verified.site, hashes), page = await network.context.newPage();
       files.set('studio-app.mjs', Buffer.from('globalThis.replaced = true;'));
-      await assert.rejects(page.goto(new URL('studio-app.mjs', server.site).href));
-      assert.equal(network.denied.length, 1);
+      const tampered = new URL('studio-app.mjs', server.site).href;
+      await assert.rejects(page.goto(tampered), /ERR_BLOCKED_BY_CLIENT/);
+      assert.deepEqual(network.denied, [tampered]);
       console.log('PLATFORM_BROWSER_CHANGED_AFTER_HTTP_SCAN_REJECTED');
+      // Deliberately request an unrelated HTTPS origin in real Chromium; no old FGM repo is needed.
+      const foreign = 'https://unrelated.example.invalid/';
+      await assert.rejects(page.goto(foreign), /ERR_BLOCKED_BY_CLIENT/);
+      assert.deepEqual(network.denied, [tampered, foreign]);
+      console.log('PLATFORM_BROWSER_CROSS_ORIGIN_DENY_PASS');
     } finally {await browser.close();}
     console.log('PLATFORM_REVIEW_HTTP_WASM_SMOKE_PASS');
   } finally {await server.close();}

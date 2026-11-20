@@ -156,7 +156,7 @@ function checkWorkflowGate(workflow) {
     "node tests/test_studio_cell.mjs \"$native/fgmr-studio-native\" \"$worker\"",
     "node tests/test_studio_catalog.mjs \"$native/fgmr-studio-native\" \"$worker\"",
     "node tests/test_studio_whole.mjs \"$native/fgmr-studio-native\" \"$native/fgmr-r06-multicell-sample\" \"$worker\" --builder \"$native/fgmr-r06-whole-build\"",
-    "node --test tests/local-browser.test.mjs tests/browser.test.mjs tests/renderer-session.browser.mjs",
+    "node --test tests/browser.test.mjs tests/renderer-session.browser.mjs",
     "node tests/renderer-session-wasm.browser.mjs build/pages-studio",
     "node tests/renderer-depth-oracle.browser.mjs",
     "node tests/studio-s2a.browser.mjs build/pages-studio --catalog",
