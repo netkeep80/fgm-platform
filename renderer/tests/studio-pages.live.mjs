@@ -9,7 +9,7 @@ import { chromium } from "playwright";
 import { writeStudioUfoCatalogFixture } from "./studio-ufo-catalog.fixture.mjs";
 import { localBrowserContext } from "./local-browser.mjs";
 
-export const ASSETS = Object.freeze(["index.html", "studio-app.mjs", "whole-ui.mjs", "renderer-session.mjs", "r05-view.mjs",
+export const ASSETS = Object.freeze(["index.html", "studio-app.mjs", "whole-ui.mjs", "r05-view.mjs",
   "synthetic.mjs", "ufo-catalog.mjs", "engine/worker.mjs", "engine/fgmr-studio.mjs", "engine/fgmr-studio.wasm"]);
 export const MANIFEST = "studio-manifest.json";
 export const PLATFORM = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -63,7 +63,8 @@ export async function verifyPublishedAssets({site, hashes, revision, version, re
   const title = `Platform ${revision} / TREE ${tree}`;
   ensure(files.get("index.html").includes(Buffer.from(`<code id="studio-version" title="${title}">Версия ${version}</code>`)), "VERSION_BADGE");
   console.log("PLATFORM_HTTP_ASSETS_PASS: exact Git revision/TREE, version and all independently expected hashes");
-  return {site, hashes, revision, tree, version, title, cacheKey};
+  const wholeNovelViews=git('ls-tree','--name-only',revision,'requirements/renderer/FGMV-NOVEL-001.rg.yaml')!=='';
+  return {site, hashes, revision, tree, version, title, cacheKey, wholeNovelViews};
 }
 
 export async function smokeStudio(verified) {
@@ -125,11 +126,15 @@ export async function smokeStudio(verified) {
     assert.equal(whole.cells,4);
     assert.equal(whole.checked_centers,24576);
     assert.equal(await page.locator("#whole-downloads button").count(),5);
-    assert.equal(await page.locator("#whole-views canvas").count(),4);
-    const views=JSON.parse(await page.locator("#whole-view-receipt").textContent());
-    assert.equal(views.model_sha256,whole.model_sha256);
-    assert.equal(views.backend,"webgpu");
-    assert.equal(views.stage_a,"NOT_ACCEPTED");
+    // The expected capability comes from immutable target Git, including older releases.
+    if(verified.wholeNovelViews){
+      assert.equal(await page.locator("#whole-views canvas").count(),4);
+      const views=JSON.parse(await page.locator("#whole-view-receipt").textContent());
+      assert.equal(views.model_sha256,whole.model_sha256);
+      assert.equal(views.backend,"webgpu");
+      assert.equal(views.stage_a,"NOT_ACCEPTED");
+      console.log("PLATFORM_HTTP_WHOLE_NOVEL_VIEWS_PASS");
+    }
     console.log("PLATFORM_HTTP_WHOLE_OBJECT_UI_PASS");
     assert.equal(await page.locator("a[href$='/camera.html']").count(), 0);
     const obsolete = await page.request.get(new URL("camera.html?release=" + cacheKey, site).href,

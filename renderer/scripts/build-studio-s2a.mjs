@@ -27,14 +27,25 @@ export async function buildStudio(wasmDirectory,outputDirectory=resolve(repo,'re
   // Compile the existing runtime from this checkout; never ship a stale build copy.
   execFileSync(process.execPath,[join(repo,'node_modules/typescript/bin/tsc'),'-p',
     join(repo,'renderer/runtime/tsconfig.json')],{stdio:'pipe'});
-  const entries=[[join(repo,'renderer/build/renderer-session-runtime/runtime/renderer-session-v1.js'),'renderer-session.mjs'],...['index.html','studio-app.mjs','whole-ui.mjs','r05-view.mjs','ufo-catalog.mjs','synthetic.mjs']
+  const runtime=await readFile(join(repo,'renderer/build/renderer-session-runtime/runtime/renderer-session-v1.js'),'utf8');
+  ensure(!/^import /m.test(runtime),'E_STUDIO_RUNTIME_IMPORT');
+  const runtimeImport='import {createRendererSessionV1} from "./renderer-session.mjs";';
+  const inlineRuntime='const {createRendererSessionV1}=(()=>{\n'+runtime.replace(/^export /gm,'')+
+    '\nreturn {createRendererSessionV1};})();';
+  const entries=[...['index.html','studio-app.mjs','whole-ui.mjs','r05-view.mjs','ufo-catalog.mjs','synthetic.mjs']
     .map(name=>[join(repo,'renderer/studio',name),name]),
     ...['worker.mjs','fgmr-studio.mjs','fgmr-studio.wasm'].map(name=>[join(src,'regenerator',name),'engine/'+name])];
   const files=new Map();let size=0;
   for(const [from,name]of entries){
     const stat=await lstat(from);ensure(stat.isFile()&&!stat.isSymbolicLink(),'E_STUDIO_ASSET_TYPE');
     ensure(stat.size>0&&stat.size<=16*1024*1024,'E_STUDIO_EMPTY_OR_LARGE_ASSET');
-    const bytes=await readFile(from);size+=bytes.length;
+    let bytes=await readFile(from);
+    if(name==='whole-ui.mjs'){
+      const source=bytes.toString('utf8');
+      ensure(source.split(runtimeImport).length===2,'E_STUDIO_RUNTIME_IMPORT');
+      bytes=Buffer.from(source.replace(runtimeImport,()=>inlineRuntime));
+    }
+    size+=bytes.length;
     if(name.endsWith('.wasm'))ensure(bytes.subarray(0,8).equals(Buffer.from('0061736d01000000','hex')),'E_STUDIO_WASM_MAGIC');
     files.set(name,bytes);
   }

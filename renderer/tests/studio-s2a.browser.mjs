@@ -13,7 +13,7 @@ const MIME={".html":"text/html; charset=utf-8",".mjs":"text/javascript; charset=
   ".wasm":"application/wasm",".json":"application/json; charset=utf-8"};
 const allowed=new Set(["/","/index.html","/studio-app.mjs","/synthetic.mjs","/r05-view.mjs",
   "/engine/worker.mjs","/engine/fgmr-studio.mjs","/engine/fgmr-studio.wasm",
-  "/studio-manifest.json","/ufo-catalog.mjs","/whole-ui.mjs","/renderer-session.mjs","/favicon.ico"]);
+  "/studio-manifest.json","/ufo-catalog.mjs","/whole-ui.mjs","/favicon.ico"]);
 const unexpected=[];
 const server=createServer(async(request,response)=>{
   const url=new URL(request.url||"/","http://localhost");

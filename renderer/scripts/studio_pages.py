@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 ASSETS = {
-    "index.html", "studio-app.mjs", "whole-ui.mjs", "renderer-session.mjs", "r05-view.mjs", "synthetic.mjs", "ufo-catalog.mjs",
+    "index.html", "studio-app.mjs", "whole-ui.mjs", "r05-view.mjs", "synthetic.mjs", "ufo-catalog.mjs",
     "engine/worker.mjs", "engine/fgmr-studio.mjs", "engine/fgmr-studio.wasm",
 }
 MANIFEST = "studio-manifest.json"

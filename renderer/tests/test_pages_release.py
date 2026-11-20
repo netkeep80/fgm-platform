@@ -76,13 +76,6 @@ class PagesReleaseTests(StudioPagesFixture):
         self.reject("ALLOWLIST")
 
 
-    def test_rejects_missing_renderer_runtime_module(self):
-        self.assets.pop("renderer-session.mjs")
-        self.manifest["assets"].pop("renderer-session.mjs")
-        self.write_bundle()
-        self.reject("ALLOWLIST")
-
-
     def test_rejects_previous_manifest_schema(self):
         self.manifest["schema"] = "fgmv-studio-ufo-catalog/1"
         self.write_bundle()
