@@ -254,6 +254,18 @@ std::string Runner::call(std::string_view input) {
             require(fields(request,{"v","action"}), "E_STUDIO_REQUEST");
             return response().dump();
         }
+        if (action=="catalog-thumbnails") {
+            require(state_!=State::running && state_!=State::paused,"E_STUDIO_STATE");
+            require(fields(request,{"v","action","dataset","records","frameSlot",
+                                    "tabBits","paletteIndex"}),"E_STUDIO_REQUEST");
+            auto reply=response();
+            reply["thumbnails"]=catalog_thumbnails(identifier(request["dataset"]),staged_,
+                request["records"],
+                static_cast<unsigned>(bounded(request["frameSlot"],7,"E_R04_ARGUMENTS")),
+                static_cast<unsigned>(bounded(request["tabBits"],32,"E_R04_ARGUMENTS")),
+                bounded(request["paletteIndex"],8191,"E_R04_PALETTE_LENGTH"));
+            return reply.dump();
+        }
         if (action=="catalog-directory" || action=="catalog-map") {
             auto reply=response();
             if (action=="catalog-directory") {
