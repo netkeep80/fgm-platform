@@ -50,6 +50,8 @@ const input=()=>[Buffer.from(JSON.stringify(receipt)),...lofts];
 const upload=async()=>{
   const bytes=input();
   await page.locator('#whole-files').setInputFiles(bytes.map((buffer,i)=>({name:i?'loft-'+(i-1)+'.json':'receipt.json',mimeType:'application/json',buffer})));
+  await page.waitForFunction(()=>document.querySelector('#whole-status').dataset.state==='READY'&&
+    !document.querySelector('#whole-run').disabled,null,{timeout:60000});
   await page.locator('#whole-expected').fill(JSON.stringify({receipt:sha(bytes[0]),lofts:bytes.slice(1).map(sha)}));
 };
 const run=async()=>{await page.locator('#whole-run').click();await page.waitForFunction(()=>['COMPLETED','ERROR'].includes(document.querySelector('#whole-status').dataset.state),null,{timeout:90000});};
