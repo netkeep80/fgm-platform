@@ -560,7 +560,7 @@ try{
         try{
           await writeStudioUfoCatalogFixture(badRoot,fault);
           await page.locator("#directory").setInputFiles(badRoot);
-          await mapMenu.locator("option[value=CULTA00]").waitFor();
+          await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
           await mapMenu.selectOption("CULTA00");
           await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
           await elementMenu.click();
