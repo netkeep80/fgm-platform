@@ -2,7 +2,7 @@ const requestLimit = 128 * 1024;
 const pathLimit = 4096;
 const encoder = new TextEncoder();
 // Filter transport paths only; the worker owns profiles, ordering and classification.
-const candidatePath = /(?:^|\/)(?:MAPS|TERRAIN|GEODATA)\/[^/]+$/i;
+const candidatePath = /(?:^|\/)(?:(?:MAPS|TERRAIN|GEODATA)\/[^/]+|ROUTES\/[^/]+\.RMP)$/i;
 
 export function indexGameFolder(files) {
   const index = new Map();
@@ -18,6 +18,25 @@ export function indexGameFolder(files) {
   if (encoder.encode(JSON.stringify({v:1,...request})).length > requestLimit)
     throw Error("E_STUDIO_CATALOG_INDEX_LIMIT");
   return {index,request};
+}
+
+// U3: only a same-root filename existence check; never read RMP bytes or
+// interpret route graph contents. Unknown root is not an absent route.
+export function mapRoutePresence(index,mapPath) {
+  const found=/^(.*\/)?MAPS\/([^/]+)\.MAP$/i.exec(mapPath??"");
+  if(!found)return "ROUTE_INDEX_UNAVAILABLE";
+  const root=(found[1]??"").toUpperCase();
+  const expected=root+"ROUTES/"+found[2].toUpperCase()+".RMP";
+  let available=false,count=0;
+  for(const path of index.keys()) {
+    const folded=path.toUpperCase();
+    if(!folded.startsWith(root+"ROUTES/")||!/\.RMP$/.test(folded))continue;
+    available=true;
+    if(folded===expected)count++;
+  }
+  return count>1?"ROUTE_FILE_AMBIGUOUS":
+    count===1?"ROUTE_FILE_PRESENT_UNPARSED":
+    available?"ROUTE_FILE_NOT_FOUND":"ROUTE_INDEX_UNAVAILABLE";
 }
 
 export function resolveFile(index,path) {

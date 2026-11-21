@@ -79,6 +79,24 @@ body[data-workspace=source] #whole-panel h2:after{content:" · совмести�
 #source-placement-status{overflow-wrap:anywhere}
 
 
+/* D4-U3: a bounded, factual MAP floor diagram, NOT a sprite/isometric view. */
+body:not([data-workspace=mapblock]) #mapblock-library-panel,
+body:not([data-workspace=mapblock]) #mapblock-inspector{display:none}
+#mapblock-library-panel{border-top:1px solid #405369;padding-top:12px}
+#mapblock-library{width:100%;min-height:190px;max-height:40vh}
+#mapblock-library-panel .muted,#mapblock-status,#mapblock-selected,#mapblock-route{overflow-wrap:anywhere}
+#mapblock-inspector{min-width:0;padding:12px;flex-direction:column;gap:9px}
+body[data-workspace=mapblock] #mapblock-inspector:not([hidden]){display:flex}
+#mapblock-inspector[hidden]{display:none}
+#mapblock-grid-scroll{max-width:100%;overflow:auto;overscroll-behavior:contain;border:1px solid #526b83;border-radius:5px;max-height:62vh}
+#mapblock-grid{display:grid;gap:2px;padding:4px;width:max-content;min-width:100%;background:#122333}
+.mapblock-cell{min-width:42px;min-height:43px;padding:4px 2px;font:11px/1.4 monospace;text-align:center;background:#284258}
+.mapblock-cell[data-count="0"]{background:#1b2937;color:#90a2b2}
+.mapblock-cell[aria-pressed="true"]{background:#176b50;border-color:#9fe7ca}
+.mapblock-cell:focus-visible,#mapblock-parts button:focus-visible{outline:3px solid #f1dc91;outline-offset:1px}
+#mapblock-parts{display:flex;flex-wrap:wrap;gap:6px}
+#mapblock-selected{font:12px/1.6 monospace}
+@media(max-width:600px){#mapblock-inspector{padding:7px}#mapblock-grid-scroll{width:100%}}
 /* D4-U2: local, proposal-only ObjectHypothesis membership UI. */
 body:not([data-workspace=object]) #object-hypothesis-panel{display:none}
 #object-hypothesis-panel{border-top:1px solid #405369;padding-top:12px}
@@ -150,6 +168,15 @@ body:not([data-workspace=object]) #object-hypothesis-panel{display:none}
 </section>
 
 
+<section id="mapblock-library-panel" aria-labelledby="mapblock-library-heading">
+<h2 id="mapblock-library-heading">Библиотека исходных MAP-блоков · U3</h2>
+<p class="muted">Локальные оригинальные файлы MAP, профили и наличие RMP. Это не 3D-реконструкция, не построенная тактическая карта и не ObjectDefinition.</p>
+<label for="mapblock-library">Исходный шаблон MAP</label>
+<select id="mapblock-library" size="8" disabled aria-label="Выбрать исходный MAP-блок"></select>
+<p id="mapblock-route" role="status" class="muted">ROUTE_INDEX_UNAVAILABLE</p>
+<p class="muted">Файлы маршрутов определяются только по именам в ROUTES/*.RMP; узлы и связи RMP не разбираются.</p>
+</section>
+
 <section id="object-hypothesis-panel" aria-labelledby="object-hypothesis-heading">
 <h2 id="object-hypothesis-heading">Гипотезы объектов · D4-U2</h2>
 <p class="muted">Только локальные предложения о принадлежности исходных частей. Это не ObjectDefinition и не проверенная целая FGM-модель.</p>
@@ -201,6 +228,17 @@ body:not([data-workspace=object]) #object-hypothesis-panel{display:none}
 <option value="collision">Коллизии</option>
 <option value="mesh">Свободный вид OBJ</option>
 </select></div>
+<section id="mapblock-inspector" hidden aria-labelledby="mapblock-view-heading">
+<h2 id="mapblock-view-heading">MapBlock · SOURCE_LAYOUT_2D</h2>
+<p class="muted">Схема размещений из нативного R02/MAP. Это не исходный мозаичный спрайт, не FGM-модель и не изометрия.</p>
+<p id="mapblock-status" role="status" class="muted">NO_SOURCE · выберите папку игры и MAP-блок.</p>
+<label for="mapblock-floor">Этаж исходного блока (Z)</label>
+<select id="mapblock-floor" disabled aria-label="Этаж MAP-блока"></select>
+<div id="mapblock-grid-scroll"><div id="mapblock-grid" role="group" aria-label="Полная схема клеток исходного MAP-блока"></div></div>
+<p id="mapblock-selected" role="status">Клетка не выбрана.</p>
+<div id="mapblock-parts" role="group" aria-label="Нативные части выбранной клетки"></div>
+<button id="mapblock-open-source" type="button" disabled>К исходным частям R04/R06</button>
+</section>
 <section id="studio-workspace-placeholder" role="status" aria-live="polite" hidden><h2 id="studio-workspace-heading">Режим пока недоступен</h2><p id="studio-workspace-description">Выберите рабочее пространство.</p></section>
 <canvas id="preview" width="840" height="630" aria-label="Сравнение реконструкции R05" aria-describedby="hint"></canvas>
 <canvas id="whole-preview" width="840" height="630" aria-label="Общая FGM-модель; игровая клеточная сетка" hidden></canvas>
@@ -214,7 +252,7 @@ body:not([data-workspace=object]) #object-hypothesis-panel{display:none}
 </section>
 <section class="source-output"><h2>Результат</h2><pre id="metrics">Результатов пока нет</pre></section>
 <section class="source-output"><h2>Сохранить локально</h2><div id="downloads"></div></section>
-<section id="studio-workspace-inspector" aria-live="polite"><h2>Контекст рабочего пространства</h2><p id="studio-workspace-context">Источник · текущий нативный каталог и реконструкция.</p><p class="muted">U1: нативные SourcePartRef. U2: локальные ObjectHypothesis. MapBlock, карта и мир пока не реализованы. Ресурсы UFO остаются локально.</p></section>
+<section id="studio-workspace-inspector" aria-live="polite"><h2>Контекст рабочего пространства</h2><p id="studio-workspace-context">Источник · текущий нативный каталог и реконструкция.</p><p class="muted">U1: нативные SourcePartRef; U2: локальные ObjectHypothesis; U3: схема исходного MAP-блока. Полные карты и фрактальный мир пока не реализованы. Ресурсы UFO остаются локально.</p></section>
 </aside>
 </main>
 <script type="module" src="./studio-app.mjs"></script>
