@@ -875,10 +875,11 @@ try{
         await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
         await page.evaluate(()=>{window.__studioGatePlacements=false});
         await elementMenu.click();
-        const sameMapDoor=page.locator('#catalog-element-options [role="option"]')
-          .filter({hasText:/Дверь/}).first();
-        await sameMapDoor.waitFor({state:"visible"});
-        await sameMapDoor.click(); // cancels old page Worker through invalidateRun()
+        const previousType=await elementMenu.evaluate(el=>el.value);
+        const differentType=page.locator('#catalog-element-options [role="option"]').last();
+        await differentType.waitFor({state:"visible"});
+        await differentType.click(); // cancels old page Worker through invalidateRun()
+        assert.notEqual(await elementMenu.evaluate(el=>el.value),previousType);
         await page.waitForFunction(()=>document.querySelector("#source-page-status")
           .textContent.includes("Z=1") &&
           document.querySelectorAll("#source-grid button").length===128,
@@ -936,8 +937,7 @@ try{
         await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
         await page.evaluate(()=>{window.__studioGatePlacements=false});
         await elementMenu.click();
-        const typeOnPendingPage=page.locator('#catalog-element-options [role="option"]')
-          .filter({hasText:/Дверь/}).first();
+        const typeOnPendingPage=page.locator('#catalog-element-options [role="option"]').last();
         await typeOnPendingPage.waitFor({state:"visible"});
         await typeOnPendingPage.click();
         await page.waitForFunction(()=>document.querySelector("#source-page-status")
