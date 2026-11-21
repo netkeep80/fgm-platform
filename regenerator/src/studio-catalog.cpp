@@ -263,6 +263,8 @@ Json catalog_placements(std::string_view map_id, const Files& files,
         }
     }
     require(offset<=total,"E_STUDIO_PLACEMENTS_PAGE");
+    // A later page without the previously observed source snapshot is unsafe.
+    require(offset==0 || !expected_digest.empty(),"E_STUDIO_PLACEMENTS_DIGEST");
     const auto next=offset+rows.size();
     Json next_offset=nullptr;
     if(next<total)next_offset=next;

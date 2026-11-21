@@ -31,7 +31,13 @@ const setState = (state, message) => {
   $("status").textContent = state + " · " + message;
 };
 function updateRunButton() {
-  const bound=sourceMode==="manual" || (Boolean(selectedPlacement) && Boolean(inspectedMap)) || inspectedMap?.elements.has(elementMenu.value);
+  const pageReady=Boolean(inspectedMap && placementPage &&
+    placementPage.map===inspectedMap.mapId &&
+    placementPage.sourceDigest===inspectedMap.sourceDigest &&
+    String(placementPage.floor)===$("source-floor").value);
+  const bound=sourceMode==="manual" || (pageReady &&
+    ((Boolean(selectedPlacement) && selectedPlacement.tile[2]===placementPage.floor) ||
+     inspectedMap.elements.has(elementMenu.value)));
   $("run").disabled=Boolean(activeWorker) || !bound;
 }
 // A source mutation invalidates the entire prior run, including its async replies.
@@ -408,6 +414,7 @@ function renderSelectedPlacement() {
     : "Отдельное размещение не выбрано; список типов R04 остаётся доступным.";
 }
 function renderPlacementPage(page) {
+  const pageEpoch=placementEpoch;
   placementPage=page;
   const grid=$("source-grid");
   grid.replaceChildren();
@@ -432,6 +439,11 @@ function renderPlacementPage(page) {
     button.setAttribute("aria-pressed",String(selectedPlacement?.sourcePartRef===placement.sourcePartRef));
     button.textContent=({floor:"Пол",west_wall:"З",north_wall:"С",object:"О"})[placement.part];
     button.addEventListener("click",()=>{
+      // Detached/old-floor buttons must never cancel a newer native page request.
+      if(!button.isConnected || pageEpoch!==placementEpoch || placementPage!==page ||
+         inspectedMap?.mapId!==page.map ||
+         inspectedMap?.sourceDigest!==page.sourceDigest ||
+         $("source-floor").value!==String(page.floor))return;
       // Existing original R04 thumbnail picker remains the ONLY sprite decoder/UI.
       // Type-level picker selection intentionally uses its representative tile;
       // R06 gets the occurrence's real native coordinate only via selectedPlacement.
@@ -477,11 +489,17 @@ function renderPlacementPage(page) {
   renderSelectedPlacement();
 }
 async function loadPlacementPage(floor,offset) {
-  const current=inspectedMap,epoch=generation,token=++placementEpoch;
+  const current=inspectedMap;
   if(!current || !catalog || activeWorker)return;
-  let worker=null;
+  const epoch=generation,token=++placementEpoch;
+  // Retire old page synchronously before yielding to any Worker/file operation.
+  placementPage=null;
+  $("source-grid").replaceChildren();
   $("source-prev").disabled=true;$("source-next").disabled=true;
   $("source-page-status").textContent="Нативная загрузка R02…";
+  $("source-placement-status").textContent="Страница исходных размещений загружается.";
+  updateRunButton();
+  let worker=null;
   try {
     let call;({worker,call}=openWorker());
     await call({action:"clear"});
@@ -491,11 +509,18 @@ async function loadPlacementPage(floor,offset) {
       action:"catalog-placements",map:current.mapId,floor,offset,limit:128,
       sourceDigest:current.sourceDigest
     });
-    if(token!==placementEpoch || current!==inspectedMap)throw Error("E_STUDIO_CANCELLED");
+    ensureCurrent(epoch);
+    if(token!==placementEpoch || current!==inspectedMap ||
+       $("source-floor").value!==String(floor))throw Error("E_STUDIO_CANCELLED");
     verifyPlacementPage(page,current.mapId,current.sourceDigest,floor,offset);
     renderPlacementPage(page);
+    updateRunButton();
   }catch(error) {
-    if(token===placementEpoch&&current===inspectedMap){
+    if(token===placementEpoch && current===inspectedMap && epoch===generation) {
+      // Failed page must not expose a previous R06 receipt or runnable old tile.
+      selectedPlacement=null;
+      invalidateRun();
+      renderSelectedPlacement();
       $("source-page-status").textContent="Не удалось прочитать размещения: "+error.message;
       $("source-prev").disabled=true;$("source-next").disabled=true;
     }
@@ -504,6 +529,7 @@ async function loadPlacementPage(floor,offset) {
 $("source-floor").addEventListener("change",()=>{
   // Different floor changes the active source coordinate; invalidate R06.
   selectedPlacement=null;invalidateRun();
+  renderSelectedPlacement();
   void loadPlacementPage(Number($("source-floor").value),0);
 });
 $("source-prev").addEventListener("click",()=> {
@@ -516,6 +542,12 @@ $("source-next").addEventListener("click",()=>{
 });
 
 function catalogInputSpec() {
+  if(!inspectedMap || !placementPage ||
+     placementPage.sourceDigest!==inspectedMap.sourceDigest ||
+     placementPage.floor!==Number($("source-floor").value) ||
+     (selectedPlacement && (selectedPlacement.tile[2]!==placementPage.floor ||
+       !selectedPlacement.sourcePartRef.startsWith(placementPage.sourceDigest+"/"))))
+    throw Error("E_STUDIO_PLACEMENTS_STALE");
   const element=selectedPlacement ?? inspectedMap?.elements.get(elementMenu.value);
   if(!element || !catalog)throw Error("E_STUDIO_CATALOG_BINDING");
   const {index,result}=catalog;

@@ -88,7 +88,7 @@ const placementRequests=[
   ...data.map(append),
   placements(0),placements(1),placements(2),placements(0,0,0),
   placements(0,0,129),placements(0,65000),placements(0,0,128,"0".repeat(64)),
-  placements(0,0,128,"","MAP3")
+  placements(0,1),placements(0,0,128,"","MAP3")
 ];
 const placementRun=spawnSync(native,{input:placementRequests.map(JSON.stringify).join("\n")+"\n",
   encoding:"utf8",maxBuffer:2*1024*1024});
@@ -114,7 +114,8 @@ assert.equal(placementReplies[7].error,"E_STUDIO_PLACEMENTS_PAGE");
 assert.equal(placementReplies[8].error,"E_STUDIO_PLACEMENTS_PAGE");
 assert.equal(placementReplies[9].error,"E_STUDIO_PLACEMENTS_PAGE");
 assert.equal(placementReplies[10].error,"E_STUDIO_PLACEMENTS_DIGEST");
-assert.equal(placementReplies[11].error,"E_STUDIO_CATALOG_PROFILE");
+assert.equal(placementReplies[11].error,"E_STUDIO_PLACEMENTS_DIGEST");
+assert.equal(placementReplies[12].error,"E_STUDIO_CATALOG_PROFILE");
 
 // >128 parts: prove deterministic boundary, no missing/duplicated occurrence.
 const largeMap=Buffer.alloc(3+11*3*4,1);
@@ -122,12 +123,19 @@ largeMap[0]=3;largeMap[1]=11;largeMap[2]=1;
 const pagedInputs=[
   append(["map",largeMap]),...data.filter(([k])=>k!=="map").map(append),
   placements(0,0,128),placements(0,128,128)
-];
+]; // The second request must fail: offset>0 without the first page's digest.
 const paged=spawnSync(native,{input:pagedInputs.map(JSON.stringify).join("\n")+"\n",
   encoding:"utf8",maxBuffer:2*1024*1024});
 assert.equal(paged.status,0,paged.stderr);
 const pagedReplies=paged.stdout.trimEnd().split("\n").map(JSON.parse);
-const first=pagedReplies[4].catalog,second=pagedReplies[5].catalog;
+const first=pagedReplies[4].catalog;
+assert.equal(pagedReplies[5].error,"E_STUDIO_PLACEMENTS_DIGEST");
+const pagedKnown=spawnSync(native,{input:[
+  append(["map",largeMap]),...data.filter(([k])=>k!=="map").map(append),
+  placements(0,128,128,first.sourceDigest)
+].map(JSON.stringify).join("\n")+"\n",encoding:"utf8",maxBuffer:2*1024*1024});
+assert.equal(pagedKnown.status,0,pagedKnown.stderr);
+const second=JSON.parse(pagedKnown.stdout.trimEnd().split("\n").at(-1)).catalog;
 assert.equal(first.total,132);
 assert.equal(first.placements.length,128);assert.equal(first.nextOffset,128);
 assert.equal(second.placements.length,4);assert.equal(second.nextOffset,null);

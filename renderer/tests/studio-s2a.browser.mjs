@@ -1,7 +1,7 @@
 import {localBrowserContext} from './local-browser.mjs';
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve,join,extname } from "node:path";
 import { tmpdir } from "node:os";
@@ -43,6 +43,10 @@ try{
     globalThis.__studioReleaseStep=null;
     globalThis.__studioGateCatalog=false;
     globalThis.__studioReleaseCatalog=null;
+    globalThis.__studioGatePlacements=false;
+    globalThis.__studioPlacementsGated=false;
+    globalThis.__studioReleasePlacements=null;
+    globalThis.__studioBadPlacementDigest=false;
     globalThis.__studioGateThumb=false;globalThis.__studioThumbGated=false;
     globalThis.__studioReleaseThumb=null;
     globalThis.__studioReads={};
@@ -72,6 +76,13 @@ try{
       }
       postMessage(data,...args) {
         const request=typeof data==="string"?JSON.parse(data):null;
+        if(globalThis.__studioBadPlacementDigest && request?.action==="catalog-placements")
+          return super.postMessage(JSON.stringify({...request,sourceDigest:"0".repeat(64)}),...args);
+        if(globalThis.__studioGatePlacements && request?.action==="catalog-placements") {
+          globalThis.__studioPlacementsGated=true;
+          globalThis.__studioReleasePlacements=()=>super.postMessage(data,...args);
+          return;
+        }
         if(globalThis.__studioGateCatalog && request?.action==="catalog-map") {
           globalThis.__studioReleaseCatalog=()=>super.postMessage(data,...args);
           return;
@@ -726,6 +737,139 @@ try{
       console.log("STUDIO_D4_U1_SOURCE_GRID_R02_R06_PASS");
 
 
+
+      // Adversarial U1 regression against the REAL packaged R02/R04/R06 WASM.
+      // 3×11×2 tiles, four present parts each = 132 placements per floor.
+      const u1Dir=await mkdtemp(join(tmpdir(),"studio-u1-floors-"));
+      try{
+        await writeStudioUfoCatalogFixture(u1Dir);
+        const multi=Buffer.alloc(3+3*11*2*4,1);
+        multi[0]=3;multi[1]=11;multi[2]=2;
+        await writeFile(join(u1Dir,"MAPS/CULTA00.MAP"),multi);
+        await page.locator("#directory").setInputFiles(u1Dir);
+        await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
+        await mapMenu.selectOption("CULTA00");
+        const pageLabel=page.locator("#source-page-status");
+        await page.waitForFunction(()=>document.querySelectorAll(
+          "#source-grid button[data-source-part-ref]").length===128 &&
+          document.querySelector("#source-page-status").textContent.includes("Z=0"),
+          null,{timeout:60000});
+        assert.match(await pageLabel.textContent(),/132 частей/);
+        const u1Grid=page.locator("#source-grid button[data-source-part-ref]");
+        const sourceInfo=button=>button.evaluate(b=>({
+          ref:b.dataset.sourcePartRef,x:Number(b.dataset.x),y:Number(b.dataset.y),
+          part:b.dataset.part
+        }));
+        const a=await sourceInfo(u1Grid.first());
+        await u1Grid.first().click();
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const ma=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(ma.tile,[a.x,a.y,0]);
+        assert.equal(ma.sourcePartRef,a.ref);
+        const b=await sourceInfo(u1Grid.nth(4));
+        assert.equal(a.part,b.part);
+        await u1Grid.nth(4).click();
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const mb=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(mb.tile,[b.x,b.y,0]);
+        assert.equal(mb.sourcePartRef,b.ref);
+        assert.notEqual(ma.sourcePartRef,mb.sourcePartRef);
+        assert.deepEqual(ma.source,mb.source,"same original MCD type in two real MAP tiles");
+
+        // Gate only the genuine catalog-placements message, never fabricate a reply.
+        await page.evaluate(()=>{
+          window.__studioStaleButton=document.querySelector("#source-grid button");
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>window.__studioStaleButton.click()); // detached old closure
+        assert.equal(await u1Grid.count(),0,"old floor is retired during native pending");
+        assert.equal(await page.locator("#run").isDisabled(),true);
+        await assertNoResult();
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=false;window.__studioReleasePlacements();
+        });
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1") &&
+          document.querySelectorAll("#source-grid button").length===128,
+          null,{timeout:60000});
+        assert.equal(await page.locator("#source-floor").inputValue(),"1");
+        const upstairs=u1Grid.first();
+        const upstairsInfo=await sourceInfo(upstairs);
+        await upstairs.focus();
+        await upstairs.press("Space");
+        assert.equal(await upstairs.getAttribute("aria-pressed"),"true");
+        assert.equal(await upstairs.evaluate(el=>document.activeElement===el),true);
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const mz=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(mz.tile,[upstairsInfo.x,upstairsInfo.y,1]);
+        assert.equal(mz.sourcePartRef,upstairsInfo.ref);
+        assert.notEqual(mz.sourcePartRef,a.ref);
+
+        await page.locator("#source-next").focus();
+        await page.locator("#source-next").press("Enter");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("129–132"),null,{timeout:60000});
+        assert.equal(await u1Grid.count(),4);
+        assert.equal(await page.locator("#source-next").isDisabled(),true);
+        assert.equal(await page.locator("#source-next").evaluate(el=>document.activeElement===el),true);
+        await u1Grid.first().focus();await u1Grid.first().press("End");
+        assert.equal(await u1Grid.last().evaluate(el=>document.activeElement===el),true);
+        await u1Grid.last().press("Home");
+        assert.equal(await u1Grid.first().evaluate(el=>document.activeElement===el),true);
+        await u1Grid.first().press("ArrowDown");
+        assert.equal(await u1Grid.nth(1).evaluate(el=>document.activeElement===el),true);
+        await u1Grid.nth(1).press("Enter");
+        assert.equal(await u1Grid.nth(1).getAttribute("aria-pressed"),"true");
+        await page.locator("#source-prev").click();
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("1–128"),null,{timeout:60000});
+        assert.equal(await u1Grid.count(),128);
+
+        // Fail the actual native digest check; no obsolete grid or R06 can survive.
+        await page.evaluate(()=>{window.__studioBadPlacementDigest=true});
+        await page.locator("#source-floor").selectOption("0");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("E_STUDIO_PLACEMENTS_DIGEST"),null,{timeout:60000});
+        assert.equal(await u1Grid.count(),0);
+        assert.equal(await page.locator("#run").isDisabled(),true);
+        await assertNoResult();
+        await page.evaluate(()=>{window.__studioBadPlacementDigest=false});
+
+        // Rapid 0→1→0 flips: release a request on an obsolete terminated Worker.
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1"),null,{timeout:60000});
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-floor").selectOption("0");
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>{window.__studioGatePlacements=false});
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1"),null,{timeout:60000});
+        await page.evaluate(()=>{
+          try{window.__studioReleasePlacements?.()}catch{/* worker terminated */}
+        });
+        assert.equal(await page.locator("#source-floor").inputValue(),"1");
+        assert.equal(await u1Grid.count(),128);
+        await page.setViewportSize({width:390,height:844});
+        assert.deepEqual(await page.evaluate(()=>[
+          document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+        await u1Grid.first().focus();await u1Grid.first().press("Enter");
+        assert.equal(await u1Grid.first().getAttribute("aria-pressed"),"true");
+        await page.setViewportSize({width:1280,height:900});
+        console.log("STUDIO_D4_U1_FLOOR_PAGE_RACE_AND_IDENTITY_PASS");
+      }finally{
+        await pick();await mapMenu.selectOption("CULTA00");
+        await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled,
+          null,{timeout:60000});
+        await rm(u1Dir,{recursive:true,force:true});
+      }
 
       await page.evaluate(()=>{window.__studioGateCatalog=true});
       await mapMenu.selectOption("CULTA01");
