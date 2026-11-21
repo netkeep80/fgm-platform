@@ -1364,7 +1364,83 @@ try{
       assert.equal((await page.evaluate(()=>window.__studioFileReadCalls))
         .some(name=>/\.rmp$/i.test(name)),false);
       console.log("STUDIO_D4_U3_RMP_DUPLICATE_PRESENCE_ONLY_PASS");
+      // D4-U4/SCOPE-R2: distinct source-backed templates are verified by
+      // the real R02/WASM Worker WITHOUT selecting global inspectedMap.
       await workspace("source").click();
+      const beforeU4=await page.evaluate(()=>({
+        source:document.querySelector("#catalog-map").value,
+        metrics:document.querySelector("#metrics").textContent,
+        object:document.querySelector("#object-draft-state").textContent
+      }));
+      await workspace("map").click();
+      assert.equal(await page.locator("#battlescape-panel").isVisible(),true);
+      assert.match(await page.locator("#battlescape-status").textContent(),/CATALOG_READY_NOT_VERIFIED/);
+      const u4Template=page.locator("#battlescape-template");
+      const u4Verify=page.locator("#battlescape-verify");
+      const u4Count=page.locator("#battlescape-count");
+      const u4Cells=page.locator("#battlescape-grid .battlescape-slot");
+      const waitU4=()=>page.waitForFunction(()=>/NATIVE_DEFINITION_VERIFIED/.test(
+        document.querySelector("#battlescape-status").textContent),null,{timeout:60000});
+      const chooseU4=async id=>{
+        await u4Template.selectOption(id);
+        await u4Verify.click();
+        await waitU4();
+      };
+      const u4Slot=async i=>u4Cells.nth(i).click();
+      await chooseU4("CULTA10");
+      assert.match(await page.locator("#battlescape-status").textContent(),/20×20×2/);
+      await u4Slot(0);
+      await page.locator("#battlescape-place").click();
+      assert.match(await u4Count.textContent(),/1 экземпляров · 4\/25 слотов/);
+      const u4Owner=await u4Cells.nth(0).getAttribute("aria-label");
+      for(const i of [1,5,6]){
+        assert.ok((await u4Cells.nth(i).getAttribute("aria-label")).includes("mbi-1"));
+      }
+      await page.locator("#battlescape-place").click();
+      assert.match(await page.locator("#battlescape-status").textContent(),/E_U4_OVERLAP/);
+      assert.match(await u4Count.textContent(),/4\/25 слотов/);
+      await chooseU4("CULTA11");
+      assert.match(await page.locator("#battlescape-status").textContent(),/10×10×1/);
+      for(let i=0;i<25;i++){
+        if([0,1,5,6].includes(i))continue;
+        await u4Slot(i);
+        await page.locator("#battlescape-place").click();
+      }
+      assert.match(await u4Count.textContent(),/22 экземпляров · 25\/25 слотов/);
+      assert.match(await u4Count.textContent(),/2 проверенных определений/);
+      await u4Slot(5);
+      assert.ok((await page.locator("#battlescape-selected").textContent()).includes("mbi-1"));
+      assert.equal(await u4Cells.nth(5).getAttribute("aria-pressed"),"true");
+      assert.ok((await u4Cells.nth(0).getAttribute("aria-label")).includes("mbi-1"));
+      const afterU4=await page.evaluate(()=>({
+        source:document.querySelector("#catalog-map").value,
+        metrics:document.querySelector("#metrics").textContent,
+        object:document.querySelector("#object-draft-state").textContent
+      }));
+      assert.deepEqual(afterU4,beforeU4,"U4 must not mutate native Source/U2/R06 owners");
+      console.log("STUDIO_D4_U4_NATIVE_22_INSTANCES_25_SLOTS_PASS");
+      await workspace("mapblock").click();
+      await library.selectOption("CULTA11");
+      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
+        .textContent.startsWith("SOURCE_LAYOUT_2D"),null,{timeout:60000});
+      await workspace("map").click();
+      assert.match(await u4Count.textContent(),/22 экземпляров · 25\/25 слотов/);
+      await u4Slot(5);await page.locator("#battlescape-remove").click();
+      assert.match(await u4Count.textContent(),/21 экземпляров · 21\/25 слотов/);
+      assert.match(await page.locator("#battlescape-status").textContent(),/DRAFT_CHANGED/);
+      await u4Template.selectOption("CULTA12");
+      await u4Verify.click();
+      await page.waitForFunction(()=>document.querySelector("#battlescape-status")
+        .textContent.startsWith("ERROR"),null,{timeout:60000});
+      assert.match(await u4Count.textContent(),/21 экземпляров · 21\/25 слотов/);
+      console.log("STUDIO_D4_U4_SOURCE_OWNER_ISOLATION_NEGATIVES_PASS");
+      await page.setViewportSize({width:390,height:844});
+      assert.equal(await page.locator("#battlescape-grid").isVisible(),true);
+      assert.deepEqual(await page.evaluate(()=>[
+        document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+      await page.setViewportSize({width:1280,height:900});
+      await workspace("source").click();
+
 
       for(const [fault,code] of [
         ["tab","E_R04_TAB_OFFSET"],["pck","E_R04_FRAME_TERMINATOR"],
