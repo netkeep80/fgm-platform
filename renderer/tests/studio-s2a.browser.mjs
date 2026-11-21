@@ -814,7 +814,8 @@ try{
           .textContent.includes("129–132"),null,{timeout:60000});
         assert.equal(await u1Grid.count(),4);
         assert.equal(await page.locator("#source-next").isDisabled(),true);
-        assert.equal(await page.locator("#source-next").evaluate(el=>document.activeElement===el),true);
+        assert.equal(await page.locator("#source-prev").evaluate(el=>document.activeElement===el),true,
+          "disabled last-page Next transfers keyboard focus to enabled Prev");
         await u1Grid.first().focus();await u1Grid.first().press("End");
         assert.equal(await u1Grid.last().evaluate(el=>document.activeElement===el),true);
         await u1Grid.last().press("Home");
@@ -823,10 +824,13 @@ try{
         assert.equal(await u1Grid.nth(1).evaluate(el=>document.activeElement===el),true);
         await u1Grid.nth(1).press("Enter");
         assert.equal(await u1Grid.nth(1).getAttribute("aria-pressed"),"true");
-        await page.locator("#source-prev").click();
+        await page.locator("#source-prev").focus();
+        await page.locator("#source-prev").press("Enter");
         await page.waitForFunction(()=>document.querySelector("#source-page-status")
           .textContent.includes("1–128"),null,{timeout:60000});
         assert.equal(await u1Grid.count(),128);
+        assert.equal(await page.locator("#source-next").evaluate(el=>document.activeElement===el),true,
+          "disabled first-page Prev transfers keyboard focus to enabled Next");
 
         // Fail the actual native digest check; no obsolete grid or R06 can survive.
         await page.evaluate(()=>{window.__studioBadPlacementDigest=true});

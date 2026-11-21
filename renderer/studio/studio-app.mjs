@@ -35,9 +35,10 @@ function updateRunButton() {
     placementPage.map===inspectedMap.mapId &&
     placementPage.sourceDigest===inspectedMap.sourceDigest &&
     String(placementPage.floor)===$("source-floor").value);
+  const type=pageReady?inspectedMap.elements.get(elementMenu.value):null;
   const bound=sourceMode==="manual" || (pageReady &&
     ((Boolean(selectedPlacement) && selectedPlacement.tile[2]===placementPage.floor) ||
-     inspectedMap.elements.has(elementMenu.value)));
+     type?.tile[2]===placementPage.floor));
   $("run").disabled=Boolean(activeWorker) || !bound;
 }
 // A source mutation invalidates the entire prior run, including its async replies.
@@ -492,6 +493,8 @@ async function loadPlacementPage(floor,offset) {
   const current=inspectedMap;
   if(!current || !catalog || activeWorker)return;
   const epoch=generation,token=++placementEpoch;
+  const focusNav=document.activeElement===$("source-next")?"next":
+    document.activeElement===$("source-prev")?"prev":null;
   // Retire old page synchronously before yielding to any Worker/file operation.
   placementPage=null;
   $("source-grid").replaceChildren();
@@ -515,6 +518,11 @@ async function loadPlacementPage(floor,offset) {
     verifyPlacementPage(page,current.mapId,current.sourceDigest,floor,offset);
     renderPlacementPage(page);
     updateRunButton();
+    if(focusNav){
+      const preferred=$("source-"+focusNav);
+      const other=$("source-"+(focusNav==="next"?"prev":"next"));
+      (preferred.disabled ? (other.disabled ? $("source-floor") : other) : preferred).focus();
+    }
   }catch(error) {
     if(token===placementEpoch && current===inspectedMap && epoch===generation) {
       // Failed page must not expose a previous R06 receipt or runnable old tile.
@@ -523,6 +531,7 @@ async function loadPlacementPage(floor,offset) {
       renderSelectedPlacement();
       $("source-page-status").textContent="Не удалось прочитать размещения: "+error.message;
       $("source-prev").disabled=true;$("source-next").disabled=true;
+      if(focusNav)$("source-floor").focus();
     }
   }finally{closeWorker(worker)}
 }
@@ -549,7 +558,8 @@ function catalogInputSpec() {
        !selectedPlacement.sourcePartRef.startsWith(placementPage.sourceDigest+"/"))))
     throw Error("E_STUDIO_PLACEMENTS_STALE");
   const element=selectedPlacement ?? inspectedMap?.elements.get(elementMenu.value);
-  if(!element || !catalog)throw Error("E_STUDIO_CATALOG_BINDING");
+  if(!element || !catalog || element.tile?.[2]!==placementPage.floor)
+    throw Error("E_STUDIO_CATALOG_BINDING");
   const {index,result}=catalog;
   const terrain=result.terrain[element.dataset];
   const inputs=new Map(inspectedMap.inputs);
