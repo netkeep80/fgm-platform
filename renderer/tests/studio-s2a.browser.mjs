@@ -1399,6 +1399,10 @@ try{
       await page.locator("#battlescape-place").click();
       assert.match(await page.locator("#battlescape-status").textContent(),/E_U4_OVERLAP/);
       assert.match(await u4Count.textContent(),/4\/25 слотов/);
+      await u4Slot(24);
+      await page.locator("#battlescape-place").click();
+      assert.match(await page.locator("#battlescape-status").textContent(),/E_U4_BOUNDS/);
+      assert.match(await u4Count.textContent(),/1 экземпляров · 4\\/25 слотов/);
       await chooseU4("CULTA11");
       assert.match(await page.locator("#battlescape-status").textContent(),/10×10×1/);
       for(let i=0;i<25;i++){
@@ -1408,6 +1412,14 @@ try{
       }
       assert.match(await u4Count.textContent(),/22 экземпляров · 25\/25 слотов/);
       assert.match(await u4Count.textContent(),/2 проверенных определений/);
+      await chooseU4("CULTA10");
+      await u4Slot(24);
+      const beforeConflict=await u4Cells.nth(24).getAttribute("aria-label");
+      await page.locator("#battlescape-replace").click();
+      assert.match(await page.locator("#battlescape-status").textContent(),/E_U4_OVERLAP/);
+      assert.equal(await u4Cells.nth(24).getAttribute("aria-label"),beforeConflict);
+      assert.match(await u4Count.textContent(),/22 экземпляров · 25\\/25 слотов/);
+      await chooseU4("CULTA11");
       await u4Slot(5);
       assert.ok((await page.locator("#battlescape-selected").textContent()).includes("mbi-1"));
       assert.equal(await u4Cells.nth(5).getAttribute("aria-pressed"),"true");
