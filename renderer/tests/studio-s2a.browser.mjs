@@ -1186,7 +1186,7 @@ try{
         bytes[0]=h;bytes[1]=w;bytes[2]=z;
         for(let tile=0;tile<w*h*z;tile++)
           for(let part=0;part<fill;part++)
-            bytes[3+4*tile+part]=[2,3,4,1][part];
+            bytes[3+4*tile+part]=[2,3,1,2][part]; // Four nonzero slots; valid MCD indices 0..3.
         return bytes;
       };
       await writeFile(join(rootDir,"MAPS","CULTA10.MAP"),makeU3Map(20,20,2));
