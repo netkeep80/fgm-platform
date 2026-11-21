@@ -174,7 +174,9 @@ try{
   assert.match(await page.locator('#mapblock-status').textContent(),/NO_SOURCE/);
   assert.equal(await page.locator('#whole-preview').isVisible(),false);
   await workspace('map').click();
-  assert.match(await page.locator('#studio-workspace-description').textContent(),/50×50/);
+  assert.equal(await page.locator('#battlescape-panel').isVisible(),true);
+  assert.match(await page.locator('#battlescape-heading').textContent(),/50×50/);
+  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),false);
   await workspace('world').click();
   assert.match(await page.locator('#studio-workspace-heading').textContent(),/RESEARCH_ONLY/);
   await workspace('source').click();
