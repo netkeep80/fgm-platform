@@ -276,7 +276,8 @@ std::string Runner::call(std::string_view input) {
             const auto floor=bounded(request["floor"],255,"E_STUDIO_PLACEMENTS_FLOOR");
             const auto offset=bounded(request["offset"],65536,"E_STUDIO_PLACEMENTS_PAGE");
             const auto limit=bounded(request["limit"],128,"E_STUDIO_PLACEMENTS_PAGE");
-            require(limit>0 && request["sourceDigest"].is_string(),"E_STUDIO_REQUEST");
+            require(limit>0,"E_STUDIO_PLACEMENTS_PAGE");
+            require(request["sourceDigest"].is_string(),"E_STUDIO_REQUEST");
             const auto& expected=request["sourceDigest"].get_ref<const std::string&>();
             require(expected.empty() || (expected.size()==64 &&
                 std::ranges::all_of(expected,[](char c) {
