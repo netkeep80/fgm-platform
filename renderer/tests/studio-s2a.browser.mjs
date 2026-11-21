@@ -889,7 +889,8 @@ try{
         });
         assert.equal(await page.locator("#source-floor").inputValue(),"1");
         assert.equal(await u1Grid.count(),128);
-        assert.equal(await u1Grid.filter({has:page.locator('[aria-pressed="true"]')}).count(),0);
+        assert.equal(await page.locator('#source-grid button[aria-pressed="true"]').count(),0);
+        assert.match(await page.locator("#source-placement-status").textContent(),/размещение не выбрано/);
         await assertNoResult();
         const afterRecovery=await sourceInfo(u1Grid.nth(4));
         await u1Grid.nth(4).click();
