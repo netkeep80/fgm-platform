@@ -838,6 +838,9 @@ function renderObjectDraft(){
   $("object-reset").disabled=!source;
   const members=$("object-members");members.replaceChildren();
   for(const m of h?.members??[]){
+    // Each control belongs to exactly this draft, hypothesis and native member.
+    // A detached control must never mutate a later owner of the same PartRef.
+    const ownerDraft=objectDraft,ownerHypothesis=h;
     const item=document.createElement("div");item.className="object-member";
     const label=document.createElement("span");
     label.textContent="R02 "+m.sourcePartRef+" · ("+m.tile.join(",")+") "+m.part+
@@ -847,13 +850,27 @@ function renderObjectDraft(){
     remove.disabled=!ready;
     remove.setAttribute("aria-label","Исключить "+m.sourcePartRef);
     remove.addEventListener("click",()=>{
+      // Check identity BEFORE u2Action, state mutation or any APPLIED intent.
+      // All draft edits render a fresh member list, retiring previous buttons.
+      if(!remove.isConnected||remove.disabled||!members.contains(remove)||
+         objectDraft!==ownerDraft||!u2Ready()||
+         u2Active()!==ownerHypothesis||
+         objectDraft.activeId!==ownerHypothesis.hypothesisId||
+         !ownerHypothesis.members.includes(m))return;
+      const index=[...members.querySelectorAll("button[data-source-part-ref]")].indexOf(remove);
       u2Action("unassign",current=>{
-        if(!current||!current.members.some(x=>x.sourcePartRef===m.sourcePartRef))
+        if(current!==ownerHypothesis||!current.members.includes(m))
           throw Error("E_U2_BINDING");
-        current.members=current.members.filter(x=>x.sourcePartRef!==m.sourcePartRef);
+        current.members=current.members.filter(x=>x!==m);
         return {sourcePartRef:m.sourcePartRef};
       },m.sourcePartRef);
-      remove.isConnected?remove.focus():$("object-add").focus();
+      // The clicked node is now detached; transfer keyboard focus to a live,
+      // enabled member button or a stable enabled hypothesis control.
+      const after=members.querySelectorAll("button[data-source-part-ref]");
+      const next=after[Math.min(index,after.length-1)]||
+        [$("object-add"),$("object-hypotheses"),$("object-create"),$("object-reset")]
+          .find(node=>node.isConnected&&!node.disabled);
+      next?.focus();
     });
     item.append(label,remove);members.append(item);
   }

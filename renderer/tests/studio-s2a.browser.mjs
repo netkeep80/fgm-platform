@@ -805,14 +805,52 @@ try{
         assert.match(await page.locator("#object-action-status").textContent(),/E_U2_MEMBER_CONFLICT/);
         assert.equal(await page.locator("#object-members button").count(),0);
         await page.locator("#object-hypotheses").selectOption("h1");
+        // Retain a real old h1 DOM control before legitimate P: h1 -> h2 transfer.
+        await page.evaluate(ref=>{
+          window.__studioU2OldRemove=[...document.querySelectorAll(
+            '#object-members button[data-source-part-ref]')]
+            .find(button=>button.dataset.sourcePartRef===ref);
+        },a.ref);
+        assert.equal(await page.evaluate(()=>window.__studioU2OldRemove.isConnected),true);
         await page.locator('#object-members button[data-source-part-ref="'+a.ref+'"]').click();
         assert.equal(await page.locator("#object-members button").count(),1);
         await page.locator("#object-hypotheses").selectOption("h2");
         await page.locator("#object-add").click();
         assert.equal(await page.locator("#object-members button").count(),1);
+        assert.equal(await page.evaluate(()=>window.__studioU2OldRemove.isConnected),false);
+        const beforeOldAction=await page.locator("#object-action-status").textContent();
+        await page.evaluate(()=>window.__studioU2OldRemove.click());
+        assert.equal(await page.locator("#object-members button").count(),1,
+          "stale h1 click must not unassign PartRef from its new h2 owner");
+        assert.equal(await page.locator("#object-action-status").textContent(),beforeOldAction,
+          "stale detached event must not claim an APPLIED intent");
         await page.locator("#object-name").fill("Новая подпись");
         await page.locator("#object-rename").click();
         assert.match(await page.locator("#object-hypotheses").textContent(),/Новая подпись/);
+        // The R04 type picker legitimately clears SourcePartRef, disabling Add.
+        // Unassigning the last h1 member must still leave an enabled focus target.
+        await workspaceU2("source").click();
+        await elementMenu.click();
+        await page.locator('#catalog-element-options [role="option"]').first().click();
+        await workspaceU2("object").click();
+        assert.match(await page.locator("#object-selected-part").textContent(),/не выбрана/);
+        assert.equal(await page.locator("#object-add").isDisabled(),true);
+        await page.locator("#object-hypotheses").selectOption("h1");
+        await page.locator("#object-members button").first().focus();
+        await page.locator("#object-members button").first().press("Enter");
+        assert.equal(await page.locator("#object-members button").count(),0);
+        assert.equal(await page.locator("#object-hypotheses").evaluate(el=>
+          document.activeElement===el && !el.disabled),true,
+          "removing with disabled Add must focus an enabled hypothesis control");
+        // Restore the native part from the original R02 grid, not via type key.
+        await workspaceU2("source").click();
+        await u1Grid.nth(4).click();
+        await workspaceU2("object").click();
+        assert.equal(await page.locator("#object-add").isDisabled(),false);
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await page.locator("#object-hypotheses").selectOption("h2");
+        console.log("STUDIO_D4_U2_STALE_OWNER_AND_KEYBOARD_FOCUS_PASS");
         const downloadPromise=page.waitForEvent("download");
         await page.locator("#object-export").click();
         const draftDownload=await downloadPromise;
@@ -827,6 +865,9 @@ try{
         assert.ok(draftJSON.intents.some(e=>e.op==="assign"&&e.outcome==="REJECTED"&&
           e.code==="E_U2_MEMBER_CONFLICT"));
         assert.ok(draftJSON.conflicts.some(c=>c.code==="E_U2_DUPLICATE"));
+        assert.equal(draftJSON.intents.filter(i=>
+          i.op==="unassign"&&i.sourcePartRef===a.ref&&i.outcome==="APPLIED").length,1,
+          "detached h1 control must not add a second successful unassign intent");
         assert.equal(JSON.stringify(draftJSON).includes("indices_hex"),false);
         assert.equal(JSON.stringify(draftJSON).includes("palette_rgb8"),false);
         assert.equal(JSON.stringify(draftJSON).includes("lofts"),false);
