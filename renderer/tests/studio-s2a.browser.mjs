@@ -1449,7 +1449,7 @@ try{
             makeU3Map(10,10,1,2));
         for(let i=0;i<=7;i++)
           await writeFile(join(p3Root,"MAPS","DESERT"+String(i).padStart(2,"0")+".MAP"),
-            makeU3Map(i===7?5:10,i===7?5:10,1,2));
+            makeU3Map(i===7?5:10,i===7?5:10,1,1));
         await page.locator("#directory").setInputFiles(p3Root);
         await u4Template.locator('option[value="DESERT07"]').waitFor({state:"attached"});
         await workspace("map").click();
