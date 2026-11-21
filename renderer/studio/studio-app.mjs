@@ -789,7 +789,7 @@ function u2Action(op,fn,ref=""){
   try{
     if(!u2Ready() && !(op==="create"&&!objectDraft&&u2Key()))
       throw Error("E_U2_SOURCE_MISMATCH");
-    if(objectDraft.intents.length>=U2_MAX_INTENTS)throw Error("E_U2_LIMIT");
+    if((objectDraft?.intents.length??0)>=U2_MAX_INTENTS)throw Error("E_U2_LIMIT");
     const done=fn(h);
     u2Intent(op,done?.hypothesisId??id,ref||done?.sourcePartRef||"","APPLIED");
     u2Status("APPLIED · "+op);
