@@ -787,10 +787,11 @@ function u2Action(op,fn,ref=""){
   const h=u2Active(),id=h?.hypothesisId??"";
   let code="";
   try{
-    if(!u2Ready())throw Error("E_U2_SOURCE_MISMATCH");
+    if(!u2Ready() && !(op==="create"&&!objectDraft&&u2Key()))
+      throw Error("E_U2_SOURCE_MISMATCH");
     if(objectDraft.intents.length>=U2_MAX_INTENTS)throw Error("E_U2_LIMIT");
     const done=fn(h);
-    u2Intent(op,done?.hypothesisId??id,ref||done?.sourcePartRef??"","APPLIED");
+    u2Intent(op,done?.hypothesisId??id,ref||done?.sourcePartRef||"","APPLIED");
     u2Status("APPLIED · "+op);
   }catch(error){
     code=/^E_U2_[A-Z_]+$/.test(error.message)?error.message:"E_U2_BINDING";
