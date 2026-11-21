@@ -25,6 +25,8 @@ function enable(){
 function showWhole(show){
   canvas.hidden=!show;
   $("preview").hidden=show;
+  // Owner-originated presentation hint; does not transfer Worker/epoch ownership.
+  document.dispatchEvent(new CustomEvent("fgm-studio:whole-visibility",{detail:{show}}));
 }
 function reset(){
   ++epoch;

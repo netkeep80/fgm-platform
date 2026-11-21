@@ -132,6 +132,30 @@ try{
     assert.equal(await version.textContent(), "Версия " + expectedVersion);
     assert.equal(await version.getAttribute("title"), revision);
   }
+
+  const workspace=key=>page.locator('#studio-workspaces [data-workspace="'+key+'"]');
+  assert.equal(await page.locator('#studio-workspaces button').count(),5);
+  assert.equal(await workspace('source').getAttribute('aria-current'),'page');
+  await workspace('source').focus();
+  await workspace('source').press('ArrowRight');
+  assert.equal(await workspace('object').getAttribute('aria-current'),'page');
+  assert.equal(await workspace('object').evaluate(el=>document.activeElement===el),true);
+  assert.equal(await page.locator('#preview').isVisible(),false);
+  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),true);
+  await workspace('mapblock').click();
+  assert.match(await page.locator('#studio-workspace-heading').textContent(),/NOT_IMPLEMENTED/);
+  assert.equal(await page.locator('#whole-preview').isVisible(),false);
+  await workspace('map').click();
+  assert.match(await page.locator('#studio-workspace-description').textContent(),/50×50/);
+  await workspace('world').click();
+  assert.match(await page.locator('#studio-workspace-heading').textContent(),/RESEARCH_ONLY/);
+  await workspace('source').click();
+  assert.equal(await page.locator('#preview').isVisible(),true);
+  await page.locator('#preview').evaluate(el=>{window.__studioU0OriginalPreview=el});
+  await page.setViewportSize({width:390,height:844});
+  assert.deepEqual(await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+  await page.setViewportSize({width:1280,height:900});
+  console.log("STUDIO_D4_U0_NAV_AND_ACCESSIBILITY_PASS");
   await page.locator("#demo").click();
   await page.locator("#run").click();
   await page.waitForFunction(()=>document.querySelector("#status").dataset.state==="COMPLETED",null,{timeout:60000});
@@ -143,6 +167,16 @@ try{
   assert.equal(await page.locator("#downloads button").count(),4);
   assert.equal(await page.locator("#file-summary").textContent().then(x=>x.includes("7 выбранных")),true);
   console.log("STUDIO_S2A_SYNTHETIC_PASS");
+
+  const sourceBefore=await page.locator('#metrics').textContent();
+  await workspace('object').click();
+  await workspace('source').click();
+  assert.equal(await page.locator('#metrics').textContent(),sourceBefore);
+  assert.equal(await page.locator('#downloads button').count(),4);
+  assert.equal(await page.locator('#preview').isVisible(),true);
+  assert.equal(await page.locator('#preview').evaluate(el=>el===window.__studioU0OriginalPreview),true);
+  console.log("STUDIO_D4_U0_SOURCE_HIDE_SHOW_PASS");
+
   const view=page.locator("#view-mode");
   const green=[159,223,163], blue=[102,218,255], amber=[255,188,107], purple=[227,175,255];
   for(const [mode,colors] of [
@@ -295,6 +329,19 @@ try{
   assert.equal(whole.rederived_r03,false);
   assert.equal(await page.locator("#whole-downloads button").count(),5);
   assert.equal(await page.locator("#whole-preview").isVisible(),true);
+
+  await workspace('object').click();
+  assert.equal(await page.locator('#whole-preview').isVisible(),true);
+  await workspace('mapblock').click();
+  assert.equal(await page.locator('#whole-preview').isVisible(),false);
+  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),true);
+  await workspace('object').click();
+  assert.equal(await page.locator('#whole-preview').isVisible(),true);
+  await workspace('source').click();
+  assert.equal(await page.locator('#preview').isVisible(),true);
+  assert.equal(await page.locator('#whole-status').getAttribute('data-state'),'COMPLETED');
+  console.log("STUDIO_D4_U0_WHOLE_HIDE_SHOW_PASS");
+
   await page.locator("#whole-cell").selectOption("0");
   await page.locator("#whole-z").fill("3");
   assert.match(await page.locator("#whole-slice").textContent(),/#/);

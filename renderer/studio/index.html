@@ -48,18 +48,44 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 #manual-bindings summary{cursor:pointer;color:#b8c9d8}fieldset{border:0;padding:0;margin:0;min-width:0}
 @media(max-width:1050px){main{grid-template-columns:280px 1fr}aside:last-child{grid-column:1/-1;border:0;border-top:1px solid #405369}}
 @media(max-width:600px){header{flex-wrap:wrap}main{display:flex;flex-direction:column}aside{border:0;border-bottom:1px solid #405369}canvas{min-height:350px}}
+
+/* D4-U0: navigational shell. Preserve current C++/WASM/Renderer owners. */
+#studio-workspaces{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;padding:10px 16px;background:#122233;border-bottom:1px solid #405369}
+#studio-workspaces button{flex:0 1 auto;min-width:92px;padding:9px 14px;background:#1e3549;border-color:#54738a}
+#studio-workspaces button[aria-current=page]{background:#176b50;border-color:#86dcc0;color:#fff;font-weight:700}
+#studio-workspaces button:focus-visible{outline:3px solid #b5e3f1;outline-offset:2px}
+#studio-workspace-placeholder{margin:14px;min-height:290px;padding:24px;border:1px dashed #536e83;border-radius:7px;background:#152638}
+#studio-workspace-placeholder[hidden],#view-toolbar[hidden],#hint[hidden],#whole-views[hidden],#whole-view-status[hidden]{display:none}
+#studio-workspace-placeholder h2{font-size:18px;letter-spacing:normal;text-transform:none;color:#e9f2fa}
+#studio-workspace-placeholder p{max-width:65ch;color:#bfd1de}
+body[data-workspace=object] .source-tools,body[data-workspace=object] .source-output{display:none}
+body[data-workspace=mapblock] .source-tools,body[data-workspace=mapblock] #whole-panel,body[data-workspace=mapblock] .source-output,
+body[data-workspace=map] .source-tools,body[data-workspace=map] #whole-panel,body[data-workspace=map] .source-output,
+body[data-workspace=world] .source-tools,body[data-workspace=world] #whole-panel,body[data-workspace=world] .source-output{display:none}
+body[data-workspace=source] #studio-workspace-inspector{display:none}
+body[data-workspace=source] #whole-panel{border-top:1px solid #405369;padding-top:12px}
+body[data-workspace=source] #whole-panel h2:after{content:" · совместимый доступ";font-size:11px;font-weight:400;color:#a7b9ca;letter-spacing:normal;text-transform:none}
+@media(max-width:600px){#studio-workspaces{padding:8px;gap:5px}#studio-workspaces button{flex:1 1 130px}#studio-workspace-placeholder{min-height:180px}}
+
 </style>
 </head>
-<body>
+<body data-workspace="source">
 <header><div><h1>FGM Reconstruction Studio</h1><small>Локальная реконструкция R06 и сравнение R05</small></div><code id="studio-version">Локальная сборка</code></header>
+<nav id="studio-workspaces" aria-label="Рабочие пространства FGM Studio">
+<button type="button" data-workspace="source" aria-current="page">Источник</button>
+<button type="button" data-workspace="object">Объект</button>
+<button type="button" data-workspace="mapblock">MapBlock</button>
+<button type="button" data-workspace="map">Карта</button>
+<button type="button" data-workspace="world">Мир · исследование</button>
+</nav>
 <main>
 <aside>
-<section><h2>Папка игры</h2><p class="muted">Выберите папку установки UFO: Enemy Unknown или X-COM: UFO Defense. Ресурсы останутся в браузере.</p>
+<section class="source-tools"><h2>Папка игры</h2><p class="muted">Выберите папку установки UFO: Enemy Unknown или X-COM: UFO Defense. Ресурсы останутся в браузере.</p>
 <label for="directory">Выбрать папку игры</label><input id="directory" type="file" webkitdirectory multiple>
 <p id="file-summary" class="muted">Нет выбранных файлов</p>
 <button id="demo" type="button">Свободный синтетический пример</button>
 </section>
-<section><h2>Тактический элемент</h2>
+<section class="source-tools"><h2>Тактический элемент</h2>
 <label for="catalog-map">Карта</label><select id="catalog-map" disabled><option value="">— выбрать карту —</option></select>
 <label id="catalog-element-label" for="catalog-element">Элемент</label>
 <div id="catalog-element-picker" class="catalog-picker">
@@ -68,7 +94,7 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 </div>
 <p id="catalog-summary" class="muted" aria-live="polite">Выберите папку игры.</p>
 </section>
-<section><details id="manual-bindings"><summary>Расширенная диагностика</summary>
+<section class="source-tools"><details id="manual-bindings"><summary>Расширенная диагностика</summary>
 <label for="local-files">Выбрать файлы для ручной привязки</label><input id="local-files" type="file" multiple>
 <fieldset id="manual-fields" disabled>
 <label for="map">MAP</label><select id="map"></select>
@@ -119,6 +145,7 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 <option value="collision">Коллизии</option>
 <option value="mesh">Свободный вид OBJ</option>
 </select></div>
+<section id="studio-workspace-placeholder" role="status" aria-live="polite" hidden><h2 id="studio-workspace-heading">Режим пока недоступен</h2><p id="studio-workspace-description">Выберите рабочее пространство.</p></section>
 <canvas id="preview" width="840" height="630" aria-label="Сравнение реконструкции R05" aria-describedby="hint"></canvas>
 <canvas id="whole-preview" width="840" height="630" aria-label="Общая FGM-модель; игровая клеточная сетка" hidden></canvas>
 <div id="whole-view-status" role="status">Четыре глобальных вида ещё не построены</div>
@@ -126,11 +153,12 @@ canvas[data-mode=mesh],#whole-preview{cursor:grab;image-rendering:auto}canvas[hi
 <div id="hint"></div>
 </div>
 <aside>
-<section><h2>Реконструкция</h2><div class="row"><button id="run" class="primary" disabled>Реконструировать</button><button id="cancel" disabled>Прервать</button></div>
+<section class="source-output"><h2>Реконструкция</h2><div class="row"><button id="run" class="primary" disabled>Реконструировать</button><button id="cancel" disabled>Прервать</button></div>
 <p id="status" role="status" data-state="READY">READY · ожидание ввода</p><p id="stage" class="muted">Алгоритм r06-cell/1, одна атомарная операция step</p>
 </section>
-<section><h2>Результат</h2><pre id="metrics">Результатов пока нет</pre></section>
-<section><h2>Сохранить локально</h2><div id="downloads"></div></section>
+<section class="source-output"><h2>Результат</h2><pre id="metrics">Результатов пока нет</pre></section>
+<section class="source-output"><h2>Сохранить локально</h2><div id="downloads"></div></section>
+<section id="studio-workspace-inspector" aria-live="polite"><h2>Контекст рабочего пространства</h2><p id="studio-workspace-context">Источник · текущий нативный каталог и реконструкция.</p><p class="muted">SourcePartRef размещений, MapBlock, карты и миры пока не реализованы. Ресурсы UFO остаются локально.</p></section>
 </aside>
 </main>
 <script type="module" src="./studio-app.mjs"></script>

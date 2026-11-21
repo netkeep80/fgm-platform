@@ -514,3 +514,70 @@ view.addEventListener("pointerup",()=>drag=null);
 view.addEventListener("pointercancel",()=>drag=null);
 view.addEventListener("wheel",e=>{if(modeControl.value!=="mesh")return;e.preventDefault();zoom=Math.max(.3,Math.min(4,zoom*(e.deltaY>0?.91:1.1)));paint()},{passive:false});
 paint();
+
+// D4-U0 UI-only coordinator: Worker and scene owners remain the existing modules.
+// Keep the legacy whole-object controls accessible in Source during this migration.
+function startStudioWorkspaces() {
+  const names=Object.freeze({
+    source:["Источник","Локальный каталог, оригинальный R04, R06, сравнение R05 и OBJ."],
+    object:["Объект","Нативная whole-object сборка 2–8 клеток; семантическое объединение SourcePartRef пока не реализовано."],
+    mapblock:["MapBlock · NOT_IMPLEMENTED","Библиотека, этажи и проверенная принадлежность частей появятся позже. Здесь нет декодированной карты или модели блока."],
+    map:["Карта · NOT_IMPLEMENTED","Конструктор 50×50, выбор экземпляров и 3D-отрисовка карт пока не реализованы."],
+    world:["Мир · RESEARCH_ONLY","Фрактальный мир и выбор графического backend исследуются. Генерация недоступна."]
+  });
+  const tabs=[...document.querySelectorAll("#studio-workspaces [data-workspace]")];
+  const placeholder=$("studio-workspace-placeholder"),heading=$("studio-workspace-heading"),
+        description=$("studio-workspace-description"),inspector=$("studio-workspace-context");
+  let workspace="source",wholeAvailable=false,preferredView="source";
+  const render=()=>{
+    document.body.dataset.workspace=workspace;
+    const useWhole=wholeAvailable&&(workspace==="object"||(workspace==="source"&&preferredView==="whole"));
+    const useSource=workspace==="source"&&!useWhole;
+    $("preview").hidden=!useSource;
+    const whole=document.getElementById("whole-preview"); // owner can replace canvas node
+    if(whole)whole.hidden=!useWhole;
+    const empty=(workspace!=="source"&&workspace!=="object")||(workspace==="object"&&!useWhole);
+    placeholder.hidden=!empty;
+    if(empty){
+      heading.textContent=names[workspace][0];
+      description.textContent=workspace==="object"&&$("whole-status").dataset.state==="COMPLETED"
+        ? "Сборка завершена, но действительный графический viewport недоступен. Метрики и артефакты остаются в инструментах объекта."
+        :names[workspace][1];
+    }
+    $("view-toolbar").hidden=!useSource;
+    $("hint").hidden=!useSource;
+    $("whole-views").hidden=!useWhole;
+    $("whole-view-status").hidden=!useWhole;
+    inspector.textContent=names[workspace][1];
+    for(const tab of tabs){
+      if(tab.dataset.workspace===workspace)tab.setAttribute("aria-current","page");
+      else tab.removeAttribute("aria-current");
+    }
+  };
+  const select=next=>{
+    if(!Object.hasOwn(names,next))return;
+    workspace=next; preferredView=next==="object"?"whole":"source";
+    // No fake change events, no new Worker, no source/run invalidation on navigation.
+    render();
+  };
+  for(let i=0;i<tabs.length;i++){
+    const tab=tabs[i];
+    tab.addEventListener("click",()=>select(tab.dataset.workspace));
+    tab.addEventListener("keydown",e=>{
+      let j=i;
+      if(e.key==="ArrowRight")j=(i+1)%tabs.length;
+      else if(e.key==="ArrowLeft")j=(i+tabs.length-1)%tabs.length;
+      else if(e.key==="Home")j=0;
+      else if(e.key==="End")j=tabs.length-1;
+      else return;
+      e.preventDefault();tabs[j].focus();select(tabs[j].dataset.workspace);
+    });
+  }
+  document.addEventListener("fgm-studio:whole-visibility",e=>{
+    wholeAvailable=e.detail?.show===true; // owner reports renderability, not model authenticity
+    if(workspace==="source")preferredView=wholeAvailable?"whole":"source";
+    render();
+  });
+  render();
+}
+startStudioWorkspaces();
