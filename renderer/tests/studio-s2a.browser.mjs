@@ -1209,8 +1209,22 @@ try{
       assert.match(await page.locator("#catalog-summary").textContent(),/неизвест/i);
       assert.equal(await blockFloor.isDisabled(),true);
       await library.selectOption("CULTA10");
-      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
-        .textContent.startsWith("SOURCE_LAYOUT_2D"),null,{timeout:60000});
+      await page.waitForFunction(()=>!document.querySelector("#mapblock-floor").disabled ||
+        document.querySelector("#status").dataset.state==="ERROR",null,{timeout:30000});
+      await page.waitForTimeout(1200);
+      const u3Debug=await page.evaluate(()=>({
+        source:document.querySelector("#catalog-summary").textContent,
+        state:document.querySelector("#status").textContent,
+        block:document.querySelector("#mapblock-status").textContent,
+        map:document.querySelector("#catalog-map").value,
+        floor:document.querySelector("#mapblock-floor").value,
+        active:document.querySelector('body').dataset.workspace,
+        library:document.querySelector("#mapblock-library").value,
+        cells:document.querySelector("#mapblock-grid").children.length
+      }));
+      console.log("STUDIO_D4_U3_DIAGNOSTIC",JSON.stringify(u3Debug));
+      assert.match(u3Debug.block,/^SOURCE_LAYOUT_2D/,
+        "native full-floor failure details: "+JSON.stringify(u3Debug));
       assert.match(await page.locator("#mapblock-status").textContent(),/20×20×2/);
       assert.match(await page.locator("#mapblock-status").textContent(),/1600/);
       assert.equal(await blockCells.count(),400);
