@@ -889,8 +889,8 @@ try{
         });
         assert.equal(await page.locator("#source-floor").inputValue(),"1");
         assert.equal(await u1Grid.count(),128);
-        assert.equal(await page.locator("#run").isDisabled(),true,
-          "type-level representative tile from the previous floor is not runnable");
+        assert.equal(await u1Grid.filter({has:page.locator('[aria-pressed="true"]')}).count(),0);
+        await assertNoResult();
         const afterRecovery=await sourceInfo(u1Grid.nth(4));
         await u1Grid.nth(4).click();
         await page.locator("#run").click();await waitState("COMPLETED");
