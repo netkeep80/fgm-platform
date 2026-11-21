@@ -75,6 +75,7 @@ function resetCatalog() {
 }
 function setSource(mode) {
   sourceMode=mode;
+  u4Reset();
   resetCatalog();
   selected=new Map();
   clearBindings();
@@ -281,6 +282,7 @@ async function scanFolder(files) {
     const maps=new Map(result.maps.map(map=>[map.id,map]));
     const usable=result.maps.filter(map=>map.datasets && !map.missing.length).length;
     catalog={index,maps,result};
+    u4CatalogReady();
     for(const map of result.maps) {
       const state=!map.datasets ? " · профиль неизвестен" : map.missing.length ? " · неполный комплект" : "";
       mapMenu.add(new Option(map.name+" ("+map.id+")"+state,map.id));
@@ -1281,6 +1283,229 @@ $("mapblock-open-source").addEventListener("click",()=>{
       "E_U3_SOURCE_TRANSFER · "+error.message;
   });
 });
+
+// D4-U4: a local, source-bound 2D composer. Definition metadata is independently
+// verified by canonical R02; U1/U2/U3 Worker/selection/result ownership is untouched.
+const U4_SIDE=5,U4_LIMIT=25;
+let u4Catalog=null,u4Epoch=0,u4Request=0,u4Pending=null;
+let u4Definitions=new Map(),u4Candidate=null,u4Instances=new Map(),u4Slots=Array(25).fill(null);
+let u4SelectedSlot=0,u4Sequence=0;
+function u4Status(message){$("battlescape-status").textContent=message}
+function u4RetirePending(){
+  ++u4Request;
+  u4Pending?.controller.abort();
+  u4Pending?.worker.terminate();
+  u4Pending=null;
+}
+function u4Reset(){
+  ++u4Epoch;u4RetirePending();
+  u4Catalog=null;u4Definitions=new Map();u4Candidate=null;
+  u4Instances=new Map();u4Slots=Array(25).fill(null);
+  u4SelectedSlot=0;u4Sequence=0;
+  const picker=$("battlescape-template");
+  picker.replaceChildren(new Option("— выберите папку UFO —",""));picker.disabled=true;
+  $("battlescape-verify").disabled=true;
+  u4Status("NO_SOURCE · выберите папку UFO.");u4Render();
+}
+function u4CatalogReady(){
+  u4Catalog=catalog;u4Candidate=null;
+  const picker=$("battlescape-template");picker.replaceChildren();
+  picker.add(new Option("— выберите MAP —",""));
+  for(const map of catalog.result.maps){
+    const state=!map.datasets?"PROFILE_UNKNOWN":map.missing.length?"INCOMPLETE":"UNVERIFIED";
+    picker.add(new Option(map.name+" · "+map.id+" · "+state,map.id));
+  }
+  picker.value="";picker.disabled=false;
+  $("battlescape-verify").disabled=false;
+  u4Status("CATALOG_READY_NOT_VERIFIED · выберите MAP и проверьте нативно.");
+  u4Render();
+}
+function u4Footprint(def,anchor){
+  if(!def || !Number.isInteger(anchor)||anchor<0||anchor>=25 ||
+     ![1,2].includes(def.slots))throw Error("E_U4_FOOTPRINT");
+  const x=anchor%5,y=Math.floor(anchor/5);
+  if(x+def.slots>5||y+def.slots>5)throw Error("E_U4_BOUNDS");
+  const indexes=[];
+  for(let dy=0;dy<def.slots;dy++)for(let dx=0;dx<def.slots;dx++)
+    indexes.push((y+dy)*5+x+dx);
+  return indexes;
+}
+function u4Render(){
+  const grid=$("battlescape-grid"),buttons=[];
+  grid.replaceChildren();
+  for(let i=0;i<25;i++){
+    const id=u4Slots[i],instance=id?u4Instances.get(id):null;
+    const button=document.createElement("button");
+    button.type="button";button.className="battlescape-slot";
+    button.dataset.slot=String(i);button.dataset.occupied=String(Boolean(instance));
+    button.setAttribute("aria-pressed",String(i===u4SelectedSlot));
+    const x=i%5,y=Math.floor(i/5);
+    button.setAttribute("aria-label","Слот "+x+","+y+
+      (instance?", экземпляр "+instance.id+", MAP "+instance.mapId:", пустой"));
+    button.textContent=x+","+y+(instance?" · "+instance.mapId+" · "+instance.id:" · пусто");
+    button.addEventListener("click",()=>{
+      if(!button.isConnected||u4Catalog!==catalog||sourceMode!=="catalog")return;
+      u4SelectedSlot=i;u4Render();grid.children[i]?.focus();
+    });
+    button.addEventListener("keydown",event=>{
+      if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(event.key))return;
+      event.preventDefault();
+      const dx=event.key==="ArrowRight"?1:event.key==="ArrowLeft"?-1:0;
+      const dy=event.key==="ArrowDown"?1:event.key==="ArrowUp"?-1:0;
+      const next=event.key==="Home"?0:event.key==="End"?24:
+        Math.max(0,Math.min(4,y+dy))*5+Math.max(0,Math.min(4,x+dx));
+      buttons[next]?.focus();
+    });
+    grid.append(button);buttons.push(button);
+  }
+  const id=u4Slots[u4SelectedSlot],item=id?u4Instances.get(id):null;
+  $("battlescape-selected").textContent="Слот ("+(u4SelectedSlot%5)+","+
+    Math.floor(u4SelectedSlot/5)+") · "+
+    (item?"экземпляр "+item.id+" · "+item.mapId+" · "+item.sourceDigest.slice(0,12)+"…"+
+      " · якорь ("+(item.anchor%5)+","+Math.floor(item.anchor/5)+")":"пустой");
+  const filled=u4Slots.filter(Boolean).length;
+  $("battlescape-count").textContent="DRAFT_LAYOUT_2D · "+u4Instances.size+
+    " экземпляров · "+filled+"/25 слотов · "+u4Definitions.size+
+    " проверенных определений в кэше; подлинность/игровая совместимость НЕ проверены.";
+}
+function u4CheckSession(snapshot,token,epoch){
+  if(u4Catalog!==snapshot||catalog!==snapshot||sourceMode!=="catalog"||
+     u4Epoch!==epoch||u4Request!==token)
+    throw Error("E_U4_STALE_SOURCE");
+}
+async function u4Verify(){
+  const snapshot=u4Catalog,id=$("battlescape-template").value;
+  if(!snapshot||snapshot!==catalog||sourceMode!=="catalog")
+    {u4Status("E_U4_NO_SOURCE");return}
+  const map=snapshot.maps.get(id);
+  if(!map||!map.datasets||map.missing.length){
+    u4Candidate=null;u4Status("E_U4_PROFILE · MAP без полного MCD-профиля.");return;
+  }
+  if(u4Pending){u4Status("E_U4_BUSY · дождитесь завершения проверки.");return}
+  const stored=u4Definitions.get(id);
+  if(stored){
+    u4Candidate=stored;
+    u4Status("NATIVE_DEFINITION_VERIFIED · "+id+" · "+stored.dimensions.join("×")+
+      " · SHA-256 "+stored.sourceDigest.slice(0,12)+"… (не подлинность).");
+    return;
+  }
+  u4Candidate=null;
+  const token=++u4Request,epoch=u4Epoch;
+  const controller=new AbortController();
+  let worker=null;
+  $("battlescape-verify").disabled=true;
+  u4Status("VERIFYING_NATIVE_R02 · "+id+" · без изменения Source и R06.");
+  try{
+    const datasets=map.datasets.map((dataset,i)=>({id:dataset,file:"ds"+i}));
+    const inputs=new Map([["map",resolveFile(snapshot.index,map.path)],
+      ...datasets.map(({id,file})=>[file,resolveFile(snapshot.index,snapshot.result.terrain[id].mcd)])]);
+    checkInputSizes(inputs);
+    worker=new Worker("./engine/worker.mjs",{type:"module"});
+    u4Pending={worker,controller,token};
+    const call=connection(worker,controller.signal);
+    const check=()=>u4CheckSession(snapshot,token,epoch);
+    await call({action:"clear"});check();
+    for(const [name,file] of inputs){
+      const bytes=file instanceof Uint8Array?file:new Uint8Array(await file.arrayBuffer());
+      check();
+      for(let offset=0;offset<bytes.length;offset+=CHUNK){
+        await call({action:"append",file:name,offset,hex:hex(bytes.subarray(offset,offset+CHUNK))});
+        check();
+      }
+    }
+    const {catalog:report}=await call({action:"catalog-map",map:id});
+    check();
+    if(report?.schema!=="fgmr-ufo-map-elements/1"||report.map!==id||
+       !Array.isArray(report.dimensions)||report.dimensions.length!==3)
+      throw Error("E_U4_NATIVE_SCHEMA");
+    const [w,h,z]=report.dimensions;
+    if(!((w===10&&h===10)||(w===20&&h===20))||
+       !Number.isInteger(z)||z<1||z>255)
+      throw Error("E_U4_UNSUPPORTED_DIMENSIONS");
+    const {catalog:page}=await call({
+      action:"catalog-placements",map:id,floor:0,offset:0,limit:128,sourceDigest:""
+    });
+    check();
+    verifyPlacementPage(page,id,null,0,0);
+    if(page.dimensions.some((value,i)=>value!==report.dimensions[i]))
+      throw Error("E_U4_NATIVE_DIMENSIONS");
+    // Reuse U3's strict native tile index, part index and ordinal checks.
+    u3CheckPage(page,{mapId:id,sourceDigest:page.sourceDigest,
+      dimensions:report.dimensions},0,0,null,-1);
+    const def=Object.freeze({mapId:id,path:map.path,sourceDigest:page.sourceDigest,
+      dimensions:Object.freeze([...report.dimensions]),
+      datasets:Object.freeze([...map.datasets]),slots:w/10,session:epoch});
+    u4Candidate=def;
+    // With 25 pinned definitions this is one transient verification slot,
+    // not an eviction. Commit decides which unreferenced entry can leave.
+    u4Status("NATIVE_DEFINITION_VERIFIED · "+id+" · "+def.dimensions.join("×")+
+      " · SHA-256 "+def.sourceDigest.slice(0,12)+
+      "… · только структурные данные R02, не вся карта и не подлинность.");
+  }catch(error){
+    if(u4Catalog===snapshot&&u4Epoch===epoch&&u4Request===token){
+      u4Candidate=null;u4Status("ERROR · "+error.message+" · компоновка не изменена.");
+    }
+  }finally{
+    worker?.terminate();
+    if(u4Pending?.token===token)u4Pending=null;
+    if(u4Catalog===snapshot&&u4Epoch===epoch){
+      $("battlescape-verify").disabled=false;
+    }
+  }
+}
+function u4Change(action){
+  const snapshot=u4Catalog,def=u4Candidate,slot=u4SelectedSlot;
+  if(!snapshot||snapshot!==catalog||sourceMode!=="catalog")
+    {u4Status("E_U4_NO_SOURCE");return}
+  if(u4Pending){u4Status("E_U4_BUSY · компоновка не изменена.");return}
+  const oldId=u4Slots[slot],old=oldId?u4Instances.get(oldId):null;
+  if(action==="remove"&&!old){u4Status("E_U4_EMPTY");return}
+  if(action==="place"&&old){u4Status("E_U4_OVERLAP");return}
+  if(action==="replace"&&!old){u4Status("E_U4_EMPTY");return}
+  if(action!=="remove"&&(!def||def.session!==u4Epoch)){
+    u4Status("E_U4_UNVERIFIED · сначала проверьте шаблон нативно.");return;
+  }
+  try{
+    const instances=new Map(u4Instances),slots=u4Slots.slice();
+    const anchor=old&&action!=="place"?old.anchor:slot;
+    if(old){
+      for(let i=0;i<25;i++)if(slots[i]===old.id)slots[i]=null;
+      instances.delete(old.id);
+    }
+    if(action!=="remove"){
+      const footprint=u4Footprint(def,anchor);
+      if(footprint.some(i=>slots[i]))throw Error("E_U4_OVERLAP");
+      const id=old?old.id:"mbi-"+(u4Sequence+1);
+      const instance=Object.freeze({id,mapId:def.mapId,
+        sourceDigest:def.sourceDigest,anchor,slots:def.slots});
+      instances.set(id,instance);
+      for(const i of footprint)slots[i]=id;
+    }
+    // Stage all changes before commit. Retain definitions referenced by the
+    // new instances; transient candidate can replace a pinned 25th entry.
+    const nextDefinitions=new Map(u4Definitions);
+    if(action!=="remove")nextDefinitions.set(def.mapId,def);
+    const used=new Set([...instances.values()].map(x=>x.mapId));
+    for(const id of nextDefinitions.keys())if(!used.has(id))nextDefinitions.delete(id);
+    if(nextDefinitions.size>U4_LIMIT)throw Error("E_U4_CACHE_LIMIT");
+    // Single synchronous transaction: failure above leaves old map/cache intact.
+    u4Instances=instances;u4Slots=slots;u4Definitions=nextDefinitions;
+    if(action==="place")++u4Sequence;
+    u4Status("DRAFT_CHANGED · "+action+" · источник не изменён; "+instances.size+
+      " экземпляров, "+slots.filter(Boolean).length+"/25 слотов.");
+    u4Render();
+  }catch(error){u4Status("ERROR · "+error.message+" · атомарная операция отклонена.");}
+}
+$("battlescape-template").addEventListener("change",()=>{
+  u4RetirePending();u4Candidate=null;
+  u4Status("UNVERIFIED · проверка выбранного MAP ещё не выполнена.");
+});
+$("battlescape-verify").addEventListener("click",()=>void u4Verify());
+$("battlescape-place").addEventListener("click",()=>u4Change("place"));
+$("battlescape-replace").addEventListener("click",()=>u4Change("replace"));
+$("battlescape-remove").addEventListener("click",()=>u4Change("remove"));
+u4Render();
+
 // D4-U0 UI-only coordinator: Worker and scene owners remain the existing modules.
 // Keep the legacy whole-object controls accessible in Source during this migration.
 function startStudioWorkspaces() {
@@ -1288,7 +1513,7 @@ function startStudioWorkspaces() {
     source:["Источник","Локальный каталог, оригинальный R04, R06, сравнение R05 и OBJ."],
     object:["Объект","D4-U2: локальные ObjectHypothesis по настоящим SourcePartRef — только гипотезы. Сборка whole R06 остаётся независимой."],
     mapblock:["MapBlock · SOURCE_LAYOUT_2D","D4-U3: только исходный 2D MAP по нативным R02 и имена ROUTES/RMP, без реконструкции или маршрутизации."],
-    map:["Карта · NOT_IMPLEMENTED","Конструктор 50×50, выбор экземпляров и 3D-отрисовка карт пока не реализованы."],
+    map:["Карта · DRAFT_LAYOUT_2D","D4-U4: локальный 2D-конструктор 50×50 из отдельно проверенных нативных MAP, без 3D, генерации и подлинности."],
     world:["Мир · RESEARCH_ONLY","Фрактальный мир и выбор графического backend исследуются. Генерация недоступна."]
   });
   const tabs=[...document.querySelectorAll("#studio-workspaces [data-workspace]")];
@@ -1302,8 +1527,9 @@ function startStudioWorkspaces() {
     $("preview").hidden=!useSource;
     const whole=document.getElementById("whole-preview"); // owner can replace canvas node
     if(whole)whole.hidden=!useWhole;
-    const empty=(workspace==="map"||workspace==="world")||(workspace==="object"&&!useWhole);
+    const empty=(workspace==="world")||(workspace==="object"&&!useWhole);
     $("mapblock-inspector").hidden=workspace!=="mapblock";
+    $("battlescape-panel").hidden=workspace!=="map";
     placeholder.hidden=!empty;
     if(empty){
       heading.textContent=names[workspace][0];
