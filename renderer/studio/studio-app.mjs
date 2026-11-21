@@ -540,9 +540,11 @@ function startStudioWorkspaces() {
     placeholder.hidden=!empty;
     if(empty){
       heading.textContent=names[workspace][0];
-      description.textContent=workspace==="object"&&$("whole-status").dataset.state==="COMPLETED"
-        ? "Сборка завершена, но действительный графический viewport недоступен. Метрики и артефакты остаются в инструментах объекта."
-        :names[workspace][1];
+      const owner=$("whole-status");
+      description.textContent=workspace!=="object"?names[workspace][1]
+        :owner.dataset.state==="COMPLETED"
+          ? "COMPLETED · Сборка проверена, но графический viewport недоступен. Метрики и артефакты остаются в инструментах объекта."
+          :owner.textContent||names[workspace][1];
     }
     $("view-toolbar").hidden=!useSource;
     $("hint").hidden=!useSource;
@@ -577,6 +579,10 @@ function startStudioWorkspaces() {
     wholeAvailable=e.detail?.show===true; // owner reports renderability, not model authenticity
     if(workspace==="source")preferredView=wholeAvailable?"whole":"source";
     render();
+  });
+  // Whole ERROR/COMPLETED may follow a viewport event asynchronously.
+  document.addEventListener("fgm-studio:whole-status",()=>{
+    if(workspace==="object")render();
   });
   render();
 }

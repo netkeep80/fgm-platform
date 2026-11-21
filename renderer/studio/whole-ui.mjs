@@ -15,6 +15,8 @@ let canvas=$("whole-preview"),ctx=canvas.getContext("2d");
 function status(state,message){
   $("whole-status").dataset.state=state;
   $("whole-status").textContent=state+" · "+message;
+  // Status is published only after the owning module commits it to the DOM.
+  document.dispatchEvent(new CustomEvent("fgm-studio:whole-status",{detail:{state}}));
 }
 function enable(){
   $("whole-run").disabled=!inputs||!!worker||!["none","ready"].includes(fittedState);
