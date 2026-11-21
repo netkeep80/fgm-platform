@@ -1521,6 +1521,9 @@ function u4Change(action){
 }
 $("battlescape-template").addEventListener("change",()=>{
   u4RetirePending();u4Candidate=null;
+  // Retiring a pending native request must not leave verification disabled.
+  $("battlescape-verify").disabled=
+    !u4Catalog||u4Catalog!==catalog||sourceMode!=="catalog";
   u4Status("UNVERIFIED · проверка выбранного MAP ещё не выполнена.");
 });
 $("battlescape-verify").addEventListener("click",()=>void u4Verify());

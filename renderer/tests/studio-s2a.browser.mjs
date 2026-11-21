@@ -1497,6 +1497,30 @@ try{
       assert.equal(await u4Cells.nth(7).getAttribute("aria-label"),beforeEmptyOwner);
       console.log("STUDIO_D4_U4_TIMEOUT_RECOVERY_NATIVE_RETRY_PASS");
 
+      // Cancel an independent native verification by changing the U4
+      // template, then immediately verify a cached template. Old callbacks
+      // must not disable or overwrite the new selection.
+      await page.evaluate(()=>{
+        window.__studioGateCatalog=true;
+        window.__studioReleaseCatalog=null;
+      });
+      await u4Template.selectOption("CULTA14");
+      await u4Verify.click();
+      await page.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),null,
+        {timeout:60000});
+      await u4Template.selectOption("CULTA11");
+      assert.equal(await u4Verify.isEnabled(),true);
+      await page.evaluate(()=>{
+        window.__studioGateCatalog=false;
+        try{window.__studioReleaseCatalog?.()}catch{/* retired Worker */}
+        window.__studioReleaseCatalog=null;
+      });
+      await u4Verify.click();
+      await waitU4();
+      assert.equal(await u4Count.textContent(),beforeEmptyCount);
+      assert.equal(await u4Cells.nth(7).getAttribute("aria-label"),beforeEmptyOwner);
+      console.log("STUDIO_D4_U4_CANCEL_TEMPLATE_RETRY_PASS");
+
       // P3-U4-R2-01: 25 distinct pinned real-native definitions + 26th
       // verified temporarily, then atomic replacement with no prior eviction.
       const p3Root=await mkdtemp(join(tmpdir(),"studio-u4-cache-"));
