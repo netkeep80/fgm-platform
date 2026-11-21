@@ -689,6 +689,44 @@ try{
       }
       assert.equal(Object.keys(reads).some(path=>path.includes("/GEOGRAPH/")),false);
 
+      // D4-U1 SourcePartRef is the true R02 placement, not the type's first tile.
+      const grid=page.locator("#source-grid button[data-source-part-ref]");
+      await page.waitForFunction(()=>document.querySelectorAll(
+        "#source-grid button[data-source-part-ref]").length>=4);
+      assert.equal(await page.locator("#source-placement-panel").isVisible(),true);
+      assert.equal(await page.locator("#source-floor").inputValue(),"0");
+      const digestLabel=await page.locator("#source-page-status").textContent();
+      assert.match(digestLabel,/SHA-256 [0-9a-f]{12}/);
+      const firstPlacement=grid.first();
+      const bound=await firstPlacement.evaluate(b=>({
+        ref:b.dataset.sourcePartRef,x:Number(b.dataset.x),y:Number(b.dataset.y)
+      }));
+      await firstPlacement.click();
+      assert.equal(await firstPlacement.getAttribute("aria-pressed"),"true");
+      assert.equal(await firstPlacement.evaluate(el=>document.activeElement===el),true);
+      assert.match(await page.locator("#source-placement-status").textContent(),/R02.*семантический объект/);
+      assert.equal(await page.locator("#run").isDisabled(),false);
+      await page.locator("#run").click();
+      await waitState("COMPLETED");
+      const placementResult=JSON.parse(await page.locator("#metrics").textContent());
+      assert.deepEqual(placementResult.tile,[bound.x,bound.y,0]);
+      assert.match(await page.locator("#source-placement-status").textContent(),new RegExp(bound.ref.slice(0,12)));
+      await page.locator('#studio-workspaces [data-workspace="object"]').click();
+      await page.locator('#studio-workspaces [data-workspace="source"]').click();
+      assert.equal(await page.locator("#source-grid button[aria-pressed=true]").count(),1);
+      assert.deepEqual(JSON.parse(await page.locator("#metrics").textContent()).tile,
+        [bound.x,bound.y,0]);
+      await grid.first().focus();
+      await grid.first().press("End");
+      assert.equal(await grid.last().evaluate(el=>document.activeElement===el),true);
+      await grid.last().press("Home");
+      assert.equal(await grid.first().evaluate(el=>document.activeElement===el),true);
+      await grid.first().press("ArrowDown");
+      assert.equal(await page.locator("#source-grid").isVisible(),true);
+      console.log("STUDIO_D4_U1_SOURCE_GRID_R02_R06_PASS");
+
+
+
       await page.evaluate(()=>{window.__studioGateCatalog=true});
       await mapMenu.selectOption("CULTA01");
       await page.waitForFunction(()=>window.__studioReleaseCatalog!==null);

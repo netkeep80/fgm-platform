@@ -269,6 +269,24 @@ std::string Runner::call(std::string_view input) {
                 bounded(request["paletteIndex"],8191,"E_R04_PALETTE_LENGTH"));
             return reply.dump();
         }
+        if (action=="catalog-placements") {
+            require(state_!=State::running && state_!=State::paused,"E_STUDIO_STATE");
+            require(fields(request,{"v","action","map","floor","offset","limit",
+                                    "sourceDigest"}),"E_STUDIO_REQUEST");
+            const auto floor=bounded(request["floor"],255,"E_STUDIO_PLACEMENTS_FLOOR");
+            const auto offset=bounded(request["offset"],65536,"E_STUDIO_PLACEMENTS_PAGE");
+            const auto limit=bounded(request["limit"],128,"E_STUDIO_PLACEMENTS_PAGE");
+            require(limit>0 && request["sourceDigest"].is_string(),"E_STUDIO_REQUEST");
+            const auto& expected=request["sourceDigest"].get_ref<const std::string&>();
+            require(expected.empty() || (expected.size()==64 &&
+                std::ranges::all_of(expected,[](char c) {
+                    return (c>='0'&&c<='9')||(c>='a'&&c<='f');
+                })),"E_STUDIO_PLACEMENTS_DIGEST");
+            auto reply=response();
+            reply["catalog"]=catalog_placements(identifier(request["map"]),staged_,
+                                                 static_cast<unsigned>(floor),offset,limit,expected);
+            return reply.dump();
+        }
         if (action=="catalog-directory" || action=="catalog-map") {
             auto reply=response();
             if (action=="catalog-directory") {

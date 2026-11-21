@@ -1,5 +1,6 @@
 #include "studio-catalog.hpp"
 #include "sprite-facts.hpp"
+#include "sha256.hpp"
 
 #include <algorithm>
 #include <array>
@@ -191,6 +192,89 @@ Json catalog_map(std::string_view map_id, const Files& files) {
     return {{"schema","fgmr-ufo-map-elements/1"},{"map",map_id},
             {"dimensions",{facts.map.sizeX,facts.map.sizeY,facts.map.sizeZ}},
             {"elements",std::move(result)}};
+}
+
+
+// D4-U1: source placements are a read-only projection of the ONE R02 decoder.
+// Map bytes and ordered MCD dataset IDs/bytes are integrity-bound, not authenticated.
+Json catalog_placements(std::string_view map_id, const Files& files,
+                        unsigned floor, std::size_t offset, std::size_t limit,
+                        std::string_view expected_digest) {
+    const auto* profile=profile_for(map_id);
+    require(profile!=nullptr,"E_STUDIO_CATALOG_PROFILE");
+    require(files.size()==profile->sets.size()+1 && files.contains("map"),
+            "E_STUDIO_CATALOG_INPUT");
+    const auto& map=files.at("map");
+    require(map.size()<=64*1024,"E_STUDIO_LIMIT");
+    std::vector<r02::DataSet> sets;
+    for (std::size_t i=0;i<profile->sets.size();++i) {
+        const auto it=files.find("ds"+std::to_string(i));
+        require(it!=files.end(),"E_STUDIO_CATALOG_INPUT");
+        sets.push_back({profile->sets[i],it->second});
+    }
+    const auto facts=r02::decode(map,sets);
+    require(floor<facts.map.sizeZ,"E_STUDIO_PLACEMENTS_FLOOR");
+    require(limit>0 && limit<=128,"E_STUDIO_PLACEMENTS_PAGE");
+    // Unambiguous length-prefixed binary encoding: neither map/dataset names
+    // nor arbitrary file bytes can collide by concatenation.
+    std::string material="fgmr-ufo-map-placements/1";
+    const auto feed=[&](std::string_view v) {
+        const auto n=static_cast<std::uint64_t>(v.size());
+        for (int shift=56;shift>=0;shift-=8)
+            material.push_back(static_cast<char>((n>>shift)&255u));
+        material.append(v);
+    };
+    feed(map_id);
+    feed({reinterpret_cast<const char*>(map.data()),map.size()});
+    for (const auto& set:sets) {
+        feed(set.id);
+        feed({reinterpret_cast<const char*>(set.bytes.data()),set.bytes.size()});
+    }
+    const auto digest=fgmr::sha256(std::string_view(material));
+    require(expected_digest.empty() || expected_digest==digest,
+            "E_STUDIO_PLACEMENTS_DIGEST");
+    Json rows=Json::array();
+    std::size_t total=0;
+    // Canonical MAP encoded record order (top layer first), then part index.
+    for (const auto& tile:facts.map.tiles) {
+        if (static_cast<unsigned>(tile.z)!=floor) continue;
+        for (std::size_t p=0;p<parts.size();++p) {
+            if (!tile.parts[p]) continue;
+            if (total>=offset && rows.size()<limit) {
+                const auto rec=r02::resolveRecord(facts.datasets,tile.parts[p]);
+                const auto& set=facts.datasets[rec.setIndex];
+                const auto [kind,name]=describe(set.bytes,rec.localIndex,p);
+                rows.push_back({
+                    {"sourcePartRef",digest+"/"+std::to_string(tile.recordIndex)+
+                                     "-"+std::to_string(p)},
+                    {"tile",{tile.x,tile.y,tile.z}},
+                    {"tileIndex",tile.recordIndex},
+                    {"partIndex",p},
+                    {"part",parts[p]},
+                    {"sourceIndex",tile.parts[p]},
+                    {"dataset",set.id},
+                    {"record",rec.localIndex},
+                    {"rightHalf",p==2 && tile.parts[1]!=0},
+                    {"kind",kind},
+                    {"name",name}
+                });
+            }
+            ++total;
+        }
+    }
+    require(offset<=total,"E_STUDIO_PLACEMENTS_PAGE");
+    const auto next=offset+rows.size();
+    Json next_offset=nullptr;
+    if(next<total)next_offset=next;
+    return {{"schema","fgmr-ufo-map-placements/1"},
+            {"map",map_id},
+            {"dimensions",{facts.map.sizeX,facts.map.sizeY,facts.map.sizeZ}},
+            {"sourceDigest",digest},
+            {"floor",floor},
+            {"total",total},
+            {"offset",offset},
+            {"nextOffset",next_offset},
+            {"placements",std::move(rows)}};
 }
 
 Json catalog_thumbnails(std::string_view dataset, const Files& files, const Json& records,
