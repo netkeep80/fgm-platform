@@ -1207,7 +1207,14 @@ try{
       assert.match(await page.locator("#mapblock-status").textContent(),/NO_SOURCE/);
       await library.selectOption("MAP3");
       assert.match(await page.locator("#catalog-summary").textContent(),/неизвест/i);
+      assert.match(await page.locator("#mapblock-status").textContent(),/PROFILE_UNKNOWN/);
       assert.equal(await blockFloor.isDisabled(),true);
+      await library.selectOption("FOREST00");
+      assert.match(await page.locator("#mapblock-status").textContent(),/INCOMPLETE/);
+      await library.selectOption("CULTA02");
+      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
+        .textContent.includes("E_R02_MAP_LENGTH"),null,{timeout:30000});
+      assert.equal(await blockCells.count(),0,"corrupt MAP must not display a previous block");
       await library.selectOption("CULTA10");
       await page.waitForFunction(()=>!document.querySelector("#mapblock-floor").disabled ||
         document.querySelector("#status").dataset.state==="ERROR",null,{timeout:30000});

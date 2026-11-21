@@ -263,6 +263,7 @@ function showCatalogError(error, fallback) {
   const code=/^E_[A-Z0-9_]+$/.test(error.message)?error.message:"E_STUDIO_UI";
   const message=(catalogErrors[code]??fallback)+" ("+code+")";
   $("catalog-summary").textContent=message;
+  u3Status("ERROR · "+code+" · "+message);
   setState("ERROR",message);
 }
 async function scanFolder(files) {
@@ -304,6 +305,10 @@ async function inspectSelectedMap() {
   if(!map.datasets || map.missing.length) {
     $("catalog-summary").textContent=!map.datasets ? "Профиль этой карты неизвестен." :
       "Для этой карты не хватает файлов "+map.missing.join(", ")+".";
+    u3RenderLibrary();
+    u3Status(!map.datasets
+      ? "PROFILE_UNKNOWN · исходный MAP "+map.id+" не имеет подтверждённого MCD-профиля."
+      : "INCOMPLETE · блок "+map.id+" не имеет полного набора исходных файлов.");
     setState("READY","Выберите карту с полным комплектом");
     return;
   }
