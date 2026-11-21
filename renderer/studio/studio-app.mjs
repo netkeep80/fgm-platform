@@ -961,7 +961,7 @@ renderObjectDraft();
 const U3_PAGE=128,U3_MAX_PAGES=16,U3_MAX_PARTS=2048;
 const U3_PARTS=["floor","west_wall","north_wall","object"];
 let u3Active=false,u3Epoch=0,u3Worker=null,u3Abort=null,u3FloorData=null;
-let u3SelectedCell=null,u3SelectedPart=null;
+let u3SelectedCell=null,u3SelectedPart=null,u3TransferEpoch=0;
 const u3Name=part=>({floor:"Пол",west_wall:"Западная стена",
                        north_wall:"Северная стена",object:"Объект"})[part];
 function u3Status(value){$("mapblock-status").textContent=value}
@@ -977,6 +977,7 @@ function u3Retire() {
   $("mapblock-open-source").disabled=true;
 }
 function u3Reset() {
+  ++u3TransferEpoch;
   u3Retire();
   $("mapblock-floor").replaceChildren();
   $("mapblock-floor").disabled=true;
@@ -1175,7 +1176,7 @@ async function u3LoadFloor() {
       if(list.some(x=>x.partIndex===p.partIndex))throw Error("E_U3_NATIVE_DUPLICATE");
       list.push(p);
     }
-    const data={source:current,floor,width:w,height:h,cells,total};
+    const data={source:current,floor,width:w,height:h,cells,rows,total};
     check();
     u3FloorData=data;u3RenderFloor(data);
     u3Status("SOURCE_LAYOUT_2D · "+current.mapId+" · "+w+"×"+h+"×"+z+
@@ -1192,6 +1193,8 @@ async function u3LoadFloor() {
   }
 }
 function u3SetActive(active){
+  // Every workspace transition invalidates an earlier Source transfer.
+  ++u3TransferEpoch;
   u3Active=active;
   if(!active){
     if(u3Worker){
@@ -1213,8 +1216,70 @@ $("mapblock-library").addEventListener("change",()=>{
 });
 $("mapblock-floor").addEventListener("change",()=>void u3LoadFloor());
 $("mapblock-open-source").addEventListener("click",()=>{
-  if(!u3FloorData || u3FloorData.source!==inspectedMap || !u3Active)return;
+  const data=u3FloorData,part=u3SelectedPart,cell=u3SelectedCell;
+  if(!data || data.source!==inspectedMap || !u3Active ||
+     $("mapblock-floor").value!==String(data.floor))return;
+  // A cell without an explicitly chosen part navigates, but does not claim
+  // to bind a SourcePartRef or change the existing Source selection.
+  if(!part){
+    document.querySelector('#studio-workspaces [data-workspace="source"]').click();
+    return;
+  }
+  const rows=data.rows,index=rows.indexOf(part);
+  if(index<0 || !cell ||
+     part.tile[0]!==cell.x || part.tile[1]!==cell.y ||
+     part.tile[2]!==data.floor ||
+     !data.cells.get(cell.y*data.width+cell.x)?.includes(part))return;
+  const target={mapId:data.source.mapId,sourceDigest:data.source.sourceDigest,
+    floor:data.floor,offset:Math.floor(index/U3_PAGE)*U3_PAGE,
+    sourcePartRef:part.sourcePartRef,tile:[...part.tile],
+    part:part.part,dataset:part.dataset,record:part.record,
+    sourceIndex:part.sourceIndex,rightHalf:part.rightHalf};
+  // Navigate first, then perform the only authorized Source selection path.
   document.querySelector('#studio-workspaces [data-workspace="source"]').click();
+  const token=u3TransferEpoch,current=data.source;
+  if(document.body.dataset.workspace!=="source" || inspectedMap!==current ||
+     sourceMode!=="catalog")return;
+  selectedPlacement=null;
+  $("source-floor").value=String(target.floor);
+  invalidateRun();renderSelectedPlacement();
+  const epoch=generation,previousPageEpoch=placementEpoch;
+  const pending=loadPlacementPage(target.floor,target.offset);
+  const newPageEpoch=placementEpoch;
+  const stillCurrent=()=>token===u3TransferEpoch && epoch===generation &&
+    inspectedMap===current && sourceMode==="catalog" &&
+    document.body.dataset.workspace==="source" &&
+    $("source-floor").value===String(target.floor) &&
+    placementEpoch===newPageEpoch;
+  void (async()=>{
+    await pending;
+    if(!stillCurrent())return; // source/floor/tab changed during genuine R02
+    const page=placementPage;
+    const nativePart=page?.placements?.find(p=>p.sourcePartRef===target.sourcePartRef);
+    const same=page?.map===target.mapId &&
+      page?.sourceDigest===target.sourceDigest &&
+      page?.floor===target.floor && page?.offset===target.offset &&
+      nativePart && nativePart.part===target.part &&
+      nativePart.dataset===target.dataset && nativePart.record===target.record &&
+      nativePart.sourceIndex===target.sourceIndex &&
+      nativePart.rightHalf===target.rightHalf &&
+      nativePart.tile.length===3 &&
+      nativePart.tile.every((n,i)=>n===target.tile[i]);
+    const button=[...$("source-grid").querySelectorAll("button[data-source-part-ref]")]
+      .find(node=>node.dataset.sourcePartRef===target.sourcePartRef);
+    if(newPageEpoch===previousPageEpoch || !same || !button?.isConnected){
+      $("source-placement-status").textContent="E_U3_SOURCE_TRANSFER · не удалось подтвердить выбранную часть на странице R02.";
+      return;
+    }
+    // Execute the native Source page's existing trusted R04/R06 selection
+    // callback: never assign a candidate directly to selectedPlacement.
+    button.click();
+    if(selectedPlacement?.sourcePartRef!==target.sourcePartRef)
+      $("source-placement-status").textContent="E_U3_SOURCE_TRANSFER · исходный тип R04 не подтверждён.";
+  })().catch(error=>{
+    if(stillCurrent())$("source-placement-status").textContent=
+      "E_U3_SOURCE_TRANSFER · "+error.message;
+  });
 });
 // D4-U0 UI-only coordinator: Worker and scene owners remain the existing modules.
 // Keep the legacy whole-object controls accessible in Source during this migration.

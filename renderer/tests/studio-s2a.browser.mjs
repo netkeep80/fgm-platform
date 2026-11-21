@@ -1268,6 +1268,39 @@ try{
       assert.ok(pages.every(p=>p.map==="CULTA10"&&p.floor===1&&p.digest?.length===64));
       assert.match(await page.locator("#mapblock-status").textContent(),/1600/);
       console.log("STUDIO_D4_U3_NATIVE_1600_PARTS_13_PAGES_PASS");
+      // Regression P2-D4-U3-01: select a genuine MAP part on the *last*
+      // R02 page of Z=1. The U3→Source bridge must re-read that page with
+      // native WASM, not reuse U3's candidate object as selectedPlacement.
+      await blockCells.last().click();
+      await page.locator("#mapblock-parts button").first().click();
+      const u3TargetRef=await page.locator("#mapblock-parts button").first()
+        .getAttribute("data-source-part-ref");
+      assert.match(await page.locator("#mapblock-selected").textContent(),/клетка \\(19,19,1\\)/);
+      const beforeBridge=await page.evaluate(()=>window.__studioU3PlacementCalls.length);
+      await page.locator("#mapblock-open-source").click();
+      await page.waitForFunction(ref=>{
+        const native=document.querySelector('#source-grid button[data-source-part-ref="'+ref+'"]');
+        return document.body.dataset.workspace==="source" &&
+          document.querySelector("#source-floor").value==="1" &&
+          document.querySelector("#source-page-status").textContent.includes("1537") &&
+          native?.getAttribute("aria-pressed")==="true";
+      },u3TargetRef,{timeout:60000});
+      assert.equal(await page.locator("#source-floor").inputValue(),"1");
+      assert.match(await page.locator("#source-placement-status").textContent(),
+        new RegExp(u3TargetRef.slice(0,20)));
+      assert.equal(await page.locator("#run").isEnabled(),true);
+      assert.deepEqual((await page.evaluate(n=>window.__studioU3PlacementCalls.slice(n),beforeBridge))
+        .filter(p=>p.map==="CULTA10"&&p.floor===1).map(p=>p.offset),[1536]);
+      assert.equal(await page.locator("#source-grid button[aria-pressed=true]").count(),1);
+      await page.locator("#run").click();await waitState("COMPLETED");
+      const bridgeR06=JSON.parse(await page.locator("#metrics").textContent());
+      assert.equal(bridgeR06.sourcePartRef,u3TargetRef);
+      assert.deepEqual(bridgeR06.tile,[19,19,1]);
+      assert.equal(bridgeR06.part,"floor");
+      await workspace("mapblock").click();
+      assert.equal(await blockFloor.inputValue(),"1");
+      assert.equal(await blockCells.count(),400);
+      console.log("STUDIO_D4_U3_LAST_PAGE_SOURCE_R06_TRANSFER_PASS");
       await blockCells.first().click();
       const oldCell=await blockCells.first().evaluate(el=>{
         window.__studioU3DetachedCell=el;return el.dataset.x+","+el.dataset.y;
