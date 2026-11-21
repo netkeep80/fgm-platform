@@ -1,7 +1,7 @@
 import {localBrowserContext} from './local-browser.mjs';
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve,join,extname } from "node:path";
 import { tmpdir } from "node:os";
@@ -43,6 +43,10 @@ try{
     globalThis.__studioReleaseStep=null;
     globalThis.__studioGateCatalog=false;
     globalThis.__studioReleaseCatalog=null;
+    globalThis.__studioGatePlacements=false;
+    globalThis.__studioPlacementsGated=false;
+    globalThis.__studioReleasePlacements=null;
+    globalThis.__studioBadPlacementDigest=false;
     globalThis.__studioGateThumb=false;globalThis.__studioThumbGated=false;
     globalThis.__studioReleaseThumb=null;
     globalThis.__studioReads={};
@@ -72,6 +76,13 @@ try{
       }
       postMessage(data,...args) {
         const request=typeof data==="string"?JSON.parse(data):null;
+        if(globalThis.__studioBadPlacementDigest && request?.action==="catalog-placements")
+          return super.postMessage(JSON.stringify({...request,sourceDigest:"0".repeat(64)}),...args);
+        if(globalThis.__studioGatePlacements && request?.action==="catalog-placements") {
+          globalThis.__studioPlacementsGated=true;
+          globalThis.__studioReleasePlacements=()=>super.postMessage(data,...args);
+          return;
+        }
         if(globalThis.__studioGateCatalog && request?.action==="catalog-map") {
           globalThis.__studioReleaseCatalog=()=>super.postMessage(data,...args);
           return;
@@ -688,6 +699,274 @@ try{
         assert.equal(reads[path]-(before[path]??0),1);
       }
       assert.equal(Object.keys(reads).some(path=>path.includes("/GEOGRAPH/")),false);
+
+      // D4-U1 SourcePartRef is the true R02 placement, not the type's first tile.
+      const grid=page.locator("#source-grid button[data-source-part-ref]");
+      await page.waitForFunction(()=>document.querySelectorAll(
+        "#source-grid button[data-source-part-ref]").length>=4);
+      assert.equal(await page.locator("#source-placement-panel").isVisible(),true);
+      assert.equal(await page.locator("#source-floor").inputValue(),"0");
+      const digestLabel=await page.locator("#source-page-status").textContent();
+      assert.match(digestLabel,/SHA-256 [0-9a-f]{12}/);
+      const firstPlacement=grid.first();
+      const bound=await firstPlacement.evaluate(b=>({
+        ref:b.dataset.sourcePartRef,x:Number(b.dataset.x),y:Number(b.dataset.y)
+      }));
+      await firstPlacement.click();
+      assert.equal(await firstPlacement.getAttribute("aria-pressed"),"true");
+      assert.equal(await firstPlacement.evaluate(el=>document.activeElement===el),true);
+      assert.match(await page.locator("#source-placement-status").textContent(),/R02.*семантический объект/);
+      assert.equal(await page.locator("#run").isDisabled(),false);
+      await page.locator("#run").click();
+      await waitState("COMPLETED");
+      const placementResult=JSON.parse(await page.locator("#metrics").textContent());
+      assert.deepEqual(placementResult.tile,[bound.x,bound.y,0]);
+      assert.match(await page.locator("#source-placement-status").textContent(),new RegExp(bound.ref.slice(0,12)));
+      await page.locator('#studio-workspaces [data-workspace="object"]').click();
+      await page.locator('#studio-workspaces [data-workspace="source"]').click();
+      assert.equal(await page.locator("#source-grid button[aria-pressed=true]").count(),1);
+      assert.deepEqual(JSON.parse(await page.locator("#metrics").textContent()).tile,
+        [bound.x,bound.y,0]);
+      await grid.first().focus();
+      await grid.first().press("End");
+      assert.equal(await grid.last().evaluate(el=>document.activeElement===el),true);
+      await grid.last().press("Home");
+      assert.equal(await grid.first().evaluate(el=>document.activeElement===el),true);
+      await grid.first().press("ArrowDown");
+      assert.equal(await page.locator("#source-grid").isVisible(),true);
+      console.log("STUDIO_D4_U1_SOURCE_GRID_R02_R06_PASS");
+
+
+
+      // Adversarial U1 regression against the REAL packaged R02/R04/R06 WASM.
+      // 3×11×2 tiles, four present parts each = 132 placements per floor.
+      const u1Dir=await mkdtemp(join(tmpdir(),"studio-u1-floors-"));
+      try{
+        await writeStudioUfoCatalogFixture(u1Dir);
+        const multi=Buffer.alloc(3+3*11*2*4,1);
+        multi[0]=3;multi[1]=11;multi[2]=2;
+        await writeFile(join(u1Dir,"MAPS/CULTA00.MAP"),multi);
+        await page.locator("#directory").setInputFiles(u1Dir);
+        await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
+        await mapMenu.selectOption("CULTA00");
+        const pageLabel=page.locator("#source-page-status");
+        await page.waitForFunction(()=>document.querySelectorAll(
+          "#source-grid button[data-source-part-ref]").length===128 &&
+          document.querySelector("#source-page-status").textContent.includes("Z=0"),
+          null,{timeout:60000});
+        assert.match(await pageLabel.textContent(),/132 частей/);
+        const u1Grid=page.locator("#source-grid button[data-source-part-ref]");
+        const sourceInfo=button=>button.evaluate(b=>({
+          ref:b.dataset.sourcePartRef,x:Number(b.dataset.x),y:Number(b.dataset.y),
+          part:b.dataset.part
+        }));
+        const a=await sourceInfo(u1Grid.first());
+        await u1Grid.first().click();
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const ma=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(ma.tile,[a.x,a.y,0]);
+        assert.equal(ma.sourcePartRef,a.ref);
+        const b=await sourceInfo(u1Grid.nth(4));
+        assert.equal(a.part,b.part);
+        await u1Grid.nth(4).click();
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const mb=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(mb.tile,[b.x,b.y,0]);
+        assert.equal(mb.sourcePartRef,b.ref);
+        assert.notEqual(ma.sourcePartRef,mb.sourcePartRef);
+        assert.deepEqual(ma.source,mb.source,"same original MCD type in two real MAP tiles");
+
+        // Gate only the genuine catalog-placements message, never fabricate a reply.
+        await page.evaluate(()=>{
+          window.__studioStaleButton=document.querySelector("#source-grid button");
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>window.__studioStaleButton.click()); // detached old closure
+        assert.equal(await u1Grid.count(),0,"old floor is retired during native pending");
+        assert.equal(await page.locator("#run").isDisabled(),true);
+        await assertNoResult();
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=false;window.__studioReleasePlacements();
+        });
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1") &&
+          document.querySelectorAll("#source-grid button").length===128,
+          null,{timeout:60000});
+        assert.equal(await page.locator("#source-floor").inputValue(),"1");
+        const upstairs=u1Grid.first();
+        const upstairsInfo=await sourceInfo(upstairs);
+        await upstairs.focus();
+        await upstairs.press("Space");
+        assert.equal(await upstairs.getAttribute("aria-pressed"),"true");
+        assert.equal(await upstairs.evaluate(el=>document.activeElement===el),true);
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const mz=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(mz.tile,[upstairsInfo.x,upstairsInfo.y,1]);
+        assert.equal(mz.sourcePartRef,upstairsInfo.ref);
+        assert.notEqual(mz.sourcePartRef,a.ref);
+
+        await page.locator("#source-next").focus();
+        await page.locator("#source-next").press("Enter");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("129–132"),null,{timeout:60000});
+        assert.equal(await u1Grid.count(),4);
+        assert.equal(await page.locator("#source-next").isDisabled(),true);
+        assert.equal(await page.locator("#source-prev").evaluate(el=>document.activeElement===el),true,
+          "disabled last-page Next transfers keyboard focus to enabled Prev");
+        await u1Grid.first().focus();await u1Grid.first().press("End");
+        assert.equal(await u1Grid.last().evaluate(el=>document.activeElement===el),true);
+        await u1Grid.last().press("Home");
+        assert.equal(await u1Grid.first().evaluate(el=>document.activeElement===el),true);
+        await u1Grid.first().press("ArrowDown");
+        assert.equal(await u1Grid.nth(1).evaluate(el=>document.activeElement===el),true);
+        await u1Grid.nth(1).press("Enter");
+        assert.equal(await u1Grid.nth(1).getAttribute("aria-pressed"),"true");
+        await page.locator("#source-prev").focus();
+        await page.locator("#source-prev").press("Enter");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("1–128"),null,{timeout:60000});
+        assert.equal(await u1Grid.count(),128);
+        assert.equal(await page.locator("#source-next").evaluate(el=>document.activeElement===el),true,
+          "disabled first-page Prev transfers keyboard focus to enabled Next");
+
+        // Fail the actual native digest check; no obsolete grid or R06 can survive.
+        await page.evaluate(()=>{window.__studioBadPlacementDigest=true});
+        await page.locator("#source-floor").selectOption("0");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("E_STUDIO_PLACEMENTS_DIGEST"),null,{timeout:60000});
+        assert.equal(await u1Grid.count(),0);
+        assert.equal(await page.locator("#run").isDisabled(),true);
+        await assertNoResult();
+        await page.evaluate(()=>{window.__studioBadPlacementDigest=false});
+
+        // Rapid 0→1→0 flips: release a request on an obsolete terminated Worker.
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1"),null,{timeout:60000});
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-floor").selectOption("0");
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>{window.__studioGatePlacements=false});
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1"),null,{timeout:60000});
+        await page.evaluate(()=>{
+          try{window.__studioReleasePlacements?.()}catch{/* worker terminated */}
+        });
+        assert.equal(await page.locator("#source-floor").inputValue(),"1");
+        assert.equal(await u1Grid.count(),128);
+
+        // P2-D4-U1-02: picking a real R04 type while floor R02 is gated
+        // must re-issue the exact current page, not strand the Source workspace.
+        await page.locator("#source-floor").selectOption("0");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=0"),null,{timeout:60000});
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>{window.__studioGatePlacements=false});
+        await elementMenu.click();
+        const previousType=await elementMenu.evaluate(el=>el.value);
+        const differentType=page.locator('#catalog-element-options [role="option"]').last();
+        await differentType.waitFor({state:"visible"});
+        await differentType.click(); // cancels old page Worker through invalidateRun()
+        assert.notEqual(await elementMenu.evaluate(el=>el.value),previousType);
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1") &&
+          document.querySelectorAll("#source-grid button").length===128,
+          null,{timeout:60000});
+        await page.evaluate(()=>{
+          try{window.__studioReleasePlacements?.()}catch{/* stale terminated Worker */}
+        });
+        assert.equal(await page.locator("#source-floor").inputValue(),"1");
+        assert.equal(await u1Grid.count(),128);
+        assert.equal(await page.locator('#source-grid button[aria-pressed="true"]').count(),0);
+        assert.match(await page.locator("#source-placement-status").textContent(),/размещение не выбрано/);
+        await assertNoResult();
+        const afterRecovery=await sourceInfo(u1Grid.nth(4));
+        await u1Grid.nth(4).click();
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const recoveryReport=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(recoveryReport.tile,[afterRecovery.x,afterRecovery.y,1]);
+        assert.equal(recoveryReport.sourcePartRef,afterRecovery.ref);
+        console.log("STUDIO_D4_U1_R04_DURING_FLOOR_LOAD_RECOVERY_PASS");
+        await page.setViewportSize({width:390,height:844});
+        assert.deepEqual(await page.evaluate(()=>[
+          document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+        await u1Grid.first().focus();await u1Grid.first().press("Enter");
+        assert.equal(await u1Grid.first().getAttribute("aria-pressed"),"true");
+        await page.setViewportSize({width:1280,height:900});
+        console.log("STUDIO_D4_U1_FLOOR_PAGE_RACE_AND_IDENTITY_PASS");
+      }finally{
+        await pick();await mapMenu.selectOption("CULTA00");
+        await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled,
+          null,{timeout:60000});
+        await rm(u1Dir,{recursive:true,force:true});
+      }
+
+
+      // Single-floor paged MAP: there is no floor-change escape hatch if R04
+      // cancels page 129–132. The same page must return via real native WASM.
+      const oneFloorDir=await mkdtemp(join(tmpdir(),"studio-u1-onefloor-"));
+      try {
+        await writeStudioUfoCatalogFixture(oneFloorDir);
+        const tiles=Buffer.alloc(3+3*11*4,1);
+        tiles[0]=3;tiles[1]=11;tiles[2]=1;
+        await writeFile(join(oneFloorDir,"MAPS/CULTA00.MAP"),tiles);
+        await page.locator("#directory").setInputFiles(oneFloorDir);
+        await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
+        await mapMenu.selectOption("CULTA00");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("132 частей") &&
+          document.querySelectorAll("#source-grid button").length===128,
+          null,{timeout:60000});
+        const onlyFloorGrid=page.locator("#source-grid button[data-source-part-ref]");
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-next").click();
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>{window.__studioGatePlacements=false});
+        await elementMenu.click();
+        const typeOnPendingPage=page.locator('#catalog-element-options [role="option"]').last();
+        await typeOnPendingPage.waitFor({state:"visible"});
+        await typeOnPendingPage.click();
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("129–132") &&
+          document.querySelectorAll("#source-grid button").length===4,
+          null,{timeout:60000});
+        await page.evaluate(()=>{
+          try{window.__studioReleasePlacements?.()}catch{/* old Worker terminated */}
+        });
+        assert.equal(await page.locator("#source-floor").locator("option").count(),1);
+        assert.equal(await onlyFloorGrid.count(),4);
+        const finalPart=await onlyFloorGrid.first().evaluate(el=>({
+          ref:el.dataset.sourcePartRef,
+          tile:[Number(el.dataset.x),Number(el.dataset.y),0]
+        }));
+        await onlyFloorGrid.first().press("Enter");
+        assert.equal(await page.locator("#run").isDisabled(),false);
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const finalReport=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(finalReport.tile,finalPart.tile);
+        assert.equal(finalReport.sourcePartRef,finalPart.ref);
+        console.log("STUDIO_D4_U1_SINGLE_FLOOR_R04_PAGE_RECOVERY_PASS");
+      } finally {
+        await pick();await mapMenu.selectOption("CULTA00");
+        await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled,
+          null,{timeout:60000});
+        await rm(oneFloorDir,{recursive:true,force:true});
+      }
 
       await page.evaluate(()=>{window.__studioGateCatalog=true});
       await mapMenu.selectOption("CULTA01");

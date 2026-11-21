@@ -67,6 +67,17 @@ body[data-workspace=source] #whole-panel{border-top:1px solid #405369;padding-to
 body[data-workspace=source] #whole-panel h2:after{content:" · совместимый доступ";font-size:11px;font-weight:400;color:#a7b9ca;letter-spacing:normal;text-transform:none}
 @media(max-width:600px){#studio-workspaces{padding:8px;gap:5px}#studio-workspaces button{flex:1 1 130px}#studio-workspace-placeholder{min-height:180px}}
 
+
+/* D4-U1: original R02 placement grid, never a Battlescape/MapBlock editor. */
+#source-grid-scroll{max-width:100%;overflow:auto;max-height:360px;overscroll-behavior:contain;border:1px solid #526b83;border-radius:4px;margin-top:10px}
+#source-grid{display:grid;grid-auto-rows:minmax(58px,auto);gap:3px;min-width:100%;width:max-content;padding:4px;background:#152637}
+.source-cell{display:flex;flex-direction:column;gap:3px;padding:4px;border:1px solid #3e586d;background:#233a4c;min-width:80px;max-width:102px}
+.source-cell small{font-size:10px;color:#c5d7e6;font-variant-numeric:tabular-nums}
+.source-cell button{min-width:0;padding:3px 4px;white-space:normal;word-break:break-word;font-size:11px}
+.source-cell button[aria-pressed=true]{background:#176b50;border-color:#80dac0;color:white}
+.source-cell button:focus-visible{outline:3px solid #e0df9e;outline-offset:1px}
+#source-placement-status{overflow-wrap:anywhere}
+
 </style>
 </head>
 <body data-workspace="source">
@@ -93,6 +104,22 @@ body[data-workspace=source] #whole-panel h2:after{content:" · совмести�
 <div id="catalog-element-options" class="catalog-list" role="listbox" aria-label="Элементы карты с оригинальными спрайтами" hidden></div>
 </div>
 <p id="catalog-summary" class="muted" aria-live="polite">Выберите папку игры.</p>
+</section>
+
+<section id="source-placement-panel" class="source-tools" hidden aria-labelledby="source-placement-heading">
+<h2 id="source-placement-heading">Размещения исходных частей · R02</h2>
+<p class="muted">Координаты из нативного MAP. SHA-256 — целостность локального снимка, а не подлинность игры.</p>
+<label for="source-floor">Этаж карты (Z)</label>
+<select id="source-floor" disabled aria-label="Этаж исходной карты"></select>
+<div id="source-grid-scroll">
+<div id="source-grid" role="group" aria-label="Исходные части клеток, выбор стрелками"></div>
+</div>
+<div class="row">
+<button id="source-prev" type="button" disabled>Предыдущие</button>
+<button id="source-next" type="button" disabled>Следующие</button>
+</div>
+<p id="source-page-status" class="muted" role="status">Нет размещений</p>
+<p id="source-placement-status" class="muted" role="status">Часть исходной клетки не выбрана.</p>
 </section>
 <section class="source-tools"><details id="manual-bindings"><summary>Расширенная диагностика</summary>
 <label for="local-files">Выбрать файлы для ручной привязки</label><input id="local-files" type="file" multiple>

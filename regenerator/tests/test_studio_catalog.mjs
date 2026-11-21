@@ -80,6 +80,76 @@ assert.equal(report.source.local_index, 0);
 assert.equal(report.right_half, true);
 
 
+
+// D4-U1: native R02 source occurrences, not grouped MCD record types.
+const placements=(floor=0,offset=0,limit=128,sourceDigest="",mapId="CULTA00") =>
+  request("catalog-placements",{map:mapId,floor,offset,limit,sourceDigest});
+const placementRequests=[
+  ...data.map(append),
+  placements(0),placements(1),placements(2),placements(0,0,0),
+  placements(0,0,129),placements(0,65000),placements(0,0,128,"0".repeat(64)),
+  placements(0,1),placements(0,0,128,"","MAP3")
+];
+const placementRun=spawnSync(native,{input:placementRequests.map(JSON.stringify).join("\n")+"\n",
+  encoding:"utf8",maxBuffer:2*1024*1024});
+assert.equal(placementRun.status,0,placementRun.stderr);
+const placementReplies=placementRun.stdout.trimEnd().split("\n").map(JSON.parse);
+const floor0=placementReplies[4].catalog,floor1=placementReplies[5].catalog;
+assert.equal(floor0.schema,"fgmr-ufo-map-placements/1");
+assert.deepEqual(floor0.dimensions,[2,1,2]);
+assert.equal(floor0.floor,0);assert.equal(floor0.total,3);
+assert.equal(floor1.floor,1);assert.equal(floor1.total,3);
+assert.equal(floor0.nextOffset,null);
+assert.match(floor0.sourceDigest,/^[0-9a-f]{64}$/);
+assert.equal(floor1.sourceDigest,floor0.sourceDigest);
+assert.deepEqual(floor0.placements.filter(x=>x.part==="floor").map(x=>x.tile),
+  [[0,0,0],[1,0,0]]);
+assert.deepEqual(floor1.placements.filter(x=>x.part==="north_wall").map(x=>x.rightHalf),
+  [false,true]);
+assert.equal(new Set([...floor0.placements,...floor1.placements].map(x=>x.sourcePartRef)).size,6);
+assert.ok([...floor0.placements,...floor1.placements].every(x=>
+  x.sourcePartRef.startsWith(floor0.sourceDigest+"/")&&x.tileIndex>=0));
+assert.equal(placementReplies[6].error,"E_STUDIO_PLACEMENTS_FLOOR");
+assert.equal(placementReplies[7].error,"E_STUDIO_PLACEMENTS_PAGE");
+assert.equal(placementReplies[8].error,"E_STUDIO_PLACEMENTS_PAGE");
+assert.equal(placementReplies[9].error,"E_STUDIO_PLACEMENTS_PAGE");
+assert.equal(placementReplies[10].error,"E_STUDIO_PLACEMENTS_DIGEST");
+assert.equal(placementReplies[11].error,"E_STUDIO_PLACEMENTS_DIGEST");
+assert.equal(placementReplies[12].error,"E_STUDIO_CATALOG_PROFILE");
+
+// >128 parts: prove deterministic boundary, no missing/duplicated occurrence.
+const largeMap=Buffer.alloc(3+11*3*4,1);
+largeMap[0]=3;largeMap[1]=11;largeMap[2]=1;
+const pagedInputs=[
+  append(["map",largeMap]),...data.filter(([k])=>k!=="map").map(append),
+  placements(0,0,128),placements(0,128,128)
+]; // The second request must fail: offset>0 without the first page's digest.
+const paged=spawnSync(native,{input:pagedInputs.map(JSON.stringify).join("\n")+"\n",
+  encoding:"utf8",maxBuffer:2*1024*1024});
+assert.equal(paged.status,0,paged.stderr);
+const pagedReplies=paged.stdout.trimEnd().split("\n").map(JSON.parse);
+const first=pagedReplies[4].catalog;
+assert.equal(pagedReplies[5].error,"E_STUDIO_PLACEMENTS_DIGEST");
+const pagedKnown=spawnSync(native,{input:[
+  append(["map",largeMap]),...data.filter(([k])=>k!=="map").map(append),
+  placements(0,128,128,first.sourceDigest)
+].map(JSON.stringify).join("\n")+"\n",encoding:"utf8",maxBuffer:2*1024*1024});
+assert.equal(pagedKnown.status,0,pagedKnown.stderr);
+const second=JSON.parse(pagedKnown.stdout.trimEnd().split("\n").at(-1)).catalog;
+assert.equal(first.total,132);
+assert.equal(first.placements.length,128);assert.equal(first.nextOffset,128);
+assert.equal(second.placements.length,4);assert.equal(second.nextOffset,null);
+assert.equal(first.sourceDigest,second.sourceDigest);
+assert.equal(new Set([...first.placements,...second.placements].map(x=>x.sourcePartRef)).size,132);
+assert.deepEqual(first.placements[0].tile,[0,0,0]);
+assert.deepEqual(second.placements[0].tile,[10,2,0]);
+const known=spawnSync(native,{input:[...data.map(append),
+  placements(0,0,128,floor0.sourceDigest)].map(JSON.stringify).join("\n")+"\n",
+  encoding:"utf8",maxBuffer:1024*1024});
+assert.equal(known.status,0,known.stderr);
+assert.deepEqual(JSON.parse(known.stdout.trimEnd().split("\n").at(-1)).catalog,floor0);
+console.log("STUDIO_D4_U1_NATIVE_PLACEMENTS_PASS");
+
 const thumbMcd=Buffer.alloc(62*4);
 thumbMcd[0]=0;thumbMcd[62]=1;thumbMcd[124]=2;thumbMcd[186]=9;
 const thumbPck=Buffer.from([0,254,5,10,254,14,10,255,0,254,10,20,255,0,254,5,30,255]);
@@ -155,6 +225,20 @@ if (workerPath) {
       assert.equal(was.error,expected.error,"R04 native/WASM error "+i);
     }
     console.log("STUDIO_R04_CATALOG_THUMB_WASM_PASS");
+    for(const [i,item] of placementRequests.entries()){
+      const reply=once(worker,"message");
+      if(i===0)worker.postMessage(JSON.stringify(request("clear")));
+      // The clear response must be consumed before the source append sequence.
+      if(i===0)await reply;
+      const received=once(worker,"message");
+      worker.postMessage(JSON.stringify(item));
+      const [raw]=await received;
+      const was=JSON.parse(raw),expected=placementReplies[i];
+      assert.deepEqual(was.catalog,expected.catalog,"U1 native/WASM placement "+i);
+      assert.equal(was.error,expected.error,"U1 native/WASM placement error "+i);
+    }
+    console.log("STUDIO_D4_U1_WASM_PLACEMENTS_PASS");
+
   } finally {
     await worker.terminate();
   }

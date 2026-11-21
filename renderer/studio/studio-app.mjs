@@ -8,6 +8,7 @@ const $ = id => document.getElementById(id);
 const fields = ["map","loft","pck","tab","palette"];
 let selected = new Map(), activeWorker = null, activeController = null, generation = 0, result = null;
 let sourceMode = "empty", catalog = null, inspectedMap = null;
+let selectedPlacement=null,placementPage=null,placementEpoch=0,placementLoading=null;
 const mapMenu = $("catalog-map"), elementMenu = $("catalog-element");
 const thumbnailPicker = new ElementSpritePicker({
   button:elementMenu,listbox:$("catalog-element-options"),decode:decodeCatalogSprites,
@@ -30,7 +31,14 @@ const setState = (state, message) => {
   $("status").textContent = state + " · " + message;
 };
 function updateRunButton() {
-  const bound=sourceMode==="manual" || inspectedMap?.elements.has(elementMenu.value);
+  const pageReady=Boolean(inspectedMap && placementPage &&
+    placementPage.map===inspectedMap.mapId &&
+    placementPage.sourceDigest===inspectedMap.sourceDigest &&
+    String(placementPage.floor)===$("source-floor").value);
+  const type=pageReady?inspectedMap.elements.get(elementMenu.value):null;
+  const bound=sourceMode==="manual" || (pageReady &&
+    ((Boolean(selectedPlacement) && selectedPlacement.tile[2]===placementPage.floor) ||
+     type?.tile[2]===placementPage.floor));
   $("run").disabled=Boolean(activeWorker) || !bound;
 }
 // A source mutation invalidates the entire prior run, including its async replies.
@@ -47,7 +55,12 @@ function invalidateRun() {
   paint();
 }
 function resetElements() {
-  inspectedMap=null;
+  inspectedMap=null;selectedPlacement=null;placementPage=null;placementLoading=null;++placementEpoch;
+  $("source-placement-panel").hidden=true;
+  $("source-grid").replaceChildren();$("source-floor").replaceChildren();
+  $("source-floor").disabled=true;$("source-prev").disabled=true;$("source-next").disabled=true;
+  $("source-page-status").textContent="Нет размещений";
+  $("source-placement-status").textContent="Часть исходной клетки не выбрана.";
   thumbnailPicker.reset();
 }
 function resetCatalog() {
@@ -309,9 +322,21 @@ async function inspectSelectedMap() {
     ensureCurrent(epoch);
     if(report?.schema!=="fgmr-ufo-map-elements/1" || report.map!==map.id)
       throw Error("E_STUDIO_CATALOG_SCHEMA");
+    // Same exact staged MAP/MCD bytes, same R02 native decoder, bounded page.
+    const {catalog:placements}=await call({
+      action:"catalog-placements",map:map.id,floor:0,offset:0,limit:128,sourceDigest:""
+    });
+    ensureCurrent(epoch);
+    verifyPlacementPage(placements,map.id,null,0,0);
     const elements=new Map(report.elements.map(entry=>[catalogElementKey(map.id,entry),entry]));
-    inspectedMap={inputs,datasets,elements};
+    inspectedMap={inputs,datasets,elements,mapId:map.id,dimensions:report.dimensions,
+                  sourceDigest:placements.sourceDigest};
     thumbnailPicker.load([...elements],{slot:0,paletteIndex:result.paletteIndex});
+    const floors=$("source-floor");
+    for(let z=0;z<report.dimensions[2];z++)floors.add(new Option("Z = "+z,String(z)));
+    floors.value="0";floors.disabled=false;
+    $("source-placement-panel").hidden=false;
+    renderPlacementPage(placements);
     $("catalog-summary").textContent=elements.size ? "Выберите элемент для реконструкции." : "В этой карте нет распознанных элементов.";
     setState("READY","Элементы карты готовы");
   } catch(error) {
@@ -349,9 +374,197 @@ async function decodeCatalogSprites(dataset,records,signal) {
   }finally{worker.terminate()}
 }
 
+
+// D4-U1: this module remains the only owner of source selection/Worker revisions.
+// Read-only typed source placements are materialized by the native R02 decoder.
+function verifyPlacementPage(page,mapId,digest,floor,offset) {
+  if(page?.schema!=="fgmr-ufo-map-placements/1"||page.map!==mapId||
+     page.floor!==floor||page.offset!==offset||
+     !/^[0-9a-f]{64}$/.test(page.sourceDigest)|| (digest && page.sourceDigest!==digest)||
+     !Array.isArray(page.dimensions)||page.dimensions.length!==3||
+     !Number.isSafeInteger(page.total)||page.total<0||
+     !Array.isArray(page.placements)||page.placements.length>128||
+     page.placements.length>page.total-page.offset)
+    throw Error("E_STUDIO_PLACEMENTS_SCHEMA");
+  const ids=new Set();
+  for(const entry of page.placements){
+    if(typeof entry.sourcePartRef!=="string"||
+       !entry.sourcePartRef.startsWith(page.sourceDigest+"/")||
+       ids.has(entry.sourcePartRef)||
+       !Array.isArray(entry.tile)||entry.tile.length!==3||
+       entry.tile[2]!==floor ||
+       entry.tile.some((n,i)=>!Number.isInteger(n)||n<0||n>=page.dimensions[i])||
+       !["floor","west_wall","north_wall","object"].includes(entry.part)||
+       !Number.isInteger(entry.record)||entry.record<0||
+       typeof entry.dataset!=="string")
+      throw Error("E_STUDIO_PLACEMENTS_SCHEMA");
+    ids.add(entry.sourcePartRef);
+  }
+  if(page.nextOffset!==null && page.nextOffset!==page.offset+page.placements.length)
+    throw Error("E_STUDIO_PLACEMENTS_SCHEMA");
+  if(page.nextOffset===null && page.offset+page.placements.length!==page.total)
+    throw Error("E_STUDIO_PLACEMENTS_SCHEMA");
+  return page;
+}
+function renderSelectedPlacement() {
+  const p=selectedPlacement;
+  $("source-placement-status").textContent=p
+    ? "R02 "+p.sourcePartRef+" · ("+p.tile.join(",")+") "+p.part+
+      " · "+p.dataset+" №"+p.record+" · "+(p.rightHalf?"R05 правая половина":"R05 полный кадр")+
+      " · проверено по локальному MAP/MCD, семантический объект ещё не определён."
+    : "Отдельное размещение не выбрано; список типов R04 остаётся доступным.";
+}
+function renderPlacementPage(page) {
+  const pageEpoch=placementEpoch;
+  placementPage=page;
+  const grid=$("source-grid");
+  grid.replaceChildren();
+  grid.style.gridTemplateColumns="repeat("+page.dimensions[0]+",minmax(80px,1fr))";
+  const cells=new Map(),buttons=[];
+  for(const placement of page.placements){
+    const [x,y,z]=placement.tile;
+    const key=x+","+y;
+    let tile=cells.get(key);
+    if(!tile){
+      tile=document.createElement("div");tile.className="source-cell";
+      tile.style.gridColumn=String(x+1);tile.style.gridRow=String(y+1);
+      const label=document.createElement("small");label.textContent=x+","+y+" · Z"+z;
+      tile.append(label);cells.set(key,tile);grid.append(tile);
+    }
+    const button=document.createElement("button");
+    button.type="button";button.dataset.sourcePartRef=placement.sourcePartRef;
+    button.dataset.x=String(x);button.dataset.y=String(y);button.dataset.part=placement.part;
+    button.title=placement.name+" · "+placement.dataset+" №"+placement.record+
+      " · ("+placement.tile.join(",")+")";
+    button.setAttribute("aria-label",button.title);
+    button.setAttribute("aria-pressed",String(selectedPlacement?.sourcePartRef===placement.sourcePartRef));
+    button.textContent=({floor:"Пол",west_wall:"З",north_wall:"С",object:"О"})[placement.part];
+    button.addEventListener("click",()=>{
+      // Detached/old-floor buttons must never cancel a newer native page request.
+      if(!button.isConnected || pageEpoch!==placementEpoch || placementPage!==page ||
+         inspectedMap?.mapId!==page.map ||
+         inspectedMap?.sourceDigest!==page.sourceDigest ||
+         $("source-floor").value!==String(page.floor))return;
+      // Existing original R04 thumbnail picker remains the ONLY sprite decoder/UI.
+      // Type-level picker selection intentionally uses its representative tile;
+      // R06 gets the occurrence's real native coordinate only via selectedPlacement.
+      const entries=thumbnailPicker.items;
+      const position=entries.findIndex(({entry})=>entry.part===placement.part &&
+        entry.dataset===placement.dataset && entry.record===placement.record &&
+        entry.rightHalf===placement.rightHalf);
+      if(position<0){$("source-placement-status").textContent="E_STUDIO_PLACEMENTS_TYPE";return}
+      thumbnailPicker.choose(position);
+      selectedPlacement=placement;
+      for(const b of buttons)b.setAttribute("aria-pressed",String(b===button));
+      renderSelectedPlacement();
+      updateRunButton();
+      button.focus();
+    });
+    tile.append(button);buttons.push(button);
+  }
+  for(let i=0;i<buttons.length;i++){
+    const btn=buttons[i];
+    btn.addEventListener("keydown",e=>{
+      if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(e.key))return;
+      e.preventDefault();
+      const [x,y]=[Number(btn.dataset.x),Number(btn.dataset.y)];
+      let dest;
+      if(e.key==="Home")dest=buttons[0];
+      else if(e.key==="End")dest=buttons.at(-1);
+      else{
+        const [dx,dy]=e.key==="ArrowLeft"?[-1,0]:e.key==="ArrowRight"?[1,0]:
+          e.key==="ArrowUp"?[0,-1]:[0,1];
+        dest=buttons.find(b=>Number(b.dataset.x)===x+dx&&
+          Number(b.dataset.y)===y+dy&&b.dataset.part===btn.dataset.part);
+        if(!dest)dest=buttons[Math.max(0,Math.min(buttons.length-1,i+(dx+dy)))];
+      }
+      dest?.focus();
+    });
+  }
+  $("source-prev").disabled=page.offset===0;
+  $("source-next").disabled=page.nextOffset===null;
+  $("source-page-status").textContent="R02: "+page.total+" частей на этаже Z="+page.floor+
+    " · показано "+(page.offset+1)+"–"+(page.offset+page.placements.length)+
+    " · страница "+(Math.floor(page.offset/128)+1)+
+    " · SHA-256 "+page.sourceDigest.slice(0,12)+"… (не аутентификация).";
+  renderSelectedPlacement();
+}
+async function loadPlacementPage(floor,offset) {
+  const current=inspectedMap;
+  if(!current || !catalog || activeWorker)return;
+  const epoch=generation,token=++placementEpoch;
+  // Pending request identity is needed only to retry a same-source R04 choice.
+  placementLoading={mapId:current.mapId,sourceDigest:current.sourceDigest,floor,offset,token};
+  const focusNav=document.activeElement===$("source-next")?"next":
+    document.activeElement===$("source-prev")?"prev":null;
+  // Retire old page synchronously before yielding to any Worker/file operation.
+  placementPage=null;
+  $("source-grid").replaceChildren();
+  $("source-prev").disabled=true;$("source-next").disabled=true;
+  $("source-page-status").textContent="Нативная загрузка R02…";
+  $("source-placement-status").textContent="Страница исходных размещений загружается.";
+  updateRunButton();
+  let worker=null;
+  try {
+    let call;({worker,call}=openWorker());
+    await call({action:"clear"});
+    await appendInputs(call,current.inputs,epoch);
+    ensureCurrent(epoch);
+    const {catalog:page}=await call({
+      action:"catalog-placements",map:current.mapId,floor,offset,limit:128,
+      sourceDigest:current.sourceDigest
+    });
+    ensureCurrent(epoch);
+    if(token!==placementEpoch || current!==inspectedMap ||
+       $("source-floor").value!==String(floor))throw Error("E_STUDIO_CANCELLED");
+    verifyPlacementPage(page,current.mapId,current.sourceDigest,floor,offset);
+    renderPlacementPage(page);
+    updateRunButton();
+    if(focusNav){
+      const preferred=$("source-"+focusNav);
+      const other=$("source-"+(focusNav==="next"?"prev":"next"));
+      (preferred.disabled ? (other.disabled ? $("source-floor") : other) : preferred).focus();
+    }
+  }catch(error) {
+    if(token===placementEpoch && current===inspectedMap && epoch===generation) {
+      // Failed page must not expose a previous R06 receipt or runnable old tile.
+      selectedPlacement=null;
+      invalidateRun();
+      renderSelectedPlacement();
+      $("source-page-status").textContent="Не удалось прочитать размещения: "+error.message;
+      $("source-prev").disabled=true;$("source-next").disabled=true;
+      if(focusNav)$("source-floor").focus();
+    }
+  }finally{
+    if(placementLoading?.token===token)placementLoading=null;
+    closeWorker(worker);
+  }
+}
+$("source-floor").addEventListener("change",()=>{
+  // Different floor changes the active source coordinate; invalidate R06.
+  selectedPlacement=null;invalidateRun();
+  renderSelectedPlacement();
+  void loadPlacementPage(Number($("source-floor").value),0);
+});
+$("source-prev").addEventListener("click",()=> {
+  if(placementPage && placementPage.offset>0)
+    void loadPlacementPage(placementPage.floor,Math.max(0,placementPage.offset-128));
+});
+$("source-next").addEventListener("click",()=>{
+  if(placementPage?.nextOffset!==null && placementPage?.nextOffset!==undefined)
+    void loadPlacementPage(placementPage.floor,placementPage.nextOffset);
+});
+
 function catalogInputSpec() {
-  const element=inspectedMap?.elements.get(elementMenu.value);
-  if(!element || !catalog)throw Error("E_STUDIO_CATALOG_BINDING");
+  if(!inspectedMap || !placementPage ||
+     placementPage.sourceDigest!==inspectedMap.sourceDigest ||
+     placementPage.floor!==Number($("source-floor").value) ||
+     (selectedPlacement && (selectedPlacement.tile[2]!==placementPage.floor ||
+       !selectedPlacement.sourcePartRef.startsWith(placementPage.sourceDigest+"/"))))
+    throw Error("E_STUDIO_PLACEMENTS_STALE");
+  const element=selectedPlacement ?? inspectedMap?.elements.get(elementMenu.value);
+  if(!element || !catalog || element.tile?.[2]!==placementPage.floor)
+    throw Error("E_STUDIO_CATALOG_BINDING");
   const {index,result}=catalog;
   const terrain=result.terrain[element.dataset];
   const inputs=new Map(inspectedMap.inputs);
@@ -368,11 +581,24 @@ function catalogInputSpec() {
 }
 mapMenu.addEventListener("change",()=>void inspectSelectedMap());
 elementMenu.addEventListener("change",()=>{
+  // R04 type selection invalidates R06, but it must not strand a pending R02 page.
+  // Retain only an exact same-map/digest/floor request, never an obsolete source.
+  const pending=placementLoading;
+  const retry=pending && inspectedMap && catalog &&
+    pending.mapId===inspectedMap.mapId &&
+    pending.sourceDigest===inspectedMap.sourceDigest &&
+    String(pending.floor)===$("source-floor").value
+    ? {floor:pending.floor,offset:pending.offset} : null;
+  selectedPlacement=null;
+  for(const node of $("source-grid").querySelectorAll('button[aria-pressed="true"]'))
+    node.setAttribute("aria-pressed","false");
+  renderSelectedPlacement();
   thumbnailPicker.cancelPending();
   invalidateRun();
   const element=inspectedMap?.elements.get(elementMenu.value);
   $("catalog-summary").textContent=element?element.name+" · экземпляров на карте: "+element.instances+".":"Выберите элемент.";
   setState("READY",element?"Элемент готов к реконструкции":"Ожидание выбора элемента");
+  if(retry)void loadPlacementPage(retry.floor,retry.offset);
 });
 async function verifyPack(pack, tile) {
   if(!pack || typeof pack!=="object")throw Error("E_STUDIO_RESULT");
@@ -416,7 +642,10 @@ async function execute() {
     if(runEpoch!==generation)throw Error("E_STUDIO_CANCELLED");
     result=final.result;mesh=nextMesh;observation=visual;
     $("metrics").textContent=JSON.stringify({
-      runId:started.runId,source:report.source,part:spec.parameters.part,occupied:report.occupied,
+      runId:started.runId,source:report.source,part:spec.parameters.part,tile:report.tile,
+      sourcePartRef:selectedPlacement?.sourcePartRef??null,
+      sourceDigest:selectedPlacement?inspectedMap?.sourceDigest??null:null,
+      occupied:report.occupied,
       boxes:report.boxes,voxels_checked:report.voxel_checks,silhouette:report.silhouette,
       model_sha256:JSON.parse(result.proof).model_sha256,
     },null,2);
