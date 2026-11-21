@@ -830,6 +830,17 @@ try{
         assert.equal(JSON.stringify(draftJSON).includes("indices_hex"),false);
         assert.equal(JSON.stringify(draftJSON).includes("palette_rgb8"),false);
         assert.equal(JSON.stringify(draftJSON).includes("lofts"),false);
+        // Native keyboard activation, deletion and typed intent accounting.
+        await page.locator("#object-delete").focus();
+        await page.locator("#object-delete").press("Enter");
+        assert.equal(await page.locator("#object-hypotheses").inputValue(),"h1");
+        assert.equal(await page.locator("#object-hypotheses option").count(),2);
+        assert.equal(await page.locator("#object-members button").count(),1);
+        const deletedExport=page.waitForEvent("download");
+        await page.locator("#object-export").click();
+        const deletedReceipt=JSON.parse(await readFile(await (await deletedExport).path(),"utf8"));
+        assert.equal(deletedReceipt.hypotheses.length,1);
+        assert.ok(deletedReceipt.intents.some(i=>i.op==="delete"&&i.hypothesisId==="h2"&&i.outcome==="APPLIED"));
         await page.setViewportSize({width:390,height:844});
         assert.deepEqual(await page.evaluate(()=>[
           document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
@@ -851,6 +862,11 @@ try{
         assert.equal(await u1Grid.count(),0,"old floor is retired during native pending");
         assert.equal(await page.locator("#run").isDisabled(),true);
         await assertNoResult();
+        await workspaceU2("object").click();
+        assert.equal(await page.locator("#object-add").isDisabled(),true,
+          "U2 cannot assign stale selection while real native R02 page is pending");
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await workspaceU2("source").click();
         await page.evaluate(()=>{
           window.__studioGatePlacements=false;window.__studioReleasePlacements();
         });
@@ -870,6 +886,14 @@ try{
         assert.deepEqual(mz.tile,[upstairsInfo.x,upstairsInfo.y,1]);
         assert.equal(mz.sourcePartRef,upstairsInfo.ref);
         assert.notEqual(mz.sourcePartRef,a.ref);
+        await workspaceU2("object").click();
+        await page.locator("#object-add").focus();
+        await page.locator("#object-add").press("Enter");
+        assert.equal(await page.locator("#object-members button").count(),2);
+        assert.match(await page.locator("#object-members").textContent(),
+          new RegExp(upstairsInfo.ref.slice(0,16)));
+        console.log("STUDIO_D4_U2_PENDING_NATIVE_GUARD_AND_KEYBOARD_DELETE_PASS");
+        await workspaceU2("source").click();
 
         await page.locator("#source-next").focus();
         await page.locator("#source-next").press("Enter");
