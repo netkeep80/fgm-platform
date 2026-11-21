@@ -535,6 +535,8 @@ function catalogInputSpec() {
 mapMenu.addEventListener("change",()=>void inspectSelectedMap());
 elementMenu.addEventListener("change",()=>{
   selectedPlacement=null;
+  for(const node of $("source-grid").querySelectorAll('button[aria-pressed="true"]'))
+    node.setAttribute("aria-pressed","false");
   renderSelectedPlacement();
   thumbnailPicker.cancelPending();
   invalidateRun();
@@ -584,7 +586,10 @@ async function execute() {
     if(runEpoch!==generation)throw Error("E_STUDIO_CANCELLED");
     result=final.result;mesh=nextMesh;observation=visual;
     $("metrics").textContent=JSON.stringify({
-      runId:started.runId,source:report.source,part:spec.parameters.part,occupied:report.occupied,
+      runId:started.runId,source:report.source,part:spec.parameters.part,tile:report.tile,
+      sourcePartRef:selectedPlacement?.sourcePartRef??null,
+      sourceDigest:selectedPlacement?inspectedMap?.sourceDigest??null:null,
+      occupied:report.occupied,
       boxes:report.boxes,voxels_checked:report.voxel_checks,silhouette:report.silhouette,
       model_sha256:JSON.parse(result.proof).model_sha256,
     },null,2);
