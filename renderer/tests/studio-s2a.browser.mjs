@@ -1194,6 +1194,8 @@ try{
       await writeFile(join(rootDir,"MAPS","CULTA10.MAP"),makeU3Map(20,20,2));
       await writeFile(join(rootDir,"MAPS","CULTA11.MAP"),makeU3Map(10,10,1,2));
       await writeFile(join(rootDir,"MAPS","CULTA12.MAP"),makeU3Map(5,5,1));
+      await writeFile(join(rootDir,"MAPS","CULTA13.MAP"),makeU3Map(10,10,1,0));
+      await writeFile(join(rootDir,"MAPS","CULTA14.MAP"),makeU3Map(10,10,1,2));
       await mkdir(join(rootDir,"ROUTES"),{recursive:true});
       await writeFile(join(rootDir,"ROUTES","CULTA10.RMP"),Buffer.from([1,2,3]));
       // One selected source never reads RMP raw bytes; this is presence-only.
@@ -1448,6 +1450,52 @@ try{
         .textContent.startsWith("ERROR"),null,{timeout:60000});
       assert.match(await u4Count.textContent(),/21 экземпляров · 21\/25 слотов/);
       console.log("STUDIO_D4_U4_SOURCE_OWNER_ISOLATION_NEGATIVES_PASS");
+
+      // P2-U4-01: all 400 native placement bytes are zero in a correctly
+      // dimensioned real MAP. Canonical R02 reports total=0: never VERIFIED.
+      const beforeEmptyCount=await u4Count.textContent();
+      const beforeEmptyOwner=await u4Cells.nth(7).getAttribute("aria-label");
+      await u4Template.selectOption("CULTA13");
+      await u4Verify.click();
+      await page.waitForFunction(()=>document.querySelector("#battlescape-status")
+        .textContent.includes("E_U4_EMPTY_MAP"),null,{timeout:60000});
+      assert.equal(await u4Count.textContent(),beforeEmptyCount);
+      assert.equal(await u4Cells.nth(7).getAttribute("aria-label"),beforeEmptyOwner);
+      await u4Slot(7);
+      await page.locator("#battlescape-replace").click();
+      assert.match(await page.locator("#battlescape-status").textContent(),/E_U4_UNVERIFIED/);
+      assert.equal(await u4Count.textContent(),beforeEmptyCount);
+      console.log("STUDIO_D4_U4_EMPTY_NATIVE_MAP_REJECTED_PASS");
+
+      // P2-U4-02: hold the dispatch to the *real* WASM Worker's catalog-map
+      // request, without faking a response; verify deadline, recovery, retry
+      // and preservation of every preexisting instance/cache entry.
+      await u4Template.selectOption("CULTA14");
+      await page.evaluate(()=>{
+        window.__studioGateCatalog=true;
+        window.__studioReleaseCatalog=null;
+      });
+      await u4Verify.click();
+      await page.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),null,
+        {timeout:60000});
+      assert.equal(await u4Verify.isDisabled(),true);
+      await page.locator("#battlescape-replace").click();
+      assert.match(await page.locator("#battlescape-status").textContent(),/E_U4_BUSY/);
+      await page.waitForFunction(()=>document.querySelector("#battlescape-status")
+        .textContent.includes("E_U4_TIMEOUT"),null,{timeout:30000});
+      assert.equal(await u4Verify.isEnabled(),true);
+      assert.equal(await u4Count.textContent(),beforeEmptyCount);
+      assert.equal(await u4Cells.nth(7).getAttribute("aria-label"),beforeEmptyOwner);
+      await page.evaluate(()=>{
+        window.__studioGateCatalog=false;
+        try{window.__studioReleaseCatalog?.()}catch{/* retired Worker */}
+        window.__studioReleaseCatalog=null;
+      });
+      await u4Verify.click();
+      await waitU4();
+      assert.equal(await u4Count.textContent(),beforeEmptyCount);
+      assert.equal(await u4Cells.nth(7).getAttribute("aria-label"),beforeEmptyOwner);
+      console.log("STUDIO_D4_U4_TIMEOUT_RECOVERY_NATIVE_RETRY_PASS");
 
       // P3-U4-R2-01: 25 distinct pinned real-native definitions + 26th
       // verified temporarily, then atomic replacement with no prior eviction.

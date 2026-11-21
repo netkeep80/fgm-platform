@@ -1286,13 +1286,14 @@ $("mapblock-open-source").addEventListener("click",()=>{
 
 // D4-U4: a local, source-bound 2D composer. Definition metadata is independently
 // verified by canonical R02; U1/U2/U3 Worker/selection/result ownership is untouched.
-const U4_SIDE=5,U4_LIMIT=25;
+const U4_SIDE=5,U4_LIMIT=25,U4_VERIFY_TIMEOUT_MS=12000;
 let u4Catalog=null,u4Epoch=0,u4Request=0,u4Pending=null;
 let u4Definitions=new Map(),u4Candidate=null,u4Instances=new Map(),u4Slots=Array(25).fill(null);
 let u4SelectedSlot=0,u4Sequence=0;
 function u4Status(message){$("battlescape-status").textContent=message}
 function u4RetirePending(){
   ++u4Request;
+  if(u4Pending?.timeoutId!==undefined)clearTimeout(u4Pending.timeoutId);
   u4Pending?.controller.abort();
   u4Pending?.worker.terminate();
   u4Pending=null;
@@ -1401,7 +1402,22 @@ async function u4Verify(){
       ...datasets.map(({id,file})=>[file,resolveFile(snapshot.index,snapshot.result.terrain[id].mcd)])]);
     checkInputSizes(inputs);
     worker=new Worker("./engine/worker.mjs",{type:"module"});
-    u4Pending={worker,controller,token};
+    // A request deadline owns only U4. Retire its token before aborting,
+    // so a late native/file reply cannot overwrite a retry or existing draft.
+    const timeoutId=setTimeout(()=>{
+      if(u4Pending?.token!==token||u4Request!==token||
+         u4Epoch!==epoch||u4Catalog!==snapshot||catalog!==snapshot||
+         sourceMode!=="catalog")return;
+      ++u4Request;
+      u4Pending=null;
+      u4Candidate=null;
+      controller.abort();
+      worker?.terminate();
+      $("battlescape-verify").disabled=false;
+      u4Status("ERROR · E_U4_TIMEOUT · нативная проверка прервана; компоновка "+
+        "не изменена, повторная проверка доступна.");
+    },U4_VERIFY_TIMEOUT_MS);
+    u4Pending={worker,controller,token,timeoutId};
     const call=connection(worker,controller.signal);
     const check=()=>u4CheckSession(snapshot,token,epoch);
     await call({action:"clear"});check();
@@ -1427,6 +1443,9 @@ async function u4Verify(){
     });
     check();
     verifyPlacementPage(page,id,null,0,0);
+    // Native R02 can return a structurally valid MAP with zero placed parts.
+    // Such an empty block is not a reusable source-backed definition.
+    if(page.total===0)throw Error("E_U4_EMPTY_MAP");
     if(page.dimensions.some((value,i)=>value!==report.dimensions[i]))
       throw Error("E_U4_NATIVE_DIMENSIONS");
     // Reuse U3's strict native tile index, part index and ordinal checks.
@@ -1447,8 +1466,12 @@ async function u4Verify(){
     }
   }finally{
     worker?.terminate();
-    if(u4Pending?.token===token)u4Pending=null;
-    if(u4Catalog===snapshot&&u4Epoch===epoch){
+    if(u4Pending?.token===token){
+      clearTimeout(u4Pending.timeoutId);
+      u4Pending=null;
+    }
+    // A superseded request must never re-enable a newer pending verification.
+    if(u4Catalog===snapshot&&u4Epoch===epoch&&u4Request===token){
       $("battlescape-verify").disabled=false;
     }
   }
