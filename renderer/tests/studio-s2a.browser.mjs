@@ -1275,7 +1275,7 @@ try{
       await page.locator("#mapblock-parts button").first().click();
       const u3TargetRef=await page.locator("#mapblock-parts button").first()
         .getAttribute("data-source-part-ref");
-      assert.match(await page.locator("#mapblock-selected").textContent(),/клетка \\(19,19,1\\)/);
+      assert.ok((await page.locator("#mapblock-selected").textContent()).includes("клетка (19,19,1)"));
       const beforeBridge=await page.evaluate(()=>window.__studioU3PlacementCalls.length);
       await page.locator("#mapblock-open-source").click();
       await page.waitForFunction(ref=>{
