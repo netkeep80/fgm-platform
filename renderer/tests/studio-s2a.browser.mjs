@@ -739,6 +739,12 @@ try{
       await workspace("source").click();
       assert.equal(await mapMenu.inputValue(),originalMap);
       assert.equal(await elementMenu.evaluate(el=>el.value),"");
+      // The proven existing picker closes on document pointerdown outside it.
+      // Task-navigation is such a pointerdown: closing is expected, not R04
+      // source invalidation. Reopen the real list to display cached/pending sprites.
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      await elementMenu.click();
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"true");
       await page.evaluate(()=>{window.__studioGateThumb=false;window.__studioReleaseThumb?.()});
       await page.waitForFunction(()=>{
         const rows=[...document.querySelectorAll('#catalog-element-options [role="option"]')];
