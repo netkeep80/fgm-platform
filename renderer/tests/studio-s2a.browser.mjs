@@ -56,6 +56,15 @@ try{
     };
     globalThis.__studioTamperProof=false;
     globalThis.__studioVisualFault="";
+    // Capture only real devices returned by the existing GPU backend.
+    if(globalThis.GPUAdapter?.prototype){
+      const originalRequestDevice=GPUAdapter.prototype.requestDevice;
+      GPUAdapter.prototype.requestDevice=async function(...args){
+        const device=await originalRequestDevice.apply(this,args);
+        globalThis.__studioU0Device=device;
+        return device;
+      };
+    }
     globalThis.Worker=class InstrumentedWorker extends NativeWorker {
       constructor(...args) {
         super(...args);
@@ -132,6 +141,30 @@ try{
     assert.equal(await version.textContent(), "Версия " + expectedVersion);
     assert.equal(await version.getAttribute("title"), revision);
   }
+
+  const workspace=key=>page.locator('#studio-workspaces [data-workspace="'+key+'"]');
+  assert.equal(await page.locator('#studio-workspaces button').count(),5);
+  assert.equal(await workspace('source').getAttribute('aria-current'),'page');
+  await workspace('source').focus();
+  await workspace('source').press('ArrowRight');
+  assert.equal(await workspace('object').getAttribute('aria-current'),'page');
+  assert.equal(await workspace('object').evaluate(el=>document.activeElement===el),true);
+  assert.equal(await page.locator('#preview').isVisible(),false);
+  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),true);
+  await workspace('mapblock').click();
+  assert.match(await page.locator('#studio-workspace-heading').textContent(),/NOT_IMPLEMENTED/);
+  assert.equal(await page.locator('#whole-preview').isVisible(),false);
+  await workspace('map').click();
+  assert.match(await page.locator('#studio-workspace-description').textContent(),/50×50/);
+  await workspace('world').click();
+  assert.match(await page.locator('#studio-workspace-heading').textContent(),/RESEARCH_ONLY/);
+  await workspace('source').click();
+  assert.equal(await page.locator('#preview').isVisible(),true);
+  await page.locator('#preview').evaluate(el=>{window.__studioU0OriginalPreview=el});
+  await page.setViewportSize({width:390,height:844});
+  assert.deepEqual(await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+  await page.setViewportSize({width:1280,height:900});
+  console.log("STUDIO_D4_U0_NAV_AND_ACCESSIBILITY_PASS");
   await page.locator("#demo").click();
   await page.locator("#run").click();
   await page.waitForFunction(()=>document.querySelector("#status").dataset.state==="COMPLETED",null,{timeout:60000});
@@ -143,6 +176,16 @@ try{
   assert.equal(await page.locator("#downloads button").count(),4);
   assert.equal(await page.locator("#file-summary").textContent().then(x=>x.includes("7 выбранных")),true);
   console.log("STUDIO_S2A_SYNTHETIC_PASS");
+
+  const sourceBefore=await page.locator('#metrics').textContent();
+  await workspace('object').click();
+  await workspace('source').click();
+  assert.equal(await page.locator('#metrics').textContent(),sourceBefore);
+  assert.equal(await page.locator('#downloads button').count(),4);
+  assert.equal(await page.locator('#preview').isVisible(),true);
+  assert.equal(await page.locator('#preview').evaluate(el=>el===window.__studioU0OriginalPreview),true);
+  console.log("STUDIO_D4_U0_SOURCE_HIDE_SHOW_PASS");
+
   const view=page.locator("#view-mode");
   const green=[159,223,163], blue=[102,218,255], amber=[255,188,107], purple=[227,175,255];
   for(const [mode,colors] of [
@@ -216,6 +259,48 @@ try{
   await assertNoResult();
   console.log("STUDIO_S2A_SOURCE_RACE_PASS");
 
+  // U0-V03: real R06 step held across source/object/mapblock navigation.
+  await page.locator("#demo").click();
+  await page.evaluate(()=>{window.__studioGateStep=true;window.__studioStepGated=false;window.__studioReleaseStep=null});
+  await page.locator("#run").click();
+  await page.waitForFunction(()=>window.__studioStepGated,null,{timeout:30000});
+  assert.match(await page.locator("#status").textContent(),/^RUNNING/);
+  const r06Binding=await page.locator("#file-summary").textContent();
+  await workspace("object").click();
+  await workspace("mapblock").click();
+  assert.equal(await page.locator("#preview").isVisible(),false);
+  await workspace("source").click();
+  assert.equal(await page.locator("#preview").isVisible(),true);
+  assert.match(await page.locator("#status").textContent(),/^RUNNING/);
+  assert.equal(await page.locator("#file-summary").textContent(),r06Binding);
+  assert.equal(await page.locator("#cancel").isDisabled(),false);
+  assert.equal(await page.locator("#downloads button").count(),0);
+  await page.evaluate(()=>{window.__studioGateStep=false;window.__studioReleaseStep?.()});
+  await waitState("COMPLETED");
+  assert.equal(JSON.parse(await page.locator("#metrics").textContent()).voxels_checked,6144);
+  assert.equal(await page.locator("#downloads button").count(),4);
+  assert.equal(await page.locator("#view-mode").inputValue(),"overlay");
+  assert.equal(await page.locator("#preview").evaluate(c=>c===window.__studioU0OriginalPreview),true);
+  console.log("STUDIO_D4_U0_PENDING_R06_NAV_PASS");
+
+  // U0-V04: real File API replacement while Source is hidden; old run is stale.
+  await page.locator("#demo").click();
+  await page.evaluate(()=>{window.__studioGateStep=true;window.__studioStepGated=false;window.__studioReleaseStep=null});
+  await page.locator("#run").click();
+  await page.waitForFunction(()=>window.__studioStepGated,null,{timeout:30000});
+  await workspace("mapblock").click();
+  await page.locator("#local-files").setInputFiles([
+    {name:"revision-switch.map",mimeType:"application/octet-stream",buffer:Buffer.from([1,1,1,0,1,2,2])}
+  ]);
+  await workspace("source").click();
+  assert.match(await page.locator("#status").textContent(),/^READY/);
+  await page.evaluate(()=>{window.__studioGateStep=false;try{window.__studioReleaseStep?.()}catch{/* terminated */}});
+  await page.waitForTimeout(250);
+  assert.match(await page.locator("#file-summary").textContent(),/1 выбранных файлов/);
+  await assertNoResult();
+  assert.match(await page.locator("#status").textContent(),/^READY/);
+  console.log("STUDIO_D4_U0_HIDDEN_SOURCE_MUTATION_PASS");
+
   // A second adversarial branch: Cancel must prevent any stale result.
   await page.locator("#demo").click();
   await page.evaluate(()=>{window.__studioGateStep=true;window.__studioStepGated=false});
@@ -284,9 +369,22 @@ try{
   await page.reload();
   await page.locator("#whole-demo").click();
   await page.waitForFunction(()=>!document.querySelector("#whole-run").disabled,null,{timeout:20000});
+  // U0-V03/whole: keep the native whole Worker pending across task tabs.
+  await page.evaluate(()=>{window.__studioGateStep=true;window.__studioStepGated=false;window.__studioReleaseStep=null});
   await page.locator("#whole-run").click();
+  await page.waitForFunction(()=>window.__studioStepGated,null,{timeout:30000});
+  await workspace("object").click();
+  assert.equal(await page.locator("#studio-workspace-placeholder").isVisible(),true);
+  assert.match(await page.locator("#studio-workspace-description").textContent(),/RUNNING/);
+  await workspace("mapblock").click();
+  await workspace("source").click();
+  await workspace("object").click();
+  assert.match(await page.locator("#whole-status").textContent(),/^RUNNING/);
+  assert.equal(await page.locator("#whole-downloads button").count(),0);
+  await page.evaluate(()=>{window.__studioGateStep=false;window.__studioReleaseStep?.()});
   await page.waitForFunction(()=>["COMPLETED","ERROR"].includes(document.querySelector("#whole-status").dataset.state),null,{timeout:60000});
   assert.match(await page.locator("#whole-status").textContent(),/^COMPLETED/);
+  console.log("STUDIO_D4_U0_PENDING_WHOLE_NAV_PASS");
   const whole=JSON.parse(await page.locator("#whole-metrics").textContent());
   assert.equal(whole.cells,4);
   assert.equal(whole.occupied,8);
@@ -295,6 +393,32 @@ try{
   assert.equal(whole.rederived_r03,false);
   assert.equal(await page.locator("#whole-downloads button").count(),5);
   assert.equal(await page.locator("#whole-preview").isVisible(),true);
+
+  await workspace('object').click();
+  assert.equal(await page.locator('#whole-preview').isVisible(),true);
+  await workspace('mapblock').click();
+  assert.equal(await page.locator('#whole-preview').isVisible(),false);
+  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),true);
+  await workspace('object').click();
+  assert.equal(await page.locator('#whole-preview').isVisible(),true);
+  await workspace('source').click();
+  assert.equal(await page.locator('#preview').isVisible(),true);
+  assert.equal(await page.locator('#whole-status').getAttribute('data-state'),'COMPLETED');
+  console.log("STUDIO_D4_U0_WHOLE_HIDE_SHOW_PASS");
+
+  // U0-V02: the same verified model and owner canvas survive viewport resize.
+  const wholeProofBefore=await page.locator("#whole-metrics").textContent();
+  await page.locator("#whole-preview").evaluate(c=>{window.__studioU0WholeCanvas=c});
+  await page.setViewportSize({width:390,height:844});
+  assert.deepEqual(await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+  await workspace("map").click();
+  await workspace("object").click();
+  await page.setViewportSize({width:1280,height:900});
+  assert.equal(await page.locator("#whole-metrics").textContent(),wholeProofBefore);
+  assert.equal(await page.locator("#whole-preview").evaluate(c=>c===window.__studioU0WholeCanvas),true);
+  assert.equal(await page.locator("#whole-preview").isVisible(),true);
+  console.log("STUDIO_D4_U0_WHOLE_RESIZE_RETURN_PASS");
+
   await page.locator("#whole-cell").selectOption("0");
   await page.locator("#whole-z").fill("3");
   assert.match(await page.locator("#whole-slice").textContent(),/#/);
@@ -387,9 +511,14 @@ try{
   // Wrong operator-provided SHA must fail closed without publishing stale data.
   await page.locator("#whole-expected").fill(JSON.stringify({
     receipt:"0".repeat(64),lofts:Array(4).fill("0".repeat(64))}));
+  await workspace("object").click();
   await page.locator("#whole-run").click();
   await page.waitForFunction(()=>document.querySelector("#whole-status").dataset.state==="ERROR",null,{timeout:10000});
   assert.match(await page.locator("#whole-status").textContent(),/E_WHOLE_DIGEST/);
+  assert.equal(await page.locator("#studio-workspace-placeholder").isVisible(),true);
+  assert.match(await page.locator("#studio-workspace-description").textContent(),/ERROR.*E_WHOLE_DIGEST/);
+  console.log("STUDIO_D4_U0_WHOLE_TERMINAL_STATUS_SYNC_PASS");
+  await workspace("source").click();
   assert.equal(await page.locator("#whole-downloads button").count(),0);
   console.log("STUDIO_WHOLE_BAD_SHA_PASS");
   // An atomic C++ step can only be stopped by Worker termination.
@@ -407,6 +536,27 @@ try{
   await page.waitForTimeout(250);
   assert.equal(await page.locator("#whole-downloads button").count(),0);
   console.log("STUDIO_WHOLE_CANCEL_STALE_PASS");
+
+  // U0-V04/whole: change the actual local whole input while hidden and gated.
+  await page.locator("#whole-demo").click();
+  await page.waitForFunction(()=>!document.querySelector("#whole-run").disabled);
+  await page.evaluate(()=>{window.__studioGateStep=true;window.__studioStepGated=false;window.__studioReleaseStep=null});
+  await page.locator("#whole-run").click();
+  await page.waitForFunction(()=>window.__studioStepGated,null,{timeout:30000});
+  await workspace("mapblock").click();
+  await page.locator("#whole-files").setInputFiles([
+    {name:"invalid-only.json",mimeType:"application/json",buffer:Buffer.from("{}")}
+  ]);
+  await page.waitForFunction(()=>document.querySelector("#whole-status").dataset.state==="ERROR");
+  await workspace("object").click();
+  await page.evaluate(()=>{window.__studioGateStep=false;try{window.__studioReleaseStep?.()}catch{/* terminated */}});
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator("#whole-downloads button").count(),0);
+  assert.equal(await page.locator("#whole-preview").isVisible(),false);
+  assert.equal(await page.locator("#whole-view-receipt").textContent(),"");
+  assert.match(await page.locator("#studio-workspace-description").textContent(),/ERROR/);
+  console.log("STUDIO_D4_U0_HIDDEN_WHOLE_MUTATION_PASS");
+  await workspace("source").click();
 
   // Switching to the previous single-cell workflow while whole step is pending
   // must invalidate and terminate the original Worker (not leak stale output).
@@ -432,6 +582,30 @@ try{
   await waitState("COMPLETED");
   assert.equal(JSON.parse(await page.locator("#metrics").textContent()).voxels_checked,6144);
   console.log("STUDIO_WHOLE_SINGLE_FALLBACK_PASS");
+
+  // U0-V06: destroy the *real* WebGPU device during a MapBlock tab visit.
+  await page.locator("#whole-demo").click();
+  await page.waitForFunction(()=>!document.querySelector("#whole-run").disabled);
+  await page.locator("#whole-run").click();
+  await page.waitForFunction(()=>["COMPLETED","ERROR"].includes(document.querySelector("#whole-status").dataset.state),null,{timeout:60000});
+  assert.match(await page.locator("#whole-status").textContent(),/^COMPLETED/);
+  const beforeGpuLoss=await page.locator("#whole-metrics").textContent();
+  assert.equal(await page.evaluate(()=>Boolean(window.__studioU0Device)),true,"GPU test requires real RendererSession device");
+  await workspace("mapblock").click();
+  await page.evaluate(async()=>{window.__studioU0Device.destroy();await window.__studioU0Device.lost});
+  await workspace("object").click();
+  const alpha=await page.locator("#whole-preview").evaluate(c=>{
+    const bytes=c.getContext("2d").getImageData(0,0,c.width,c.height).data;
+    let nontransparent=0;
+    for(let i=3;i<bytes.length;i+=4)if(bytes[i])nontransparent++;
+    return nontransparent;
+  });
+  assert.equal(alpha,0,"lost GPU republished an old visible frame");
+  assert.equal(await page.locator("#whole-metrics").textContent(),beforeGpuLoss,
+    "GPU loss must not invalidate independently verified C++/WASM model");
+  console.log("STUDIO_D4_U0_GPU_LOSS_RETURN_PASS");
+  // Keep the following catalogue tests on a clean GPU/session.
+  await page.reload();
 
   if(process.argv.includes("--catalog")) {
     await page.reload();
@@ -552,6 +726,34 @@ try{
       assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
       assert.equal(await page.locator("#catalog-element-icon").isVisible(),false);
       console.log("STUDIO_R04_THUMB_STALE_MAP_PASS");
+
+      // U0-V03/R04: genuine pending PCK/TAB sprite decode across task tabs.
+      await mapMenu.selectOption("CULTA00");
+      await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled);
+      await page.evaluate(()=>{window.__studioGateThumb=true;window.__studioThumbGated=false;window.__studioReleaseThumb=null});
+      await elementMenu.click();
+      await page.waitForFunction(()=>window.__studioThumbGated,null,{timeout:30000});
+      const originalMap=await mapMenu.inputValue();
+      await workspace("object").click();
+      await workspace("mapblock").click();
+      await workspace("source").click();
+      assert.equal(await mapMenu.inputValue(),originalMap);
+      assert.equal(await elementMenu.evaluate(el=>el.value),"");
+      // The proven existing picker closes on document pointerdown outside it.
+      // Task-navigation is such a pointerdown: closing is expected, not R04
+      // source invalidation. Reopen the real list to display cached/pending sprites.
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"false");
+      await elementMenu.click();
+      assert.equal(await elementMenu.getAttribute("aria-expanded"),"true");
+      await page.evaluate(()=>{window.__studioGateThumb=false;window.__studioReleaseThumb?.()});
+      await page.waitForFunction(()=>{
+        const rows=[...document.querySelectorAll('#catalog-element-options [role="option"]')];
+        return rows.length>=4 && rows.every(r=>!r.querySelector("canvas").hidden);
+      },null,{timeout:30000});
+      assert.deepEqual(await rgb(item("CULTIVAT"),10),[0,252,0,255]);
+      await elementMenu.press("Escape");
+      assert.equal(await elementMenu.evaluate(el=>el.value),"");
+      console.log("STUDIO_D4_U0_PENDING_R04_NAV_PASS");
 
       for(const [fault,code] of [
         ["tab","E_R04_TAB_OFFSET"],["pck","E_R04_FRAME_TERMINATOR"],

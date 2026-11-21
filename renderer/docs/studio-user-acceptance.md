@@ -56,3 +56,11 @@
 - Каноническая исходная фиксация сценария и AC: [план Platform](https://github.com/netkeep80/fgm-platform/issues/15).
 
 Порядок автоматической публикации и отдельного ручного отката описан в [протоколе Studio Pages](studio-pages.md).
+
+## D4-U0 — переходная единая оболочка Studio (Draft implementation)
+
+В U0 появились пять рабочих пространств **Источник / Объект / MapBlock / Карта / Мир**, доступная клавиатурой навигация и общий viewport-host. Реальные C++/WASM R04 (исходные миниатюры 32×40 ещё до выбора), R05/R06 и whole-object остаются действующими владельцами данных, Worker, source provenance и RendererSession. В переходном режиме Source сохраняет совместимый доступ к прежним whole-object контролам; вкладка Object предоставляет отдельный контекст. Окончательное разделение Source и Object требует следующих срезов.
+
+MapBlock, Карта и Мир явно помечены **NOT_IMPLEMENTED/RESEARCH_ONLY**: нет нативного SourcePartRef-placement selector (U1), MapBlock editor (U3), Battlescape constructor (U4), глобальной 3D-карты, нового backend или World Lab generation. Смена вкладки не меняет RunSpec и не отменяет Worker. При смене вкладки сохраняются исходная выборка, результат R06 и валидная отдельная whole-модель; владелец whole preview сообщает только о его видимости и самостоятельно обрабатывает отмену/устаревшие кадры.
+
+Реальные Chromium/WASM сценарии U0 проверяют стрелки и фокус вкладок, рабочий R04 picker, исходные R05/R06/whole результаты, скрытие/возврат viewport, размеры 390px, отсутствие иных URL/asset и точное ограничение signed bundle из 9 assets. Фокус будущих сеток SourcePartRef будет протестирован в U1, сеток карты — в U4; эти тесты нельзя засчитывать по синтетическому R2 mock. Это Draft и **не разрешение на main merge/automatic Production**.
