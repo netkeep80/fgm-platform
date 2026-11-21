@@ -8,7 +8,7 @@ const $ = id => document.getElementById(id);
 const fields = ["map","loft","pck","tab","palette"];
 let selected = new Map(), activeWorker = null, activeController = null, generation = 0, result = null;
 let sourceMode = "empty", catalog = null, inspectedMap = null;
-let selectedPlacement=null,placementPage=null,placementEpoch=0;
+let selectedPlacement=null,placementPage=null,placementEpoch=0,placementLoading=null;
 const mapMenu = $("catalog-map"), elementMenu = $("catalog-element");
 const thumbnailPicker = new ElementSpritePicker({
   button:elementMenu,listbox:$("catalog-element-options"),decode:decodeCatalogSprites,
@@ -55,7 +55,7 @@ function invalidateRun() {
   paint();
 }
 function resetElements() {
-  inspectedMap=null;selectedPlacement=null;placementPage=null;++placementEpoch;
+  inspectedMap=null;selectedPlacement=null;placementPage=null;placementLoading=null;++placementEpoch;
   $("source-placement-panel").hidden=true;
   $("source-grid").replaceChildren();$("source-floor").replaceChildren();
   $("source-floor").disabled=true;$("source-prev").disabled=true;$("source-next").disabled=true;
@@ -493,6 +493,8 @@ async function loadPlacementPage(floor,offset) {
   const current=inspectedMap;
   if(!current || !catalog || activeWorker)return;
   const epoch=generation,token=++placementEpoch;
+  // Pending request identity is needed only to retry a same-source R04 choice.
+  placementLoading={mapId:current.mapId,sourceDigest:current.sourceDigest,floor,offset,token};
   const focusNav=document.activeElement===$("source-next")?"next":
     document.activeElement===$("source-prev")?"prev":null;
   // Retire old page synchronously before yielding to any Worker/file operation.
@@ -533,7 +535,10 @@ async function loadPlacementPage(floor,offset) {
       $("source-prev").disabled=true;$("source-next").disabled=true;
       if(focusNav)$("source-floor").focus();
     }
-  }finally{closeWorker(worker)}
+  }finally{
+    if(placementLoading?.token===token)placementLoading=null;
+    closeWorker(worker);
+  }
 }
 $("source-floor").addEventListener("change",()=>{
   // Different floor changes the active source coordinate; invalidate R06.
@@ -576,6 +581,14 @@ function catalogInputSpec() {
 }
 mapMenu.addEventListener("change",()=>void inspectSelectedMap());
 elementMenu.addEventListener("change",()=>{
+  // R04 type selection invalidates R06, but it must not strand a pending R02 page.
+  // Retain only an exact same-map/digest/floor request, never an obsolete source.
+  const pending=placementLoading;
+  const retry=pending && inspectedMap && catalog &&
+    pending.mapId===inspectedMap.mapId &&
+    pending.sourceDigest===inspectedMap.sourceDigest &&
+    String(pending.floor)===$("source-floor").value
+    ? {floor:pending.floor,offset:pending.offset} : null;
   selectedPlacement=null;
   for(const node of $("source-grid").querySelectorAll('button[aria-pressed="true"]'))
     node.setAttribute("aria-pressed","false");
@@ -585,6 +598,7 @@ elementMenu.addEventListener("change",()=>{
   const element=inspectedMap?.elements.get(elementMenu.value);
   $("catalog-summary").textContent=element?element.name+" · экземпляров на карте: "+element.instances+".":"Выберите элемент.";
   setState("READY",element?"Элемент готов к реконструкции":"Ожидание выбора элемента");
+  if(retry)void loadPlacementPage(retry.floor,retry.offset);
 });
 async function verifyPack(pack, tile) {
   if(!pack || typeof pack!=="object")throw Error("E_STUDIO_RESULT");

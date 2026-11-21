@@ -861,6 +861,42 @@ try{
         });
         assert.equal(await page.locator("#source-floor").inputValue(),"1");
         assert.equal(await u1Grid.count(),128);
+
+        // P2-D4-U1-02: picking a real R04 type while floor R02 is gated
+        // must re-issue the exact current page, not strand the Source workspace.
+        await page.locator("#source-floor").selectOption("0");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=0"),null,{timeout:60000});
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-floor").selectOption("1");
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>{window.__studioGatePlacements=false});
+        await elementMenu.click();
+        const sameMapDoor=page.locator('#catalog-element-options [role="option"]')
+          .filter({hasText:/Дверь/}).first();
+        await sameMapDoor.waitFor({state:"visible"});
+        await sameMapDoor.click(); // cancels old page Worker through invalidateRun()
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("Z=1") &&
+          document.querySelectorAll("#source-grid button").length===128,
+          null,{timeout:60000});
+        await page.evaluate(()=>{
+          try{window.__studioReleasePlacements?.()}catch{/* stale terminated Worker */}
+        });
+        assert.equal(await page.locator("#source-floor").inputValue(),"1");
+        assert.equal(await u1Grid.count(),128);
+        assert.equal(await page.locator("#run").isDisabled(),true,
+          "type-level representative tile from the previous floor is not runnable");
+        const afterRecovery=await sourceInfo(u1Grid.nth(4));
+        await u1Grid.nth(4).click();
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const recoveryReport=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(recoveryReport.tile,[afterRecovery.x,afterRecovery.y,1]);
+        assert.equal(recoveryReport.sourcePartRef,afterRecovery.ref);
+        console.log("STUDIO_D4_U1_R04_DURING_FLOOR_LOAD_RECOVERY_PASS");
         await page.setViewportSize({width:390,height:844});
         assert.deepEqual(await page.evaluate(()=>[
           document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
@@ -873,6 +909,62 @@ try{
         await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled,
           null,{timeout:60000});
         await rm(u1Dir,{recursive:true,force:true});
+      }
+
+
+      // Single-floor paged MAP: there is no floor-change escape hatch if R04
+      // cancels page 129–132. The same page must return via real native WASM.
+      const oneFloorDir=await mkdtemp(join(tmpdir(),"studio-u1-onefloor-"));
+      try {
+        await writeStudioUfoCatalogFixture(oneFloorDir);
+        const tiles=Buffer.alloc(3+3*11*4,1);
+        tiles[0]=3;tiles[1]=11;tiles[2]=1;
+        await writeFile(join(oneFloorDir,"MAPS/CULTA00.MAP"),tiles);
+        await page.locator("#directory").setInputFiles(oneFloorDir);
+        await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
+        await mapMenu.selectOption("CULTA00");
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("132 частей") &&
+          document.querySelectorAll("#source-grid button").length===128,
+          null,{timeout:60000});
+        const onlyFloorGrid=page.locator("#source-grid button[data-source-part-ref]");
+        await page.evaluate(()=>{
+          window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+          window.__studioReleasePlacements=null;
+        });
+        await page.locator("#source-next").click();
+        await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+        await page.evaluate(()=>{window.__studioGatePlacements=false});
+        await elementMenu.click();
+        const typeOnPendingPage=page.locator('#catalog-element-options [role="option"]')
+          .filter({hasText:/Дверь/}).first();
+        await typeOnPendingPage.waitFor({state:"visible"});
+        await typeOnPendingPage.click();
+        await page.waitForFunction(()=>document.querySelector("#source-page-status")
+          .textContent.includes("129–132") &&
+          document.querySelectorAll("#source-grid button").length===4,
+          null,{timeout:60000});
+        await page.evaluate(()=>{
+          try{window.__studioReleasePlacements?.()}catch{/* old Worker terminated */}
+        });
+        assert.equal(await page.locator("#source-floor").locator("option").count(),1);
+        assert.equal(await onlyFloorGrid.count(),4);
+        const finalPart=await onlyFloorGrid.first().evaluate(el=>({
+          ref:el.dataset.sourcePartRef,
+          tile:[Number(el.dataset.x),Number(el.dataset.y),0]
+        }));
+        await onlyFloorGrid.first().press("Enter");
+        assert.equal(await page.locator("#run").isDisabled(),false);
+        await page.locator("#run").click();await waitState("COMPLETED");
+        const finalReport=JSON.parse(await page.locator("#metrics").textContent());
+        assert.deepEqual(finalReport.tile,finalPart.tile);
+        assert.equal(finalReport.sourcePartRef,finalPart.ref);
+        console.log("STUDIO_D4_U1_SINGLE_FLOOR_R04_PAGE_RECOVERY_PASS");
+      } finally {
+        await pick();await mapMenu.selectOption("CULTA00");
+        await page.waitForFunction(()=>!document.querySelector("#catalog-element").disabled,
+          null,{timeout:60000});
+        await rm(oneFloorDir,{recursive:true,force:true});
       }
 
       await page.evaluate(()=>{window.__studioGateCatalog=true});
