@@ -776,6 +776,69 @@ try{
         assert.notEqual(ma.sourcePartRef,mb.sourcePartRef);
         assert.deepEqual(ma.source,mb.source,"same original MCD type in two real MAP tiles");
 
+        // D4-U2: same MCD type, two distinct true R02 occurrences, one
+        // proposal-only semantic hypothesis. All UI tested in packaged Chromium.
+        const workspaceU2=name=>page.locator('#studio-workspaces [data-workspace="'+name+'"]');
+        await workspaceU2("object").click();
+        assert.match(await page.locator("#object-draft-state").textContent(),/NO_DRAFT/);
+        assert.match(await page.locator("#object-selected-part").textContent(),new RegExp(b.ref.slice(0,16)));
+        await page.locator("#object-name").fill("Проверяемый объект");
+        await page.locator("#object-create").click();
+        assert.match(await page.locator("#object-draft-state").textContent(),/DRAFT/);
+        assert.equal(await page.locator("#object-hypotheses").inputValue(),"h1");
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await workspaceU2("source").click();
+        assert.deepEqual(JSON.parse(await page.locator("#metrics").textContent()).tile,[b.x,b.y,0],
+          "navigation does not destroy valid native R06 result");
+        await u1Grid.first().click();
+        await workspaceU2("object").click();
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),2);
+        await page.locator("#object-add").click();
+        assert.match(await page.locator("#object-action-status").textContent(),/E_U2_DUPLICATE/);
+        assert.equal(await page.locator("#object-members button").count(),2);
+        await page.locator("#object-name").fill("Вторая гипотеза");
+        await page.locator("#object-create").click();
+        assert.equal(await page.locator("#object-hypotheses").inputValue(),"h2");
+        await page.locator("#object-add").click();
+        assert.match(await page.locator("#object-action-status").textContent(),/E_U2_MEMBER_CONFLICT/);
+        assert.equal(await page.locator("#object-members button").count(),0);
+        await page.locator("#object-hypotheses").selectOption("h1");
+        await page.locator('#object-members button[data-source-part-ref="'+a.ref+'"]').click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await page.locator("#object-hypotheses").selectOption("h2");
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await page.locator("#object-name").fill("Новая подпись");
+        await page.locator("#object-rename").click();
+        assert.match(await page.locator("#object-hypotheses").textContent(),/Новая подпись/);
+        const downloadPromise=page.waitForEvent("download");
+        await page.locator("#object-export").click();
+        const draftDownload=await downloadPromise;
+        const draftJSON=JSON.parse(await readFile(await draftDownload.path(),"utf8"));
+        assert.equal(draftJSON.schema,"fgmp-studio-object-hypotheses-draft/1");
+        assert.equal(draftJSON.mapId,"CULTA00");
+        assert.match(draftJSON.sourceDigest,/^[0-9a-f]{64}$/);
+        assert.equal(draftJSON.hypotheses.length,2);
+        assert.deepEqual(draftJSON.hypotheses.map(h=>h.members.map(m=>m.sourcePartRef)),[[b.ref],[a.ref]]);
+        assert.equal(draftJSON.hypotheses[0].members[0].record,
+          draftJSON.hypotheses[1].members[0].record);
+        assert.ok(draftJSON.intents.some(e=>e.op==="assign"&&e.outcome==="REJECTED"&&
+          e.code==="E_U2_MEMBER_CONFLICT"));
+        assert.ok(draftJSON.conflicts.some(c=>c.code==="E_U2_DUPLICATE"));
+        assert.equal(JSON.stringify(draftJSON).includes("indices_hex"),false);
+        assert.equal(JSON.stringify(draftJSON).includes("palette_rgb8"),false);
+        assert.equal(JSON.stringify(draftJSON).includes("lofts"),false);
+        await page.setViewportSize({width:390,height:844});
+        assert.deepEqual(await page.evaluate(()=>[
+          document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+        await page.setViewportSize({width:1280,height:900});
+        console.log("STUDIO_D4_U2_MEMBERSHIP_CONFLICTS_EXPORT_PASS");
+        await workspaceU2("source").click();
+
+
+
         // Gate only the genuine catalog-placements message, never fabricate a reply.
         await page.evaluate(()=>{
           window.__studioStaleButton=document.querySelector("#source-grid button");
@@ -923,12 +986,20 @@ try{
         tiles[0]=3;tiles[1]=11;tiles[2]=1;
         await writeFile(join(oneFloorDir,"MAPS/CULTA00.MAP"),tiles);
         await page.locator("#directory").setInputFiles(oneFloorDir);
+        assert.match(await page.locator("#object-draft-state").textContent(),/STALE_SOURCE/);
+        assert.equal(await page.locator("#object-add").isDisabled(),true);
         await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
         await mapMenu.selectOption("CULTA00");
         await page.waitForFunction(()=>document.querySelector("#source-page-status")
           .textContent.includes("132 частей") &&
           document.querySelectorAll("#source-grid button").length===128,
           null,{timeout:60000});
+        assert.match(await page.locator("#object-draft-state").textContent(),/STALE_SOURCE/);
+        await page.locator('#studio-workspaces [data-workspace="object"]').click();
+        await page.locator("#object-reset").click();
+        assert.match(await page.locator("#object-draft-state").textContent(),/DRAFT/);
+        assert.equal(await page.locator("#object-hypotheses").locator("option").count(),1);
+        await page.locator('#studio-workspaces [data-workspace="source"]').click();
         const onlyFloorGrid=page.locator("#source-grid button[data-source-part-ref]");
         await page.evaluate(()=>{
           window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
