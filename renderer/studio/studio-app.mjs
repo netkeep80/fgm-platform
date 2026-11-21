@@ -1,7 +1,7 @@
 // R02/R03/R04/R05/R06/C05 execute in pinned WASM.
 import { syntheticFixture } from "./synthetic.mjs";
 import { paintR05, sha256, verifyR05Observation } from "./r05-view.mjs";
-import { indexGameFolder, resolveFile, catalogElementKey, ElementSpritePicker } from "./ufo-catalog.mjs";
+import { indexGameFolder, resolveFile, mapRoutePresence, catalogElementKey, ElementSpritePicker } from "./ufo-catalog.mjs";
 const CORE = "ba91a5e96d9f4f9580c9b2e9a9460b97acb7f01b";
 const MAX = 4 * 1024 * 1024, CHUNK = 16384;
 const $ = id => document.getElementById(id);
@@ -58,13 +58,14 @@ function invalidateRun() {
 function resetElements() {
   // Invalidate the old source's semantic applicability BEFORE any async File/Worker read.
   if(objectDraft)objectDraft.stale=true;
+  u3Reset();
   inspectedMap=null;selectedPlacement=null;placementPage=null;placementLoading=null;++placementEpoch;
   $("source-placement-panel").hidden=true;
   $("source-grid").replaceChildren();$("source-floor").replaceChildren();
   $("source-floor").disabled=true;$("source-prev").disabled=true;$("source-next").disabled=true;
   $("source-page-status").textContent="Нет размещений";
   $("source-placement-status").textContent="Часть исходной клетки не выбрана.";
-  thumbnailPicker.reset();renderObjectDraft();
+  thumbnailPicker.reset();renderObjectDraft();u3RenderLibrary();
 }
 function resetCatalog() {
   catalog=null;
@@ -284,6 +285,7 @@ async function scanFolder(files) {
       mapMenu.add(new Option(map.name+" ("+map.id+")"+state,map.id));
     }
     mapMenu.disabled=false;
+    u3RenderLibrary();
     $("file-summary").textContent="Тактических карт: "+result.maps.length+". Готовы к выбору: "+usable+".";
     $("catalog-summary").textContent=usable ? "Выберите карту, затем элемент." : "Проверьте состав папки по списку карт.";
     setState("READY","Папка игры проверена");
@@ -341,6 +343,7 @@ async function inspectSelectedMap() {
     $("source-placement-panel").hidden=false;
     renderPlacementPage(placements);
     renderObjectDraft();
+    u3MapReady();
     $("catalog-summary").textContent=elements.size ? "Выберите элемент для реконструкции." : "В этой карте нет распознанных элементов.";
     setState("READY","Элементы карты готовы");
   } catch(error) {
@@ -948,13 +951,274 @@ $("object-export").addEventListener("click",()=>{
 });
 renderObjectDraft();
 
+// D4-U3: a read-only, source-bound view of canonical native R02 MAP facts.
+// The worker URL/protocol is unchanged; this consumer owns no new source truth.
+const U3_PAGE=128,U3_MAX_PAGES=16,U3_MAX_PARTS=2048;
+const U3_PARTS=["floor","west_wall","north_wall","object"];
+let u3Active=false,u3Epoch=0,u3Worker=null,u3Abort=null,u3FloorData=null;
+let u3SelectedCell=null,u3SelectedPart=null;
+const u3Name=part=>({floor:"Пол",west_wall:"Западная стена",
+                       north_wall:"Северная стена",object:"Объект"})[part];
+function u3Status(value){$("mapblock-status").textContent=value}
+function u3Retire() {
+  ++u3Epoch;
+  u3Abort?.abort();
+  u3Worker?.terminate();
+  u3Abort=null;u3Worker=null;u3FloorData=null;
+  u3SelectedCell=null;u3SelectedPart=null;
+  $("mapblock-grid").replaceChildren();
+  $("mapblock-parts").replaceChildren();
+  $("mapblock-selected").textContent="Клетка не выбрана.";
+  $("mapblock-open-source").disabled=true;
+}
+function u3Reset() {
+  u3Retire();
+  $("mapblock-floor").replaceChildren();
+  $("mapblock-floor").disabled=true;
+  u3Status("NO_SOURCE · выберите папку игры и настоящий MAP-блок.");
+  $("mapblock-route").textContent="ROUTE_INDEX_UNAVAILABLE";
+}
+function u3RenderLibrary() {
+  const list=$("mapblock-library"),selectedId=mapMenu.value;
+  list.replaceChildren();
+  list.disabled=!catalog;
+  if(!catalog){list.add(new Option("— выберите папку игры —",""));return}
+  for(const map of catalog.result.maps) {
+    const state=!map.datasets?"PROFILE_UNKNOWN":map.missing.length?"INCOMPLETE":"READY";
+    list.add(new Option(map.name+" · "+map.id+" · "+state,map.id));
+  }
+  if(catalog.maps.has(selectedId))list.value=selectedId;
+  else list.selectedIndex=-1;
+  const selected=catalog.maps.get(selectedId);
+  $("mapblock-route").textContent=selected
+    ? mapRoutePresence(catalog.index,selected.path)
+    : "ROUTE_INDEX_UNAVAILABLE";
+}
+function u3MapReady() {
+  u3RenderLibrary();
+  const source=inspectedMap;
+  if(!source || sourceMode!=="catalog")return;
+  const dims=source.dimensions;
+  const f=$("mapblock-floor");
+  f.replaceChildren();
+  for(let z=0;z<dims[2];z++)f.add(new Option("Z = "+z,String(z)));
+  f.value="0";f.disabled=false;
+  u3Status("NATIVE_MAP_READY · "+source.mapId+" · "+dims.join("×")+
+    " · SHA-256 "+source.sourceDigest.slice(0,12)+"… (не аутентификация)");
+  if(u3Active)void u3LoadFloor();
+}
+function u3CheckPage(page,current,floor,offset,total,prior) {
+  verifyPlacementPage(page,current.mapId,current.sourceDigest,floor,offset);
+  const [w,h,z]=current.dimensions;
+  if(![10,20].includes(w)||w!==h||w*h>400||!Number.isInteger(z)||z<1||
+     page.dimensions.some((v,i)=>v!==current.dimensions[i])||
+     page.total>w*h*4||page.total>U3_MAX_PARTS||
+     (total!==null&&page.total!==total)||
+     page.placements.length===0 && page.nextOffset!==null)
+    throw Error("E_U3_NATIVE_PAGE");
+  let last=prior;
+  for(const p of page.placements){
+    const expectedIndex=(z-1-floor)*w*h+p.tile[1]*w+p.tile[0];
+    if(!Number.isInteger(p.tileIndex)||p.tileIndex!==expectedIndex||
+       !Number.isInteger(p.partIndex)||p.partIndex<0||p.partIndex>3||
+       p.part!==U3_PARTS[p.partIndex]||
+       p.sourcePartRef!==current.sourceDigest+"/"+expectedIndex+"-"+p.partIndex||
+       !Number.isInteger(p.sourceIndex)||p.sourceIndex<1||p.sourceIndex>255||
+       typeof p.name!=="string"||typeof p.kind!=="string")
+      throw Error("E_U3_NATIVE_BINDING");
+    const order=expectedIndex*4+p.partIndex;
+    if(order<=last)throw Error("E_U3_NATIVE_ORDER");
+    last=order;
+  }
+  return last;
+}
+function u3CellSelect(cell,button=null,focus=false) {
+  const data=u3FloorData;
+  if(!data||!u3Active||data.source!==inspectedMap ||
+     $("mapblock-floor").value!==String(data.floor)||!cell)return;
+  u3SelectedCell=cell;u3SelectedPart=null;
+  for(const node of $("mapblock-grid").querySelectorAll(".mapblock-cell"))
+    node.setAttribute("aria-pressed",String(Number(node.dataset.x)===cell.x&&
+      Number(node.dataset.y)===cell.y));
+  const parts=$("mapblock-parts");parts.replaceChildren();
+  const present=data.cells.get(cell.y*data.width+cell.x)??[];
+  const show=part=>{
+    u3SelectedPart=part??null;
+    $("mapblock-selected").textContent="R02 · "+data.source.mapId+
+      " · SHA-256 "+data.source.sourceDigest+" · клетка ("+
+      [cell.x,cell.y,data.floor].join(",")+") · "+
+      (part ? part.sourcePartRef+" · "+u3Name(part.part)+" · "+
+        part.dataset+" №"+part.record+" · sourceIndex="+part.sourceIndex
+        : "частей: "+present.length+"; выберите исходную часть для Source/R04/R06.");
+    for(const n of parts.querySelectorAll("button"))
+      n.setAttribute("aria-pressed",String(part?.sourcePartRef===n.dataset.sourcePartRef));
+  };
+  for(const part of present){
+    const b=document.createElement("button");
+    b.type="button";b.dataset.sourcePartRef=part.sourcePartRef;
+    b.textContent=u3Name(part.part)+" · "+part.dataset+" №"+part.record;
+    b.addEventListener("click",()=>{
+      if(!b.isConnected||!u3Active||u3FloorData!==data||
+         !present.includes(part)||u3SelectedCell!==cell)return;
+      show(part);b.focus();
+    });
+    parts.append(b);
+  }
+  show(null);
+  $("mapblock-open-source").disabled=false;
+  if(button&&focus)button.focus();
+}
+function u3RenderFloor(data) {
+  const grid=$("mapblock-grid");grid.replaceChildren();
+  grid.style.gridTemplateColumns="repeat("+data.width+",42px)";
+  const buttons=[];
+  for(let y=0;y<data.height;y++)for(let x=0;x<data.width;x++){
+    const present=data.cells.get(y*data.width+x)??[];
+    const b=document.createElement("button");
+    b.type="button";b.className="mapblock-cell";
+    b.dataset.x=String(x);b.dataset.y=String(y);
+    b.dataset.count=String(present.length);
+    b.setAttribute("aria-label","Клетка "+x+","+y+" этаж "+data.floor+
+      ", нативных частей "+present.length);
+    b.setAttribute("aria-pressed","false");
+    b.textContent=x+","+y+" · "+present.length;
+    const cell={x,y};
+    b.addEventListener("click",()=>{
+      if(!b.isConnected||!u3Active||u3FloorData!==data||
+         $("mapblock-grid").contains(b)&&
+         $("mapblock-floor").value!==String(data.floor))return;
+      if(!$("mapblock-grid").contains(b)||data.source!==inspectedMap)return;
+      u3CellSelect(cell,b,true);
+    });
+    b.addEventListener("keydown",e=>{
+      if(!["ArrowRight","ArrowLeft","ArrowUp","ArrowDown","Home","End"].includes(e.key))return;
+      e.preventDefault();
+      const [dx,dy]=e.key==="ArrowRight"?[1,0]:e.key==="ArrowLeft"?[-1,0]:
+        e.key==="ArrowDown"?[0,1]:e.key==="ArrowUp"?[0,-1]:[0,0];
+      const nx=e.key==="Home"?0:e.key==="End"?data.width-1:
+        Math.max(0,Math.min(data.width-1,x+dx));
+      const ny=e.key==="Home"?0:e.key==="End"?data.height-1:
+        Math.max(0,Math.min(data.height-1,y+dy));
+      buttons[ny*data.width+nx]?.focus();
+    });
+    grid.append(b);buttons.push(b);
+  }
+  if(buttons.length)u3CellSelect({x:0,y:0});
+}
+async function u3LoadFloor() {
+  const current=inspectedMap,raw=$("mapblock-floor").value;
+  if(!u3Active||sourceMode!=="catalog"||!current||!catalog||
+     !/^(0|[1-9]\\d*)$/.test(raw))return;
+  u3Retire();
+  const token=u3Epoch,floor=Number(raw),[w,h,z]=current.dimensions;
+  if(!Number.isInteger(floor)||floor<0||floor>=z||
+     !((w===10&&h===10)||(w===20&&h===20))) {
+    u3Status("UNSUPPORTED_U3_SCOPE · нативные размеры "+
+      current.dimensions.join("×")+"; просмотр 2D ограничен 10×10 и 20×20.");
+    return;
+  }
+  const check=()=>{
+    if(token!==u3Epoch||!u3Active||current!==inspectedMap||
+       sourceMode!=="catalog"||mapMenu.value!==current.mapId||
+       $("mapblock-floor").value!==raw)
+      throw Error("E_U3_CANCELLED");
+  };
+  let worker=null;
+  const controller=new AbortController();
+  u3Abort=controller;
+  u3Status("LOADING_NATIVE_R02 · "+current.mapId+" · Z="+floor+
+    " · ожидается весь этаж, без частичного отображения.");
+  try{
+    worker=new Worker("./engine/worker.mjs",{type:"module"});
+    u3Worker=worker;
+    const call=connection(worker,controller.signal);
+    await call({action:"clear"});
+    const inputs=current.inputs;
+    for(const [name,input] of inputs) {
+      const bytes=input instanceof Uint8Array?input:new Uint8Array(await input.arrayBuffer());
+      check();
+      for(let start=0;start<bytes.length;start+=CHUNK){
+        await call({action:"append",file:name,offset:start,
+                    hex:hex(bytes.subarray(start,start+CHUNK))});
+        check();
+      }
+    }
+    const rows=[],refs=new Set();
+    let offset=0,total=null,last=-1,finished=false;
+    for(let n=0;n<U3_MAX_PAGES;n++){
+      check();
+      const {catalog:page}=await call({
+        action:"catalog-placements",map:current.mapId,floor,
+        offset,limit:U3_PAGE,sourceDigest:current.sourceDigest});
+      check();
+      last=u3CheckPage(page,current,floor,offset,total,last);
+      if(total===null)total=page.total;
+      for(const p of page.placements){
+        if(refs.has(p.sourcePartRef))throw Error("E_U3_NATIVE_DUPLICATE");
+        refs.add(p.sourcePartRef);rows.push(p);
+      }
+      if(page.nextOffset===null){finished=true;break}
+      if(page.nextOffset<=offset)throw Error("E_U3_NATIVE_PAGE");
+      offset=page.nextOffset;
+    }
+    if(!finished||rows.length!==total)throw Error("E_U3_PAGE_LIMIT");
+    check();
+    const cells=new Map();
+    for(const p of rows){
+      const key=p.tile[1]*w+p.tile[0];
+      if(!cells.has(key))cells.set(key,[]);
+      const list=cells.get(key);
+      if(list.some(x=>x.partIndex===p.partIndex))throw Error("E_U3_NATIVE_DUPLICATE");
+      list.push(p);
+    }
+    const data={source:current,floor,width:w,height:h,cells,total};
+    check();
+    u3FloorData=data;u3RenderFloor(data);
+    u3Status("SOURCE_LAYOUT_2D · "+current.mapId+" · "+w+"×"+h+"×"+z+
+      " · Z="+floor+" · клеток "+w*h+" · исходных частей "+total+
+      " · SHA-256 "+current.sourceDigest.slice(0,12)+"… (не подлинность).");
+  }catch(error){
+    if(token===u3Epoch&&u3Active&&current===inspectedMap){
+      u3FloorData=null;$("mapblock-grid").replaceChildren();
+      u3Status("E_U3_FLOOR · "+error.message+" · неполный этаж не отображается.");
+    }
+  }finally{
+    worker?.terminate();
+    if(u3Worker===worker){u3Worker=null;u3Abort=null}
+  }
+}
+function u3SetActive(active){
+  u3Active=active;
+  if(!active){
+    if(u3Worker){
+      u3Retire();
+      u3Status("READY · повторно откройте MapBlock для чтения этажа.");
+    }
+    return;
+  }
+  u3RenderLibrary();
+  if(inspectedMap && !$("mapblock-floor").disabled && !u3FloorData)
+    void u3LoadFloor();
+}
+$("mapblock-library").addEventListener("change",()=>{
+  const id=$("mapblock-library").value;
+  if(!catalog?.maps.has(id))return;
+  if(mapMenu.value===id && inspectedMap?.mapId===id)return;
+  mapMenu.value=id;
+  mapMenu.dispatchEvent(new Event("change",{bubbles:true}));
+});
+$("mapblock-floor").addEventListener("change",()=>void u3LoadFloor());
+$("mapblock-open-source").addEventListener("click",()=>{
+  if(!u3FloorData || u3FloorData.source!==inspectedMap || !u3Active)return;
+  document.querySelector('#studio-workspaces [data-workspace="source"]').click();
+});
 // D4-U0 UI-only coordinator: Worker and scene owners remain the existing modules.
 // Keep the legacy whole-object controls accessible in Source during this migration.
 function startStudioWorkspaces() {
   const names=Object.freeze({
     source:["Источник","Локальный каталог, оригинальный R04, R06, сравнение R05 и OBJ."],
     object:["Объект","D4-U2: локальные ObjectHypothesis по настоящим SourcePartRef — только гипотезы. Сборка whole R06 остаётся независимой."],
-    mapblock:["MapBlock · NOT_IMPLEMENTED","Библиотека, этажи и проверенная принадлежность частей появятся позже. Здесь нет декодированной карты или модели блока."],
+    mapblock:["MapBlock · SOURCE_LAYOUT_2D","D4-U3: только исходный 2D MAP по нативным R02 и имена ROUTES/RMP, без реконструкции или маршрутизации."],
     map:["Карта · NOT_IMPLEMENTED","Конструктор 50×50, выбор экземпляров и 3D-отрисовка карт пока не реализованы."],
     world:["Мир · RESEARCH_ONLY","Фрактальный мир и выбор графического backend исследуются. Генерация недоступна."]
   });
@@ -969,7 +1233,8 @@ function startStudioWorkspaces() {
     $("preview").hidden=!useSource;
     const whole=document.getElementById("whole-preview"); // owner can replace canvas node
     if(whole)whole.hidden=!useWhole;
-    const empty=(workspace!=="source"&&workspace!=="object")||(workspace==="object"&&!useWhole);
+    const empty=(workspace==="map"||workspace==="world")||(workspace==="object"&&!useWhole);
+    $("mapblock-inspector").hidden=workspace!=="mapblock";
     placeholder.hidden=!empty;
     if(empty){
       heading.textContent=names[workspace][0];
@@ -992,6 +1257,7 @@ function startStudioWorkspaces() {
   const select=next=>{
     if(!Object.hasOwn(names,next))return;
     workspace=next;renderObjectDraft(); preferredView=next==="object"?"whole":"source";
+    u3SetActive(next==="mapblock");
     // No fake change events, no new Worker, no source/run invalidation on navigation.
     render();
   };
