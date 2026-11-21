@@ -1085,9 +1085,8 @@ function u3RenderFloor(data) {
     const cell={x,y};
     b.addEventListener("click",()=>{
       if(!b.isConnected||!u3Active||u3FloorData!==data||
-         $("mapblock-grid").contains(b)&&
-         $("mapblock-floor").value!==String(data.floor))return;
-      if(!$("mapblock-grid").contains(b)||data.source!==inspectedMap)return;
+         $("mapblock-floor").value!==String(data.floor)||
+         !$("mapblock-grid").contains(b)||data.source!==inspectedMap)return;
       u3CellSelect(cell,b,true);
     });
     b.addEventListener("keydown",e=>{
@@ -1108,7 +1107,7 @@ function u3RenderFloor(data) {
 async function u3LoadFloor() {
   const current=inspectedMap,raw=$("mapblock-floor").value;
   if(!u3Active||sourceMode!=="catalog"||!current||!catalog||
-     !/^(0|[1-9]\\d*)$/.test(raw))return;
+     !/^(0|[1-9]\d*)$/.test(raw))return;
   u3Retire();
   const token=u3Epoch,floor=Number(raw),[w,h,z]=current.dimensions;
   if(!Number.isInteger(floor)||floor<0||floor>=z||

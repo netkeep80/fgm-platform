@@ -1,7 +1,7 @@
 import {localBrowserContext} from './local-browser.mjs';
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve,join,extname } from "node:path";
 import { tmpdir } from "node:os";
@@ -43,6 +43,7 @@ try{
     globalThis.__studioReleaseStep=null;
     globalThis.__studioGateCatalog=false;
     globalThis.__studioReleaseCatalog=null;
+    globalThis.__studioU3PlacementCalls=[];
     globalThis.__studioGatePlacements=false;
     globalThis.__studioPlacementsGated=false;
     globalThis.__studioReleasePlacements=null;
@@ -76,6 +77,11 @@ try{
       }
       postMessage(data,...args) {
         const request=typeof data==="string"?JSON.parse(data):null;
+        if(request?.action==="catalog-placements")
+          globalThis.__studioU3PlacementCalls.push({
+            map:request.map,floor:request.floor,offset:request.offset,
+            digest:request.sourceDigest
+          });
         if(globalThis.__studioBadPlacementDigest && request?.action==="catalog-placements")
           return super.postMessage(JSON.stringify({...request,sourceDigest:"0".repeat(64)}),...args);
         if(globalThis.__studioGatePlacements && request?.action==="catalog-placements") {
@@ -163,7 +169,9 @@ try{
   assert.equal(await page.locator('#preview').isVisible(),false);
   assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),true);
   await workspace('mapblock').click();
-  assert.match(await page.locator('#studio-workspace-heading').textContent(),/NOT_IMPLEMENTED/);
+  assert.equal(await page.locator('#mapblock-inspector').isVisible(),true);
+  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),false);
+  assert.match(await page.locator('#mapblock-status').textContent(),/NO_SOURCE/);
   assert.equal(await page.locator('#whole-preview').isVisible(),false);
   await workspace('map').click();
   assert.match(await page.locator('#studio-workspace-description').textContent(),/50×50/);
@@ -409,7 +417,8 @@ try{
   assert.equal(await page.locator('#whole-preview').isVisible(),true);
   await workspace('mapblock').click();
   assert.equal(await page.locator('#whole-preview').isVisible(),false);
-  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),true);
+  assert.equal(await page.locator('#mapblock-inspector').isVisible(),true);
+  assert.equal(await page.locator('#studio-workspace-placeholder').isVisible(),false);
   await workspace('object').click();
   assert.equal(await page.locator('#whole-preview').isVisible(),true);
   await workspace('source').click();
@@ -1169,6 +1178,139 @@ try{
       await elementMenu.press("Escape");
       assert.equal(await elementMenu.evaluate(el=>el.value),"");
       console.log("STUDIO_D4_U0_PENDING_R04_NAV_PASS");
+
+      // D4-U3, SCOPE-R1: real synthetic MAP files using canonical WASM R02.
+      // These are not spoofed Worker responses or private original UFO bytes.
+      const makeU3Map=(w,h,z,fill=4)=>{
+        const bytes=Buffer.alloc(3+4*w*h*z);
+        bytes[0]=h;bytes[1]=w;bytes[2]=z;
+        for(let tile=0;tile<w*h*z;tile++)
+          for(let part=0;part<fill;part++)
+            bytes[3+4*tile+part]=[2,3,4,1][part];
+        return bytes;
+      };
+      await writeFile(join(rootDir,"MAPS","CULTA10.MAP"),makeU3Map(20,20,2));
+      await writeFile(join(rootDir,"MAPS","CULTA11.MAP"),makeU3Map(10,10,1,2));
+      await writeFile(join(rootDir,"MAPS","CULTA12.MAP"),makeU3Map(5,5,1));
+      await mkdir(join(rootDir,"ROUTES"),{recursive:true});
+      await writeFile(join(rootDir,"ROUTES","CULTA10.RMP"),Buffer.from([1,2,3]));
+      // One selected source never reads RMP raw bytes; this is presence-only.
+      await page.locator("#directory").setInputFiles(rootDir);
+      await mapMenu.locator('option[value="CULTA10"]').waitFor({state:"attached"});
+      await workspace("mapblock").click();
+      const library=page.locator("#mapblock-library");
+      const blockFloor=page.locator("#mapblock-floor");
+      const blockCells=page.locator("#mapblock-grid .mapblock-cell");
+      assert.equal(await library.locator('option[value="MAP3"]').count(),1);
+      assert.equal(await library.locator('option[value="CULTA10"]').count(),1);
+      assert.equal(await blockFloor.isDisabled(),true);
+      assert.match(await page.locator("#mapblock-status").textContent(),/NO_SOURCE/);
+      await library.selectOption("MAP3");
+      assert.match(await page.locator("#catalog-summary").textContent(),/неизвест/i);
+      assert.equal(await blockFloor.isDisabled(),true);
+      await library.selectOption("CULTA10");
+      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
+        .textContent.startsWith("SOURCE_LAYOUT_2D"),null,{timeout:60000});
+      assert.match(await page.locator("#mapblock-status").textContent(),/20×20×2/);
+      assert.match(await page.locator("#mapblock-status").textContent(),/1600/);
+      assert.equal(await blockCells.count(),400);
+      assert.equal(await blockFloor.locator("option").count(),2);
+      assert.match(await page.locator("#mapblock-route").textContent(),/ROUTE_FILE_PRESENT_UNPARSED/);
+      assert.equal(await page.locator("#mapblock-parts button").count(),4);
+      const part0=await page.locator("#mapblock-parts button").first()
+        .getAttribute("data-source-part-ref");
+      assert.match(part0,/^[a-f0-9]{64}\/\d+-[0-3]$/);
+      assert.equal(await blockCells.first().getAttribute("aria-pressed"),"true");
+      await blockCells.first().focus();
+      await blockCells.first().press("ArrowRight");
+      assert.equal(await blockCells.nth(1).evaluate(el=>document.activeElement===el),true);
+      await blockCells.nth(1).press("Enter");
+      assert.equal(await blockCells.nth(1).getAttribute("aria-pressed"),"true");
+      assert.match(await page.locator("#mapblock-selected").textContent(),/клетка \(1,0,0\)/);
+      const last=blockCells.last();
+      await last.click();
+      assert.match(await page.locator("#mapblock-selected").textContent(),/клетка \(19,19,0\)/);
+      assert.equal(await page.locator("#mapblock-parts button").count(),4);
+      console.log("STUDIO_D4_U3_NATIVE_20X20_2D_LAYOUT_PASS");
+      const beforeFloor1=await page.evaluate(()=>window.__studioU3PlacementCalls.length);
+      await blockFloor.selectOption("1");
+      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
+        .textContent.startsWith("SOURCE_LAYOUT_2D") &&
+        document.querySelector("#mapblock-floor").value==="1",null,{timeout:60000});
+      assert.equal(await blockCells.count(),400);
+      assert.equal(await page.locator("#mapblock-parts button").count(),4);
+      const part1=await page.locator("#mapblock-parts button").first().getAttribute("data-source-part-ref");
+      assert.notEqual(part1,part0);
+      const pages=await page.evaluate(start=>window.__studioU3PlacementCalls.slice(start),beforeFloor1);
+      assert.deepEqual(pages.filter(p=>p.map==="CULTA10"&&p.floor===1).map(p=>p.offset),
+        Array.from({length:13},(_,i)=>128*i));
+      assert.ok(pages.every(p=>p.map==="CULTA10"&&p.floor===1&&p.digest?.length===64));
+      assert.match(await page.locator("#mapblock-status").textContent(),/1600/);
+      console.log("STUDIO_D4_U3_NATIVE_1600_PARTS_13_PAGES_PASS");
+      await blockCells.first().click();
+      const oldCell=await blockCells.first().evaluate(el=>{
+        window.__studioU3DetachedCell=el;return el.dataset.x+","+el.dataset.y;
+      });
+      assert.equal(oldCell,"0,0");
+      await page.evaluate(()=>{
+        window.__studioGatePlacements=true;window.__studioPlacementsGated=false;
+      });
+      await blockFloor.selectOption("0");
+      await page.waitForFunction(()=>window.__studioPlacementsGated,null,{timeout:60000});
+      assert.equal(await blockCells.count(),0,"U3 retires prior floor synchronously");
+      await page.evaluate(()=>{window.__studioGatePlacements=false;});
+      await library.selectOption("CULTA11");
+      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
+        .textContent.startsWith("SOURCE_LAYOUT_2D")&&
+        document.querySelector("#mapblock-status").textContent.includes("10×10×1"),
+        null,{timeout:60000});
+      await page.evaluate(()=>{
+        window.__studioU3DetachedCell.click();
+        try{window.__studioReleasePlacements?.()}catch{/* old worker terminated */}
+      });
+      assert.equal(await blockCells.count(),100);
+      assert.match(await page.locator("#mapblock-status").textContent(),/200/);
+      assert.equal(await blockFloor.locator("option").count(),1);
+      assert.match(await page.locator("#mapblock-route").textContent(),/ROUTE_FILE_NOT_FOUND/);
+      assert.equal(await page.locator("#mapblock-parts button").count(),2);
+      console.log("STUDIO_D4_U3_NATIVE_10X10_STALE_WORKER_PASS");
+      await library.selectOption("CULTA12");
+      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
+        .textContent.includes("UNSUPPORTED_U3_SCOPE"),null,{timeout:60000});
+      assert.match(await page.locator("#mapblock-status").textContent(),/5×5×1/);
+      assert.equal(await blockCells.count(),0);
+      await library.selectOption("CULTA10");
+      await page.waitForFunction(()=>document.querySelector("#mapblock-status")
+        .textContent.startsWith("SOURCE_LAYOUT_2D"),null,{timeout:60000});
+      await page.setViewportSize({width:390,height:844});
+      assert.deepEqual(await page.evaluate(()=>[
+        document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+      assert.equal(await page.locator("#mapblock-grid-scroll").evaluate(el=>
+        el.scrollWidth>el.clientWidth),true);
+      await page.setViewportSize({width:1280,height:900});
+      const originalU3=await page.locator("#mapblock-status").textContent();
+      await page.locator("#mapblock-open-source").click();
+      assert.equal(await workspace("source").getAttribute("aria-current"),"page");
+      assert.equal(await mapMenu.inputValue(),"CULTA10");
+      await workspace("object").click();
+      await workspace("mapblock").click();
+      assert.equal(await page.locator("#mapblock-status").textContent(),originalU3);
+      assert.equal(await blockCells.count(),400);
+      assert.equal((await page.evaluate(()=>Object.keys(window.__studioReads)))
+        .some(x=>x.toUpperCase().includes("/ROUTES/")),false);
+      console.log("STUDIO_D4_U3_RMP_PRIVACY_NAV_MOBILE_PASS");
+      await workspace("source").click();
+      // Case-fold collision is a diagnostic, not invented game route identity.
+      await writeFile(join(rootDir,"ROUTES","culta10.rmp"),Buffer.from([4]));
+      await page.locator("#directory").setInputFiles(rootDir);
+      await mapMenu.locator('option[value="CULTA10"]').waitFor({state:"attached"});
+      await workspace("mapblock").click();
+      await library.selectOption("CULTA10");
+      assert.match(await page.locator("#mapblock-route").textContent(),/ROUTE_FILE_AMBIGUOUS/);
+      assert.equal((await page.evaluate(()=>window.__studioFileReadCalls))
+        .some(name=>/\.rmp$/i.test(name)),false);
+      console.log("STUDIO_D4_U3_RMP_DUPLICATE_PRESENCE_ONLY_PASS");
+      await workspace("source").click();
 
       for(const [fault,code] of [
         ["tab","E_R04_TAB_OFFSET"],["pck","E_R04_FRAME_TERMINATOR"],
