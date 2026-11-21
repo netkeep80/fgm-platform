@@ -1415,11 +1415,11 @@ try{
       assert.match(await u4Count.textContent(),/22 экземпляров · 25\/25 слотов/);
       assert.match(await u4Count.textContent(),/2 проверенных определений/);
       await chooseU4("CULTA10");
-      await u4Slot(24);
-      const beforeConflict=await u4Cells.nth(24).getAttribute("aria-label");
+      await u4Slot(7); // interior 20x20 anchor; conflicts with three other instances
+      const beforeConflict=await u4Cells.nth(7).getAttribute("aria-label");
       await page.locator("#battlescape-replace").click();
       assert.match(await page.locator("#battlescape-status").textContent(),/E_U4_OVERLAP/);
-      assert.equal(await u4Cells.nth(24).getAttribute("aria-label"),beforeConflict);
+      assert.equal(await u4Cells.nth(7).getAttribute("aria-label"),beforeConflict);
       assert.match(await u4Count.textContent(),/22 экземпляров · 25\/25 слотов/);
       await chooseU4("CULTA11");
       await u4Slot(5);
