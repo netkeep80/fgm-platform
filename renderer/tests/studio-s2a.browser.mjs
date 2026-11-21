@@ -776,6 +776,121 @@ try{
         assert.notEqual(ma.sourcePartRef,mb.sourcePartRef);
         assert.deepEqual(ma.source,mb.source,"same original MCD type in two real MAP tiles");
 
+        // D4-U2: same MCD type, two distinct true R02 occurrences, one
+        // proposal-only semantic hypothesis. All UI tested in packaged Chromium.
+        const workspaceU2=name=>page.locator('#studio-workspaces [data-workspace="'+name+'"]');
+        await workspaceU2("object").click();
+        assert.match(await page.locator("#object-draft-state").textContent(),/NO_DRAFT/);
+        assert.match(await page.locator("#object-selected-part").textContent(),new RegExp(b.ref.slice(0,16)));
+        await page.locator("#object-name").fill("Проверяемый объект");
+        await page.locator("#object-create").click();
+        assert.match(await page.locator("#object-draft-state").textContent(),/DRAFT/);
+        assert.equal(await page.locator("#object-hypotheses").inputValue(),"h1");
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await workspaceU2("source").click();
+        assert.deepEqual(JSON.parse(await page.locator("#metrics").textContent()).tile,[b.x,b.y,0],
+          "navigation does not destroy valid native R06 result");
+        await u1Grid.first().click();
+        await workspaceU2("object").click();
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),2);
+        await page.locator("#object-add").click();
+        assert.match(await page.locator("#object-action-status").textContent(),/E_U2_DUPLICATE/);
+        assert.equal(await page.locator("#object-members button").count(),2);
+        await page.locator("#object-name").fill("Вторая гипотеза");
+        await page.locator("#object-create").click();
+        assert.equal(await page.locator("#object-hypotheses").inputValue(),"h2");
+        await page.locator("#object-add").click();
+        assert.match(await page.locator("#object-action-status").textContent(),/E_U2_MEMBER_CONFLICT/);
+        assert.equal(await page.locator("#object-members button").count(),0);
+        await page.locator("#object-hypotheses").selectOption("h1");
+        // Retain a real old h1 DOM control before legitimate P: h1 -> h2 transfer.
+        await page.evaluate(ref=>{
+          window.__studioU2OldRemove=[...document.querySelectorAll(
+            '#object-members button[data-source-part-ref]')]
+            .find(button=>button.dataset.sourcePartRef===ref);
+        },a.ref);
+        assert.equal(await page.evaluate(()=>window.__studioU2OldRemove.isConnected),true);
+        await page.locator('#object-members button[data-source-part-ref="'+a.ref+'"]').click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await page.locator("#object-hypotheses").selectOption("h2");
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        assert.equal(await page.evaluate(()=>window.__studioU2OldRemove.isConnected),false);
+        const beforeOldAction=await page.locator("#object-action-status").textContent();
+        await page.evaluate(()=>window.__studioU2OldRemove.click());
+        assert.equal(await page.locator("#object-members button").count(),1,
+          "stale h1 click must not unassign PartRef from its new h2 owner");
+        assert.equal(await page.locator("#object-action-status").textContent(),beforeOldAction,
+          "stale detached event must not claim an APPLIED intent");
+        await page.locator("#object-name").fill("Новая подпись");
+        await page.locator("#object-rename").click();
+        assert.match(await page.locator("#object-hypotheses").textContent(),/Новая подпись/);
+        // The R04 type picker legitimately clears SourcePartRef, disabling Add.
+        // Unassigning the last h1 member must still leave an enabled focus target.
+        await workspaceU2("source").click();
+        await elementMenu.click();
+        await page.locator('#catalog-element-options [role="option"]').first().click();
+        await workspaceU2("object").click();
+        assert.match(await page.locator("#object-selected-part").textContent(),/не выбрана/);
+        assert.equal(await page.locator("#object-add").isDisabled(),true);
+        await page.locator("#object-hypotheses").selectOption("h1");
+        await page.locator("#object-members button").first().focus();
+        await page.locator("#object-members button").first().press("Enter");
+        assert.equal(await page.locator("#object-members button").count(),0);
+        assert.equal(await page.locator("#object-hypotheses").evaluate(el=>
+          document.activeElement===el && !el.disabled),true,
+          "removing with disabled Add must focus an enabled hypothesis control");
+        // Restore the native part from the original R02 grid, not via type key.
+        await workspaceU2("source").click();
+        await u1Grid.nth(4).click();
+        await workspaceU2("object").click();
+        assert.equal(await page.locator("#object-add").isDisabled(),false);
+        await page.locator("#object-add").click();
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await page.locator("#object-hypotheses").selectOption("h2");
+        console.log("STUDIO_D4_U2_STALE_OWNER_AND_KEYBOARD_FOCUS_PASS");
+        const downloadPromise=page.waitForEvent("download");
+        await page.locator("#object-export").click();
+        const draftDownload=await downloadPromise;
+        const draftJSON=JSON.parse(await readFile(await draftDownload.path(),"utf8"));
+        assert.equal(draftJSON.schema,"fgmp-studio-object-hypotheses-draft/1");
+        assert.equal(draftJSON.mapId,"CULTA00");
+        assert.match(draftJSON.sourceDigest,/^[0-9a-f]{64}$/);
+        assert.equal(draftJSON.hypotheses.length,2);
+        assert.deepEqual(draftJSON.hypotheses.map(h=>h.members.map(m=>m.sourcePartRef)),[[b.ref],[a.ref]]);
+        assert.equal(draftJSON.hypotheses[0].members[0].record,
+          draftJSON.hypotheses[1].members[0].record);
+        assert.ok(draftJSON.intents.some(e=>e.op==="assign"&&e.outcome==="REJECTED"&&
+          e.code==="E_U2_MEMBER_CONFLICT"));
+        assert.ok(draftJSON.conflicts.some(c=>c.code==="E_U2_DUPLICATE"));
+        assert.equal(draftJSON.intents.filter(i=>
+          i.op==="unassign"&&i.sourcePartRef===a.ref&&i.outcome==="APPLIED").length,1,
+          "detached h1 control must not add a second successful unassign intent");
+        assert.equal(JSON.stringify(draftJSON).includes("indices_hex"),false);
+        assert.equal(JSON.stringify(draftJSON).includes("palette_rgb8"),false);
+        assert.equal(JSON.stringify(draftJSON).includes("lofts"),false);
+        // Native keyboard activation, deletion and typed intent accounting.
+        await page.locator("#object-delete").focus();
+        await page.locator("#object-delete").press("Enter");
+        assert.equal(await page.locator("#object-hypotheses").inputValue(),"h1");
+        assert.equal(await page.locator("#object-hypotheses option").count(),2);
+        assert.equal(await page.locator("#object-members button").count(),1);
+        const deletedExport=page.waitForEvent("download");
+        await page.locator("#object-export").click();
+        const deletedReceipt=JSON.parse(await readFile(await (await deletedExport).path(),"utf8"));
+        assert.equal(deletedReceipt.hypotheses.length,1);
+        assert.ok(deletedReceipt.intents.some(i=>i.op==="delete"&&i.hypothesisId==="h2"&&i.outcome==="APPLIED"));
+        await page.setViewportSize({width:390,height:844});
+        assert.deepEqual(await page.evaluate(()=>[
+          document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+        await page.setViewportSize({width:1280,height:900});
+        console.log("STUDIO_D4_U2_MEMBERSHIP_CONFLICTS_EXPORT_PASS");
+        await workspaceU2("source").click();
+
+
+
         // Gate only the genuine catalog-placements message, never fabricate a reply.
         await page.evaluate(()=>{
           window.__studioStaleButton=document.querySelector("#source-grid button");
@@ -788,6 +903,11 @@ try{
         assert.equal(await u1Grid.count(),0,"old floor is retired during native pending");
         assert.equal(await page.locator("#run").isDisabled(),true);
         await assertNoResult();
+        await workspaceU2("object").click();
+        assert.equal(await page.locator("#object-add").isDisabled(),true,
+          "U2 cannot assign stale selection while real native R02 page is pending");
+        assert.equal(await page.locator("#object-members button").count(),1);
+        await workspaceU2("source").click();
         await page.evaluate(()=>{
           window.__studioGatePlacements=false;window.__studioReleasePlacements();
         });
@@ -807,6 +927,14 @@ try{
         assert.deepEqual(mz.tile,[upstairsInfo.x,upstairsInfo.y,1]);
         assert.equal(mz.sourcePartRef,upstairsInfo.ref);
         assert.notEqual(mz.sourcePartRef,a.ref);
+        await workspaceU2("object").click();
+        await page.locator("#object-add").focus();
+        await page.locator("#object-add").press("Enter");
+        assert.equal(await page.locator("#object-members button").count(),2);
+        assert.match(await page.locator("#object-members").textContent(),
+          new RegExp(upstairsInfo.ref.slice(0,16)));
+        console.log("STUDIO_D4_U2_PENDING_NATIVE_GUARD_AND_KEYBOARD_DELETE_PASS");
+        await workspaceU2("source").click();
 
         await page.locator("#source-next").focus();
         await page.locator("#source-next").press("Enter");
@@ -923,12 +1051,20 @@ try{
         tiles[0]=3;tiles[1]=11;tiles[2]=1;
         await writeFile(join(oneFloorDir,"MAPS/CULTA00.MAP"),tiles);
         await page.locator("#directory").setInputFiles(oneFloorDir);
+        assert.match(await page.locator("#object-draft-state").textContent(),/STALE_SOURCE/);
+        assert.equal(await page.locator("#object-add").isDisabled(),true);
         await mapMenu.locator("option[value=CULTA00]").waitFor({state:"attached"});
         await mapMenu.selectOption("CULTA00");
         await page.waitForFunction(()=>document.querySelector("#source-page-status")
           .textContent.includes("132 частей") &&
           document.querySelectorAll("#source-grid button").length===128,
           null,{timeout:60000});
+        assert.match(await page.locator("#object-draft-state").textContent(),/STALE_SOURCE/);
+        await page.locator('#studio-workspaces [data-workspace="object"]').click();
+        await page.locator("#object-reset").click();
+        assert.match(await page.locator("#object-draft-state").textContent(),/DRAFT/);
+        assert.equal(await page.locator("#object-hypotheses").locator("option").count(),1);
+        await page.locator('#studio-workspaces [data-workspace="source"]').click();
         const onlyFloorGrid=page.locator("#source-grid button[data-source-part-ref]");
         await page.evaluate(()=>{
           window.__studioGatePlacements=true;window.__studioPlacementsGated=false;

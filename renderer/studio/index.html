@@ -78,6 +78,17 @@ body[data-workspace=source] #whole-panel h2:after{content:" · совмести�
 .source-cell button:focus-visible{outline:3px solid #e0df9e;outline-offset:1px}
 #source-placement-status{overflow-wrap:anywhere}
 
+
+/* D4-U2: local, proposal-only ObjectHypothesis membership UI. */
+body:not([data-workspace=object]) #object-hypothesis-panel{display:none}
+#object-hypothesis-panel{border-top:1px solid #405369;padding-top:12px}
+#object-hypothesis-panel .muted{overflow-wrap:anywhere}
+#object-hypothesis-panel button{min-height:36px}
+#object-members{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto}
+.object-member{border:1px solid #536c82;border-radius:5px;padding:7px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.object-member span{flex:1;min-width:140px;font:11px/1.5 monospace;overflow-wrap:anywhere}
+#object-draft-state,#object-action-status{overflow-wrap:anywhere}
+#object-action-status[data-state=ERROR]{color:#ffad91}
 </style>
 </head>
 <body data-workspace="source">
@@ -138,6 +149,24 @@ body[data-workspace=source] #whole-panel h2:after{content:" · совмести�
 </fieldset></details>
 </section>
 
+
+<section id="object-hypothesis-panel" aria-labelledby="object-hypothesis-heading">
+<h2 id="object-hypothesis-heading">Гипотезы объектов · D4-U2</h2>
+<p class="muted">Только локальные предложения о принадлежности исходных частей. Это не ObjectDefinition и не проверенная целая FGM-модель.</p>
+<p id="object-draft-state" role="status" class="muted">NO_SOURCE · выберите карту и исходную часть.</p>
+<p id="object-selected-part" role="status" class="muted">Нативная исходная часть не выбрана.</p>
+<label for="object-name">Имя гипотезы (до 80 символов)</label>
+<input id="object-name" type="text" maxlength="80" autocomplete="off" placeholder="Например, часть конструкции">
+<div class="row"><button id="object-create" type="button" disabled>Создать</button><button id="object-rename" type="button" disabled>Переименовать</button></div>
+<label for="object-hypotheses">Текущая гипотеза</label>
+<select id="object-hypotheses" disabled><option value="">— нет гипотез —</option></select>
+<button id="object-add" type="button" disabled>Добавить выбранную исходную часть</button>
+<p id="object-action-status" data-state="READY" role="status" class="muted">Выберите исходную часть во вкладке «Источник».</p>
+<div id="object-members" role="group" aria-label="Исходные части текущей гипотезы"></div>
+<div class="row"><button id="object-delete" type="button" disabled>Удалить гипотезу</button><button id="object-export" type="button" disabled>Скачать JSON-драфт</button></div>
+<button id="object-reset" type="button" disabled>Новый черновик текущей карты</button>
+<p class="muted">Новый черновик явно заменяет предыдущий локальный черновик. Перед заменой его можно скачать. Импорт и сохранение StudioProject относятся к U6.</p>
+</section>
 <section id="whole-panel">
 <h2>Целый объект · R06</h2>
 <p class="muted">Одна FGM-модель из 2–8 клеток. SHA-256 подтверждает целостность локальных данных, но не происхождение B1/R03. Сборка выполняется в WASM Worker без отправки ресурсов на сервер.</p>
@@ -185,7 +214,7 @@ body[data-workspace=source] #whole-panel h2:after{content:" · совмести�
 </section>
 <section class="source-output"><h2>Результат</h2><pre id="metrics">Результатов пока нет</pre></section>
 <section class="source-output"><h2>Сохранить локально</h2><div id="downloads"></div></section>
-<section id="studio-workspace-inspector" aria-live="polite"><h2>Контекст рабочего пространства</h2><p id="studio-workspace-context">Источник · текущий нативный каталог и реконструкция.</p><p class="muted">SourcePartRef размещений, MapBlock, карты и миры пока не реализованы. Ресурсы UFO остаются локально.</p></section>
+<section id="studio-workspace-inspector" aria-live="polite"><h2>Контекст рабочего пространства</h2><p id="studio-workspace-context">Источник · текущий нативный каталог и реконструкция.</p><p class="muted">U1: нативные SourcePartRef. U2: локальные ObjectHypothesis. MapBlock, карта и мир пока не реализованы. Ресурсы UFO остаются локально.</p></section>
 </aside>
 </main>
 <script type="module" src="./studio-app.mjs"></script>

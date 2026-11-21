@@ -9,6 +9,7 @@ const fields = ["map","loft","pck","tab","palette"];
 let selected = new Map(), activeWorker = null, activeController = null, generation = 0, result = null;
 let sourceMode = "empty", catalog = null, inspectedMap = null;
 let selectedPlacement=null,placementPage=null,placementEpoch=0,placementLoading=null;
+let objectDraft=null,objectLastError="";
 const mapMenu = $("catalog-map"), elementMenu = $("catalog-element");
 const thumbnailPicker = new ElementSpritePicker({
   button:elementMenu,listbox:$("catalog-element-options"),decode:decodeCatalogSprites,
@@ -55,13 +56,15 @@ function invalidateRun() {
   paint();
 }
 function resetElements() {
+  // Invalidate the old source's semantic applicability BEFORE any async File/Worker read.
+  if(objectDraft)objectDraft.stale=true;
   inspectedMap=null;selectedPlacement=null;placementPage=null;placementLoading=null;++placementEpoch;
   $("source-placement-panel").hidden=true;
   $("source-grid").replaceChildren();$("source-floor").replaceChildren();
   $("source-floor").disabled=true;$("source-prev").disabled=true;$("source-next").disabled=true;
   $("source-page-status").textContent="Нет размещений";
   $("source-placement-status").textContent="Часть исходной клетки не выбрана.";
-  thumbnailPicker.reset();
+  thumbnailPicker.reset();renderObjectDraft();
 }
 function resetCatalog() {
   catalog=null;
@@ -337,6 +340,7 @@ async function inspectSelectedMap() {
     floors.value="0";floors.disabled=false;
     $("source-placement-panel").hidden=false;
     renderPlacementPage(placements);
+    renderObjectDraft();
     $("catalog-summary").textContent=elements.size ? "Выберите элемент для реконструкции." : "В этой карте нет распознанных элементов.";
     setState("READY","Элементы карты готовы");
   } catch(error) {
@@ -413,6 +417,7 @@ function renderSelectedPlacement() {
       " · "+p.dataset+" №"+p.record+" · "+(p.rightHalf?"R05 правая половина":"R05 полный кадр")+
       " · проверено по локальному MAP/MCD, семантический объект ещё не определён."
     : "Отдельное размещение не выбрано; список типов R04 остаётся доступным.";
+  renderObjectDraft();
 }
 function renderPlacementPage(page) {
   const pageEpoch=placementEpoch;
@@ -744,12 +749,211 @@ view.addEventListener("pointercancel",()=>drag=null);
 view.addEventListener("wheel",e=>{if(modeControl.value!=="mesh")return;e.preventDefault();zoom=Math.max(.3,Math.min(4,zoom*(e.deltaY>0?.91:1.1)));paint()},{passive:false});
 paint();
 
+
+// D4-U2: proposal-only local membership; no new R02 parser, Worker, persistence
+// authority, ObjectDefinition or automatic BuildWholeObject invocation.
+const U2_MAX_HYPOTHESES=16,U2_MAX_MEMBERS=128,U2_MAX_INTENTS=256;
+const u2Key=()=>sourceMode==="catalog" && inspectedMap &&
+  /^[0-9a-f]{64}$/.test(inspectedMap.sourceDigest)
+  ? {mapId:inspectedMap.mapId,sourceDigest:inspectedMap.sourceDigest} : null;
+const u2Same=(a,b)=>Boolean(a&&b&&a.mapId===b.mapId&&a.sourceDigest===b.sourceDigest);
+const u2Active=()=>objectDraft?.hypotheses.find(h=>h.hypothesisId===objectDraft.activeId);
+const u2Ready=()=>Boolean(objectDraft&&!objectDraft.stale&&u2Same(u2Key(),objectDraft.source));
+const u2Selection=()=>{
+  const key=u2Key(),p=selectedPlacement;
+  if(!key||!p||!Array.isArray(p.tile)||p.tile.length!==3||
+     !new RegExp("^"+key.sourceDigest+"/[0-9]+-[0-3]$").test(p.sourcePartRef)||
+     !["floor","west_wall","north_wall","object"].includes(p.part)||
+     !p.tile.every(Number.isInteger)||typeof p.dataset!=="string"||
+     !Number.isInteger(p.record)||p.record<0)return null;
+  return {sourcePartRef:p.sourcePartRef,tile:[...p.tile],part:p.part,
+    dataset:p.dataset,record:p.record};
+};
+const u2Count=()=>objectDraft?.hypotheses.reduce((n,h)=>n+h.members.length,0)??0;
+function u2Status(message,error=false){
+  objectLastError=error?message:"";
+  $("object-action-status").dataset.state=error?"ERROR":"READY";
+  $("object-action-status").textContent=message;
+}
+function u2Intent(op,hypothesisId,sourcePartRef,outcome,code){
+  if(!objectDraft || objectDraft.intents.length>=U2_MAX_INTENTS)return;
+  const entry={ordinal:objectDraft.intents.length+1,op,hypothesisId,
+    sourceKey:{...objectDraft.source},outcome};
+  if(sourcePartRef)entry.sourcePartRef=sourcePartRef;
+  if(code)entry.code=code;
+  objectDraft.intents.push(entry);
+}
+function u2Action(op,fn,ref=""){
+  const h=u2Active(),id=h?.hypothesisId??"";
+  let code="";
+  try{
+    if(!u2Ready() && !(op==="create"&&!objectDraft&&u2Key()))
+      throw Error("E_U2_SOURCE_MISMATCH");
+    if((objectDraft?.intents.length??0)>=U2_MAX_INTENTS)throw Error("E_U2_LIMIT");
+    const done=fn(h);
+    u2Intent(op,done?.hypothesisId??id,ref||done?.sourcePartRef||"","APPLIED");
+    u2Status("APPLIED · "+op);
+  }catch(error){
+    code=/^E_U2_[A-Z_]+$/.test(error.message)?error.message:"E_U2_BINDING";
+    u2Intent(op,id,ref,"REJECTED",code);
+    u2Status(code,true);
+  }
+  renderObjectDraft();
+}
+function u2NewDraft(){
+  const source=u2Key();
+  if(!source){u2Status("E_U2_STALE_SELECTION",true);return}
+  objectDraft={source:{...source},hypotheses:[],intents:[],activeId:"",
+    nextId:1,stale:false};
+  u2Status("DRAFT · новый черновик привязан к нативному MAP/MCD.");
+  renderObjectDraft();
+}
+function renderObjectDraft(){
+  const source=u2Key(),selected=u2Selection();
+  const ready=u2Ready(),h=u2Active();
+  $("object-selected-part").textContent=selected
+    ? "R02 "+selected.sourcePartRef+" · ("+selected.tile.join(",")+") "+selected.part+
+       " · "+selected.dataset+" №"+selected.record
+    : "Нативная исходная часть не выбрана; вернитесь в «Источник».";
+  const state=objectDraft
+    ? objectDraft.stale||!u2Same(objectDraft.source,source)?"STALE_SOURCE"
+      : objectLastError?"CONFLICT":"DRAFT"
+    : source?"NO_DRAFT":"NO_SOURCE";
+  $("object-draft-state").textContent=state+(objectDraft
+    ? " · "+objectDraft.source.mapId+" · "+objectDraft.source.sourceDigest.slice(0,12)+
+      "… · "+objectDraft.hypotheses.length+" гипотез, "+u2Count()+" частей."
+    : " · "+(source?"Создайте первую гипотезу.":"Выберите исходную карту."));
+  const list=$("object-hypotheses"),prior=list.value;
+  list.replaceChildren(new Option("— нет гипотез —",""));
+  if(objectDraft)for(const item of objectDraft.hypotheses)
+    list.add(new Option(item.label+" · "+item.hypothesisId,item.hypothesisId));
+  list.value=h?.hypothesisId??"";
+  list.disabled=!ready||!objectDraft?.hypotheses.length;
+  $("object-create").disabled=!source||(objectDraft&&!ready)||
+    (objectDraft?.hypotheses.length??0)>=U2_MAX_HYPOTHESES;
+  $("object-rename").disabled=!ready||!h;
+  $("object-delete").disabled=!ready||!h;
+  $("object-add").disabled=!ready||!h||!selected;
+  $("object-export").disabled=!objectDraft;
+  $("object-reset").disabled=!source;
+  const members=$("object-members");members.replaceChildren();
+  for(const m of h?.members??[]){
+    // Each control belongs to exactly this draft, hypothesis and native member.
+    // A detached control must never mutate a later owner of the same PartRef.
+    const ownerDraft=objectDraft,ownerHypothesis=h;
+    const item=document.createElement("div");item.className="object-member";
+    const label=document.createElement("span");
+    label.textContent="R02 "+m.sourcePartRef+" · ("+m.tile.join(",")+") "+m.part+
+      " · "+m.dataset+" №"+m.record;
+    const remove=document.createElement("button");remove.type="button";
+    remove.textContent="Исключить";remove.dataset.sourcePartRef=m.sourcePartRef;
+    remove.disabled=!ready;
+    remove.setAttribute("aria-label","Исключить "+m.sourcePartRef);
+    remove.addEventListener("click",()=>{
+      // Check identity BEFORE u2Action, state mutation or any APPLIED intent.
+      // All draft edits render a fresh member list, retiring previous buttons.
+      if(!remove.isConnected||remove.disabled||!members.contains(remove)||
+         objectDraft!==ownerDraft||!u2Ready()||
+         u2Active()!==ownerHypothesis||
+         objectDraft.activeId!==ownerHypothesis.hypothesisId||
+         !ownerHypothesis.members.includes(m))return;
+      const index=[...members.querySelectorAll("button[data-source-part-ref]")].indexOf(remove);
+      u2Action("unassign",current=>{
+        if(current!==ownerHypothesis||!current.members.includes(m))
+          throw Error("E_U2_BINDING");
+        current.members=current.members.filter(x=>x!==m);
+        return {sourcePartRef:m.sourcePartRef};
+      },m.sourcePartRef);
+      // The clicked node is now detached; transfer keyboard focus to a live,
+      // enabled member button or a stable enabled hypothesis control.
+      const after=members.querySelectorAll("button[data-source-part-ref]");
+      const next=after[Math.min(index,after.length-1)]||
+        [$("object-add"),$("object-hypotheses"),$("object-create"),$("object-reset")]
+          .find(node=>node.isConnected&&!node.disabled);
+      next?.focus();
+    });
+    item.append(label,remove);members.append(item);
+  }
+}
+$("object-reset").addEventListener("click",u2NewDraft);
+$("object-create").addEventListener("click",()=>{
+  const label=$("object-name").value.trim();
+  u2Action("create",()=>{
+    if(!label||label.length>80)throw Error("E_U2_BINDING");
+    if(!objectDraft){objectDraft={source:{...u2Key()},hypotheses:[],intents:[],
+      activeId:"",nextId:1,stale:false}}
+    if(objectDraft.hypotheses.length>=U2_MAX_HYPOTHESES)throw Error("E_U2_LIMIT");
+    const id="h"+objectDraft.nextId++;
+    objectDraft.hypotheses.push({hypothesisId:id,label,members:[]});
+    objectDraft.activeId=id;
+    return {hypothesisId:id};
+  });
+});
+$("object-hypotheses").addEventListener("change",()=>{
+  if(u2Ready() && objectDraft.hypotheses.some(h=>h.hypothesisId===$("object-hypotheses").value))
+    objectDraft.activeId=$("object-hypotheses").value;
+  u2Status("DRAFT · выбор рабочей гипотезы.");renderObjectDraft();
+});
+$("object-rename").addEventListener("click",()=>{
+  const label=$("object-name").value.trim();
+  u2Action("rename",h=>{
+    if(!h||!label||label.length>80)throw Error("E_U2_BINDING");
+    h.label=label;
+  });
+});
+$("object-add").addEventListener("click",()=>{
+  const selected=u2Selection();
+  u2Action("assign",h=>{
+    if(!h||!selected||!u2Same(u2Key(),objectDraft.source))
+      throw Error("E_U2_STALE_SELECTION");
+    if(h.members.some(x=>x.sourcePartRef===selected.sourcePartRef))
+      throw Error("E_U2_DUPLICATE");
+    if(objectDraft.hypotheses.some(x=>x.hypothesisId!==h.hypothesisId &&
+      x.members.some(m=>m.sourcePartRef===selected.sourcePartRef)))
+      throw Error("E_U2_MEMBER_CONFLICT");
+    if(u2Count()>=U2_MAX_MEMBERS)throw Error("E_U2_LIMIT");
+    h.members.push(selected);return {sourcePartRef:selected.sourcePartRef};
+  },selected?.sourcePartRef??"");
+});
+$("object-delete").addEventListener("click",()=>{
+  u2Action("delete",h=>{
+    if(!h)throw Error("E_U2_BINDING");
+    objectDraft.hypotheses=objectDraft.hypotheses.filter(x=>x!==h);
+    objectDraft.activeId=objectDraft.hypotheses[0]?.hypothesisId??"";
+    return {hypothesisId:h.hypothesisId};
+  });
+});
+$("object-export").addEventListener("click",()=>{
+  if(!objectDraft)return;
+  const state=objectDraft.stale||!u2Same(objectDraft.source,u2Key())
+    ?"STALE_SOURCE":objectLastError?"CONFLICT":"DRAFT";
+  const data={schema:"fgmp-studio-object-hypotheses-draft/1",
+    mapId:objectDraft.source.mapId,sourceDigest:objectDraft.source.sourceDigest,
+    status:state,hypotheses:objectDraft.hypotheses.map(h=>({
+      hypothesisId:h.hypothesisId,label:h.label,members:h.members.map(m=>({
+        ...m,tile:[...m.tile]
+      }))
+    })),intents:objectDraft.intents.map(e=>({...e,sourceKey:{...e.sourceKey}})),
+    conflicts:objectDraft.intents.filter(e=>e.outcome==="REJECTED").map(e=>({
+      ordinal:e.ordinal,code:e.code,sourcePartRef:e.sourcePartRef??null
+    }))};
+  const bytes=JSON.stringify(data);
+  if(bytes.length>131072){u2Status("E_U2_LIMIT",true);return}
+  const url=URL.createObjectURL(new Blob([bytes],{type:"application/json"}));
+  const a=document.createElement("a");
+  a.href=url;a.download="fgm-object-hypotheses-draft.json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  u2Status("DRAFT · JSON скачан локально; импорт U6 не реализован.");
+  renderObjectDraft();
+});
+renderObjectDraft();
+
 // D4-U0 UI-only coordinator: Worker and scene owners remain the existing modules.
 // Keep the legacy whole-object controls accessible in Source during this migration.
 function startStudioWorkspaces() {
   const names=Object.freeze({
     source:["Источник","Локальный каталог, оригинальный R04, R06, сравнение R05 и OBJ."],
-    object:["Объект","Нативная whole-object сборка 2–8 клеток; семантическое объединение SourcePartRef пока не реализовано."],
+    object:["Объект","D4-U2: локальные ObjectHypothesis по настоящим SourcePartRef — только гипотезы. Сборка whole R06 остаётся независимой."],
     mapblock:["MapBlock · NOT_IMPLEMENTED","Библиотека, этажи и проверенная принадлежность частей появятся позже. Здесь нет декодированной карты или модели блока."],
     map:["Карта · NOT_IMPLEMENTED","Конструктор 50×50, выбор экземпляров и 3D-отрисовка карт пока не реализованы."],
     world:["Мир · RESEARCH_ONLY","Фрактальный мир и выбор графического backend исследуются. Генерация недоступна."]
@@ -787,7 +991,7 @@ function startStudioWorkspaces() {
   };
   const select=next=>{
     if(!Object.hasOwn(names,next))return;
-    workspace=next; preferredView=next==="object"?"whole":"source";
+    workspace=next;renderObjectDraft(); preferredView=next==="object"?"whole":"source";
     // No fake change events, no new Worker, no source/run invalidation on navigation.
     render();
   };
