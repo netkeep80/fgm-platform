@@ -133,6 +133,17 @@ body:not([data-workspace=map]) #battlescape-panel{display:none}
 #u5-view-choice{max-width:230px}
 @media(max-width:900px){#u5-viewport-pair[data-layout=compare]{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){#view-toolbar{flex-wrap:wrap;gap:6px}#u5-view-choice{max-width:100%}#u5-viewport-pair{padding:5px}.u5-pane canvas{min-height:280px}}
+
+/* D4-U6: explicit local project draft, never an authenticated reconstruction. */
+#studio-project-panel{min-width:0;border-top:1px solid #405369;padding-top:12px}
+#studio-project-panel .row{flex-wrap:wrap}
+#studio-project-panel .row button{min-width:100px}
+#studio-project-panel input[type=file]{max-width:100%;width:100%}
+#studio-project-panel p,#studio-project-panel pre{overflow-wrap:anywhere}
+#project-status[data-state=ERROR],#project-status[data-state=CONFLICT]{color:#ffad91}
+#project-status[data-state=READY]{color:#91d6bb}
+#project-preview{max-height:180px;overflow:auto}
+@media(max-width:600px){#studio-project-panel .row button{flex:1 1 140px}}
 </style>
 </head>
 <body data-workspace="source">
@@ -296,6 +307,23 @@ body:not([data-workspace=map]) #battlescape-panel{display:none}
 </section>
 <section class="source-output"><h2>Результат</h2><pre id="metrics">Результатов пока нет</pre></section>
 <section class="source-output"><h2>Сохранить локально</h2><div id="downloads"></div></section>
+
+<section id="studio-project-panel" aria-labelledby="studio-project-heading">
+<h2 id="studio-project-heading">Проект Studio · локальный черновик U6</h2>
+<p class="muted">Сохраняются гипотезы U2, размещения 2D-карты U4 и настройки интерфейса. Исходные MAP/MCD, R05/R06, GPU и результаты реконструкции не сохраняются.</p>
+<label for="project-label">Имя проекта</label><input id="project-label" type="text" maxlength="80" value="Новый проект">
+<div class="row"><button id="project-save" type="button">Сохранить JSON</button>
+<label for="project-file">Открыть проект JSON</label></div>
+<input id="project-file" type="file" accept=".json,application/json">
+<label for="project-folder">Папка игры для отдельной проверки проекта (не переключает текущий источник)</label>
+<input id="project-folder" type="file" webkitdirectory multiple>
+<div class="row"><button id="project-verify" type="button" disabled>Проверить через R02</button>
+<button id="project-apply" type="button" disabled>Применить черновик</button>
+<button id="project-cancel" type="button">Отменить импорт</button></div>
+<p id="project-status" role="status" aria-live="polite" data-state="PARKED">NO_PROJECT · импортируйте локальный JSON.</p>
+<pre id="project-preview" aria-label="Сводка содержимого проекта">Файл проекта ещё не выбран.</pre>
+<p class="muted">Для восстановления сначала откройте в обычной вкладке «Источник» соответствующую папку и карту. Обычная смена источника может уничтожить несохранённые U2/U4 и прежний результат Whole. Отмена отдельной проверки проекта не изменяет текущую работу.</p>
+</section>
 <section id="studio-workspace-inspector" aria-live="polite"><h2>Контекст рабочего пространства</h2><p id="studio-workspace-context">Источник · текущий нативный каталог и реконструкция.</p><p class="muted">U1: нативные SourcePartRef; U2: локальные ObjectHypothesis; U3: схема исходного MAP-блока. Полные карты и фрактальный мир пока не реализованы. Ресурсы UFO остаются локально.</p></section>
 </aside>
 </main>

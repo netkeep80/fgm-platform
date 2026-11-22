@@ -38,6 +38,8 @@ try{
   // The optional proof mutation operates on a real finalize reply.
   await page.addInitScript(() => {
     const NativeWorker=globalThis.Worker;
+    globalThis.__u6DialogDecision=true;
+    globalThis.confirm=()=>globalThis.__u6DialogDecision;
     globalThis.__studioGateStep=false;
     globalThis.__studioStepGated=false;
     globalThis.__studioReleaseStep=null;
@@ -1462,6 +1464,742 @@ try{
       }));
       assert.deepEqual(afterU4,beforeU4,"U4 must not mutate native Source/U2/R06 owners");
       console.log("STUDIO_D4_U4_NATIVE_22_INSTANCES_25_SLOTS_PASS");
+
+      // D4-U6/SCOPE-R2: author intent round-trip, honest local project format.
+      // The ordinary active Source must be selected explicitly; project rebind
+      // never promotes stored JSON to native verification on its own.
+      await workspace("source").click();
+      await mapMenu.selectOption("CULTA10");
+      await page.waitForFunction(()=>document.querySelectorAll(
+        "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+      await page.locator("#source-grid button[data-source-part-ref]").first().click();
+      await page.locator("#run").click();await waitState("COMPLETED");
+      await workspace("object").click();
+      await page.locator("#object-reset").click();
+      await page.locator("#object-name").fill("U6 source-bound hypothesis");
+      await page.locator("#object-create").click();
+      await page.locator("#object-add").click();
+      assert.match(await page.locator("#object-draft-state").textContent(),/DRAFT/);
+      await workspace("map").click();
+      assert.match(await u4Count.textContent(),/22 экземпляров · 25\/25 слотов/);
+      const u6Download=page.waitForEvent("download");
+      await page.locator("#project-save").click();
+      const u6File=await u6Download;
+      assert.equal(u6File.suggestedFilename(),"fgm-studio-project.json");
+      const u6Bytes=await readFile(await u6File.path(),"utf8");
+      const u6JSON=JSON.parse(u6Bytes);
+      assert.equal(u6JSON.schema,"fgmp-studio-project/1");
+      assert.equal(u6JSON.objectDraft.hypotheses.length,1);
+      assert.equal(u6JSON.objectDraft.hypotheses[0].members.length,1);
+      assert.equal(u6JSON.battlescapeDraft.instances.length,22);
+      assert.equal(u6JSON.battlescapeDraft.sourceDefinitions.length,2);
+      for(const forbidden of ["indices_hex","palette_rgb8","lofts","wholeFrame",
+        "WHOLE_FRAME_READY","filePath","webkitRelativePath"])
+        assert.equal(u6Bytes.includes(forbidden),false,"no private source bytes/proof");
+      console.log("STUDIO_D4_U6_EXPORT_LOCAL_BOUNDED_DRAFT_PASS");
+      // A07 must preserve an ACTUAL native Whole R06 result, not only
+      // an empty owner. Synthetic whole fixture still runs real C++20/WASM.
+      await workspace("source").click();
+      await page.locator("#whole-demo").click();
+      await page.waitForFunction(()=>!document.querySelector("#whole-run").disabled,
+        null,{timeout:20000});
+      await page.locator("#whole-run").click();
+      await page.waitForFunction(()=>document.querySelector("#whole-status")
+        .dataset.state==="COMPLETED",null,{timeout:60000});
+      // GPU draw is asynchronous after native Whole completion; wait for the
+      // final frame before comparing owner-stable states across a declined event.
+      await page.waitForFunction(()=>window.__u5WholeEvents.at(-1)?.state===
+        "WHOLE_FRAME_READY",null,{timeout:60000});
+      assert.equal(await page.locator("#whole-downloads button").count(),5);
+
+
+      // A07: DECLINE ordinary source mutations in capture phase. Both the
+      // existing Source handlers and independent Whole target listeners must
+      // remain untouched; this is not the project-only folder selector.
+      const u6Before=await page.evaluate(()=>({
+        map:document.querySelector("#catalog-map").value,
+        metrics:document.querySelector("#metrics").textContent,
+        u2:document.querySelector("#object-draft-state").textContent,
+        u4:document.querySelector("#battlescape-count").textContent,
+        whole:document.querySelector("#whole-status").textContent,
+        wholeProof:document.querySelector("#whole-metrics").textContent,
+        wholeButtons:document.querySelectorAll("#whole-downloads button").length,
+        wholeEvidence:window.__u5WholeEvents.at(-1)?.state??null,
+        sourceEvents:window.__u5SourceEvents.length,
+        wholeEvents:window.__u5WholeEvents.length
+      }));
+      await workspace("source").click();
+      await page.evaluate(()=>{window.__u6DialogDecision=false});
+      await mapMenu.selectOption("CULTA11");
+      await page.locator("#directory").setInputFiles(rootDir);
+      await page.locator("#local-files").setInputFiles([
+        {name:"manual.map",mimeType:"application/octet-stream",buffer:Buffer.from([1,1,1,1])}
+      ]);
+      assert.equal(await page.locator("#local-files").evaluate(el=>el.files.length),0,
+        "decline clears FileList; browser cannot restore previous selection");
+      await page.locator("#demo").click();
+      const u6After=await page.evaluate(()=>({
+        map:document.querySelector("#catalog-map").value,
+        metrics:document.querySelector("#metrics").textContent,
+        u2:document.querySelector("#object-draft-state").textContent,
+        u4:document.querySelector("#battlescape-count").textContent,
+        whole:document.querySelector("#whole-status").textContent,
+        wholeProof:document.querySelector("#whole-metrics").textContent,
+        wholeButtons:document.querySelectorAll("#whole-downloads button").length,
+        wholeEvidence:window.__u5WholeEvents.at(-1)?.state??null,
+        sourceEvents:window.__u5SourceEvents.length,
+        wholeEvents:window.__u5WholeEvents.length
+      }));
+      assert.deepEqual(u6After,u6Before,
+        "decline must block both Source and independent Whole before event dispatch");
+      await page.evaluate(()=>{window.__u6DialogDecision=true});
+      console.log("STUDIO_D4_U6_A07_CANCEL_BEFORE_OWNER_DISPATCH_PASS");
+
+      const u6WorkDir=await mkdtemp(join(tmpdir(),"studio-u6-project-"));
+      try{
+        const u6ProjectPath=join(u6WorkDir,"studio-project.json");
+        await writeFile(u6ProjectPath,u6Bytes);
+        const u6Rejected=join(u6WorkDir,"forged-project.json");
+        await writeFile(u6Rejected,JSON.stringify({...u6JSON,
+          battlescapeDraft:{...u6JSON.battlescapeDraft,instances:[
+            ...u6JSON.battlescapeDraft.instances,
+            {...u6JSON.battlescapeDraft.instances[0]}
+          ]}}));
+        await page.locator("#project-file").setInputFiles(u6Rejected);
+        await page.waitForFunction(()=>document.querySelector("#project-status")
+          .textContent.startsWith("REJECTED"),null,{timeout:30000});
+        assert.equal(await u4Count.textContent(),u6Before.u4);
+        assert.equal(await page.locator("#metrics").textContent(),u6Before.metrics);
+        console.log("STUDIO_D4_U6_CORRUPT_PROJECT_ZERO_MUTATION_PASS");
+
+        // Verify independent native project root B while current source A and
+        // its real R05/U2/U4 stay intact. Same MAP ID with altered bytes fails.
+        const u6Other=join(u6WorkDir,"changed-ufo");
+        await mkdir(u6Other);
+        await writeStudioUfoCatalogFixture(u6Other);
+        await writeFile(join(u6Other,"MAPS","CULTA10.MAP"),Buffer.from([10,10,1,...Array(400).fill(1)]));
+        await page.locator("#project-file").setInputFiles(u6ProjectPath);
+        await page.waitForFunction(()=>document.querySelector("#project-status")
+          .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+        await page.locator("#project-folder").setInputFiles(u6Other);
+        await page.locator("#project-verify").click();
+        await page.waitForFunction(()=>/PARKED_CONFLICT|PARKED_UNBOUND/.test(
+          document.querySelector("#project-status").textContent),null,{timeout:60000});
+        assert.equal(await page.locator("#project-apply").isDisabled(),true);
+        assert.equal(await u4Count.textContent(),u6Before.u4);
+        assert.equal(await page.locator("#metrics").textContent(),u6Before.metrics);
+        console.log("STUDIO_D4_U6_DIFFERENT_ROOT_NATIVE_CONFLICT_PASS");
+        await page.locator("#project-cancel").click();
+
+        // A05 combined owner regression: original source A has genuine
+        // unsaved U2+U4 and a completed real Whole R06/GPU frame. A delayed
+        // project-only R02 reply after cancel must not mutate any owner.
+        await page.locator("#project-file").setInputFiles(u6ProjectPath);
+        await page.waitForFunction(()=>document.querySelector("#project-status")
+          .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+        await page.locator("#project-folder").setInputFiles(rootDir);
+        await page.evaluate(()=>{
+          window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+        });
+        await page.locator("#project-verify").click();
+        await page.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),
+          null,{timeout:30000});
+        await page.locator("#project-cancel").click();
+        await page.evaluate(()=>{
+          window.__studioGateCatalog=false;
+          try{window.__studioReleaseCatalog?.()}catch{/* terminated real native Worker */}
+        });
+        await page.waitForTimeout(150);
+        const afterLate=await page.evaluate(()=>({
+          map:document.querySelector("#catalog-map").value,
+          metrics:document.querySelector("#metrics").textContent,
+          u2:document.querySelector("#object-draft-state").textContent,
+          u4:document.querySelector("#battlescape-count").textContent,
+          whole:document.querySelector("#whole-status").textContent,
+          wholeProof:document.querySelector("#whole-metrics").textContent,
+          wholeButtons:document.querySelectorAll("#whole-downloads button").length,
+          wholeEvidence:window.__u5WholeEvents.at(-1)?.state??null
+        }));
+        assert.deepEqual(afterLate,{
+          map:u6Before.map,metrics:u6Before.metrics,u2:u6Before.u2,u4:u6Before.u4,
+          whole:u6Before.whole,wholeProof:u6Before.wholeProof,
+          wholeButtons:u6Before.wholeButtons,wholeEvidence:u6Before.wholeEvidence
+        },"late native reply after cancel preserves U2/U4/R05 and Whole GPU evidence");
+        assert.equal(await page.locator("#project-apply").isDisabled(),true);
+        console.log("STUDIO_D4_U6_A05_DELAYED_WORKER_WHOLE_AND_UNSAVED_SOURCE_PASS");
+
+        // Reload creates no project state or native proof. Explicitly open the
+        // same real source, import, revalidate in separate native R02 and Apply.
+        const projectPage=await network.context.newPage();
+        projectPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await projectPage.goto(url+"/");
+          assert.match(await projectPage.locator("#project-status").textContent(),/NO_PROJECT/);
+          await projectPage.locator("#directory").setInputFiles(rootDir);
+          const importedMap=projectPage.locator("#catalog-map");
+          await importedMap.locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await importedMap.selectOption("CULTA10");
+          await projectPage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await projectPage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await projectPage.locator("#project-apply").click();
+          assert.match(await projectPage.locator("#project-status").textContent(),/ACTIVE_DRAFT/);
+          assert.match(await projectPage.locator("#object-draft-state").textContent(),/DRAFT/);
+          assert.match(await projectPage.locator("#battlescape-count").textContent(),
+            /22 экземпляров · 25\/25 слотов/);
+          assert.equal(await projectPage.locator("#object-members button").count(),1);
+          assert.equal(await projectPage.locator("#downloads button").count(),0,
+            "R05/R06 must not be fabricated on project rehydrate");
+          assert.notEqual(await projectPage.locator("#whole-status").getAttribute("data-state"),
+            "COMPLETED");
+          console.log("STUDIO_D4_U6_RELOAD_REAL_NATIVE_R02_ATOMIC_APPLY_PASS");
+
+          // A04: U4-only projects need only an active compatible catalog.
+          const layoutOnly={...u6JSON,objectDraft:null};
+          const u6U4=join(u6WorkDir,"map-only.json");
+          await writeFile(u6U4,JSON.stringify(layoutOnly));
+          await projectPage.reload();
+          await projectPage.locator("#directory").setInputFiles(rootDir);
+          await projectPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await projectPage.locator("#project-file").setInputFiles(u6U4);
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await projectPage.locator("#project-apply").click();
+          assert.match(await projectPage.locator("#battlescape-count").textContent(),
+            /22 экземпляров · 25\/25 слотов/);
+          console.log("STUDIO_D4_U6_U4_ONLY_NO_INSPECTED_MAP_PASS");
+
+          // A04 symmetric case: U2-only cannot activate until a matching
+          // active inspectedMap is separately loaded through normal Source.
+          const u6OnlyU2=join(u6WorkDir,"object-only.json");
+          await writeFile(u6OnlyU2,JSON.stringify({...u6JSON,battlescapeDraft:null}));
+          await projectPage.reload();
+          await projectPage.locator("#directory").setInputFiles(rootDir);
+          await projectPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await projectPage.locator("#project-file").setInputFiles(u6OnlyU2);
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("STAGED_NATIVE_VERIFIED"),null,{timeout:60000});
+          assert.match(await projectPage.locator("#project-status").textContent(),/PARKED_CONFLICT/);
+          assert.equal(await projectPage.locator("#project-apply").isDisabled(),true);
+          await projectPage.locator("#catalog-map").selectOption("CULTA10");
+          await projectPage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await projectPage.locator("#project-apply").click();
+          assert.match(await projectPage.locator("#object-draft-state").textContent(),/DRAFT/);
+          assert.equal(await projectPage.locator("#object-members button").count(),1);
+          assert.match(await projectPage.locator("#battlescape-count").textContent(),
+            /0 экземпляров · 0\/25 слотов/);
+          console.log("STUDIO_D4_U6_A04_U2_ONLY_EXACT_MAP_PASS");
+          await projectPage.setViewportSize({width:390,height:844});
+          assert.deepEqual(await projectPage.evaluate(()=>[
+            document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+        }finally{await projectPage.close()}
+
+        // Test-only transparent Worker interception on each *new* page.
+        // Original page.addInitScript is page-scoped, not inherited by pages
+        // created later in the same BrowserContext.
+        const instrumentProjectPage=async target=>target.addInitScript(()=>{
+          window.__studioU3PlacementCalls=[];
+          window.__studioGateCatalog=false;window.__studioReleaseCatalog=null;
+          const NativeWorker=window.Worker;
+          window.Worker=class U6ObservedWorker extends NativeWorker{
+            postMessage(data,...args){
+              const request=typeof data==="string"?JSON.parse(data):null;
+              if(request?.action==="catalog-placements")
+                window.__studioU3PlacementCalls.push({
+                  map:request.map,floor:request.floor,offset:request.offset
+                });
+              if(window.__studioGateCatalog&&request?.action==="catalog-map"){
+                window.__studioReleaseCatalog=()=>super.postMessage(data,...args);
+                return;
+              }
+              return super.postMessage(data,...args);
+            }
+          };
+        });
+
+        // P2-01: stage genuine project files with NO active Source. Rebind and
+        // native proof are independent of activation; later Source selection
+        // only enables Apply after a fresh second native comparison.
+        const stagePage=await network.context.newPage();
+        await instrumentProjectPage(stagePage);
+        stagePage.on("dialog",dialog=>dialog.accept());
+        try{
+          await stagePage.goto(url+"/");
+          assert.equal(await stagePage.locator("#catalog-map").isDisabled(),true);
+          await stagePage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          const firstR02=await stagePage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await stagePage.locator("#project-folder").setInputFiles(rootDir);
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("STAGED_NATIVE_VERIFIED"),null,{timeout:90000});
+          assert.match(await stagePage.locator("#project-status").textContent(),/PARKED_UNBOUND/);
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#catalog-map").isDisabled(),true);
+          assert.equal(await stagePage.locator("#downloads button").count(),0);
+          assert.ok((await stagePage.evaluate(()=>window.__studioU3PlacementCalls.length))>firstR02,
+            "native R02 pages must be read despite Source being absent");
+          console.log("STUDIO_D4_U6_P2_01_NATIVE_STAGED_NO_ACTIVE_SOURCE_PASS");
+          await stagePage.locator("#directory").setInputFiles(rootDir);
+          await stagePage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await stagePage.locator("#catalog-map").selectOption("CULTA10");
+          await stagePage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await stagePage.locator("#project-apply").click();
+          assert.match(await stagePage.locator("#battlescape-count").textContent(),
+            /22 экземпляров · 25\/25 слотов/);
+          console.log("STUDIO_D4_U6_P2_01_NATIVE_STAGE_THEN_COMPATIBLE_APPLY_PASS");
+
+          // A05: deterministically delay a real native catalog-map request,
+          // cancel or reimport a project and release the stale Worker action.
+          const stableBefore=await stagePage.locator("#battlescape-count").textContent();
+          await stagePage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+          });
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),
+            null,{timeout:30000});
+          await stagePage.locator("#project-cancel").click();
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=false;
+            try{window.__studioReleaseCatalog?.()}catch{/* canceled native Worker */}
+          });
+          await stagePage.waitForTimeout(150);
+          assert.match(await stagePage.locator("#project-status").textContent(),/^NO_PROJECT/);
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#battlescape-count").textContent(),stableBefore);
+          await stagePage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+          });
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),
+            null,{timeout:30000});
+          await stagePage.locator("#project-file").setInputFiles(join(u6WorkDir,"map-only.json"));
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=false;
+            try{window.__studioReleaseCatalog?.()}catch{/* superseded native Worker */}
+          });
+          await stagePage.waitForTimeout(150);
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#battlescape-count").textContent(),stableBefore);
+          console.log("STUDIO_D4_U6_A05_CANCEL_REIMPORT_LATE_NATIVE_PASS");
+
+          // A06: a forced deadline uses the real Worker, not fabricated
+          // responses. Only the test's 90s alarm is shortened deterministically.
+          await stagePage.evaluate(()=>{
+            const real=window.setTimeout;
+            window.__u6RestoreTimeout=()=>{window.setTimeout=real};
+            window.setTimeout=(fn,delay,...rest)=>real(fn,delay===90000?80:delay,...rest);
+            window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+          });
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_VERIFY_TIMEOUT"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__u6RestoreTimeout();
+            window.__studioGateCatalog=false;
+            try{window.__studioReleaseCatalog?.()}catch{/* timed-out native Worker */}
+          });
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#battlescape-count").textContent(),stableBefore);
+          console.log("STUDIO_D4_U6_A06_GLOBAL_DEADLINE_TIMEOUT_PASS");
+        }finally{await stagePage.close()}
+
+        // Source A may be incompatible while separately selected project B is
+        // successfully checked by R02. Source A remains selected and untouched.
+        const conflictPage=await network.context.newPage();
+        await instrumentProjectPage(conflictPage);
+        conflictPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await conflictPage.goto(url+"/");
+          await conflictPage.locator("#directory").setInputFiles(u6Other);
+          await conflictPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await conflictPage.locator("#catalog-map").selectOption("CULTA10");
+          await conflictPage.waitForFunction(()=>document.querySelector("#catalog-map").value===
+            "CULTA10"&&document.querySelector("#source-grid button[data-source-part-ref]"),
+            null,{timeout:60000});
+          const beforeMap=await conflictPage.locator("#catalog-map").inputValue();
+          await conflictPage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await conflictPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await conflictPage.locator("#project-folder").setInputFiles(rootDir);
+          const callsBefore=await conflictPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await conflictPage.locator("#project-verify").click();
+          await conflictPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("STAGED_NATIVE_VERIFIED"),null,{timeout:90000});
+          assert.match(await conflictPage.locator("#project-status").textContent(),/PARKED_CONFLICT/);
+          assert.ok((await conflictPage.evaluate(()=>window.__studioU3PlacementCalls.length))>
+            callsBefore);
+          assert.equal(await conflictPage.locator("#catalog-map").inputValue(),beforeMap);
+          assert.equal(await conflictPage.locator("#project-apply").isDisabled(),true);
+          console.log("STUDIO_D4_U6_P2_01_INCOMPATIBLE_ACTIVE_NATIVE_STAGE_PASS");
+        }finally{await conflictPage.close()}
+
+        // A03/A07 accepted ordinary switch is explicitly destructive and does
+        // invalidate the independent Whole owner. Declined events were checked
+        // earlier with a settled real GPU frame and all four controls.
+        const acceptedPage=await network.context.newPage();
+        acceptedPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await acceptedPage.goto(url+"/");
+          await acceptedPage.locator("#directory").setInputFiles(rootDir);
+          await acceptedPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await acceptedPage.locator("#catalog-map").selectOption("CULTA10");
+          await acceptedPage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await acceptedPage.locator("#source-grid button[data-source-part-ref]").first().click();
+          await acceptedPage.locator('#studio-workspaces [data-workspace="object"]').click();
+          await acceptedPage.locator("#object-name").fill("A03 draft");
+          await acceptedPage.locator("#object-create").click();
+          await acceptedPage.locator("#object-add").click();
+          await acceptedPage.locator('#studio-workspaces [data-workspace="source"]').click();
+          await acceptedPage.locator("#whole-demo").click();
+          await acceptedPage.waitForFunction(()=>!document.querySelector("#whole-run").disabled);
+          await acceptedPage.locator("#whole-run").click();
+          await acceptedPage.waitForFunction(()=>document.querySelector("#whole-status")
+            .dataset.state==="COMPLETED",null,{timeout:60000});
+          await acceptedPage.locator("#catalog-map").selectOption("CULTA11");
+          assert.match(await acceptedPage.locator("#object-draft-state").textContent(),
+            /STALE|SOURCE_MISMATCH/);
+          assert.notEqual(await acceptedPage.locator("#whole-status").getAttribute("data-state"),
+            "COMPLETED");
+          await acceptedPage.locator("#directory").setInputFiles(rootDir);
+          await acceptedPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          assert.equal(await acceptedPage.locator("#battlescape-grid .battlescape-slot[data-occupied=true]").count(),0);
+          console.log("STUDIO_D4_U6_A03_A07_ACCEPTED_SOURCE_INVALIDATION_PASS");
+        }finally{await acceptedPage.close()}
+
+
+        // A06: 25 *distinct* native MAP definitions, each occupying one of
+        // 25 slots, together with 128 genuine SourcePartRefs in the original
+        // 20x20 MAP. No fake Worker replies or in-memory trusted receipts.
+        const stressRoot=join(u6WorkDir,"stress-25");
+        await writeStudioUfoCatalogFixture(stressRoot);
+        await writeFile(join(stressRoot,"MAPS","CULTA10.MAP"),makeU3Map(20,20,2));
+        // R02's native catalog recognizes CULTA00..18 (not CULTA20..44).
+        // Reserve CULTA10 for the U2 20x20 source and combine 18 CULTA
+        // definitions with 7 genuine DESERT00..06 native profiles.
+        const cultaIds=Array.from({length:19},(_,i)=>"CULTA"+String(i).padStart(2,"0"))
+          .filter(id=>id!=="CULTA10");
+        const desertIds=Array.from({length:7},(_,i)=>"DESERT"+String(i).padStart(2,"0"));
+        const ids=[...cultaIds,...desertIds];
+        assert.equal(ids.length,25);
+        for(const id of cultaIds)
+          await writeFile(join(stressRoot,"MAPS",id+".MAP"),makeU3Map(10,10,1,2));
+        for(const ext of ["MCD","PCK","TAB"])
+          await writeFile(join(stressRoot,"TERRAIN","DESERT."+ext),
+            await readFile(join(stressRoot,"TERRAIN","CULTIVAT."+ext)));
+        for(const id of desertIds)
+          await writeFile(join(stressRoot,"MAPS",id+".MAP"),makeU3Map(10,10,1,1));
+        const stressPage=await network.context.newPage();
+        await instrumentProjectPage(stressPage);
+        stressPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await stressPage.goto(url+"/");
+          await stressPage.locator("#directory").setInputFiles(stressRoot);
+          await stressPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await stressPage.locator("#catalog-map")
+            .locator('option[value="DESERT00"]').waitFor({state:"attached"});
+          // Source digest is deliberately bound to MAP ID as well as bytes and
+          // ordered MCD IDs; do not reuse a digest across identical MAP files.
+          const nativeDigests=new Map();
+          for(const id of ids){
+            await stressPage.locator("#catalog-map").selectOption(id);
+            await stressPage.waitForFunction(expected=>
+              document.querySelector("#catalog-map").value===expected &&
+              document.querySelectorAll("#source-grid button[data-source-part-ref]").length>0 &&
+              document.querySelector("#source-page-status").textContent.includes("SHA-256"),
+              id,{timeout:60000});
+            const ref=await stressPage.locator(
+              "#source-grid button[data-source-part-ref]").first()
+              .getAttribute("data-source-part-ref");
+            const digest=ref.split("/")[0];
+            assert.match(digest,/^[a-f0-9]{64}$/);
+            nativeDigests.set(id,digest);
+          }
+          assert.equal(nativeDigests.size,25);
+          assert.equal(new Set(nativeDigests.values()).size,25);
+          await stressPage.locator("#catalog-map").selectOption("CULTA10");
+          await stressPage.waitForFunction(()=>
+            document.querySelectorAll("#source-grid button[data-source-part-ref]").length===128,
+            null,{timeout:60000});
+          const native128=await stressPage.locator(
+            "#source-grid button[data-source-part-ref]").evaluateAll(buttons=>
+              buttons.slice(0,128).map(button=>{
+                const match=/ · ([A-Z0-9_]+) №(\d+) · \((\d+),(\d+),(\d+)\)$/.exec(button.title);
+                if(!match)throw Error("E_U6_TEST_NATIVE_PART_METADATA");
+                return {sourcePartRef:button.dataset.sourcePartRef,
+                  tile:[Number(match[3]),Number(match[4]),Number(match[5])],
+                  part:button.dataset.part,dataset:match[1],record:Number(match[2])};
+              }));
+          assert.equal(native128.length,128);
+          assert.equal(new Set(native128.map(m=>m.sourcePartRef)).size,128);
+          const baseDef=u6JSON.battlescapeDraft.sourceDefinitions.find(
+            d=>d.mapId==="CULTA11");
+          assert.ok(baseDef,"same native MAP bytes as 10x10 source definition");
+          const validDefs=ids.map(id=>({...baseDef,mapId:id,
+            sourceDigest:nativeDigests.get(id),
+            datasets:id.startsWith("DESERT")?["BLANKS","DESERT"]:[...baseDef.datasets]}));
+          const saturated={...u6JSON,
+            objectDraft:{...u6JSON.objectDraft,
+              hypotheses:[{...u6JSON.objectDraft.hypotheses[0],members:native128}]},
+            battlescapeDraft:{...u6JSON.battlescapeDraft,
+              sourceDefinitions:validDefs,
+              instances:validDefs.map((d,i)=>({id:"mbi-"+(i+1),mapId:d.mapId,
+                sourceDigest:d.sourceDigest,anchor:i,slots:1})),
+              nextSequence:25,selectedSlot:0}};
+          const saturatedPath=join(u6WorkDir,"saturation-25-128.json");
+          await writeFile(saturatedPath,JSON.stringify(saturated));
+          await stressPage.locator("#project-file").setInputFiles(saturatedPath);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          const nativeBefore=await stressPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await stressPage.locator("#project-folder").setInputFiles(stressRoot);
+          await stressPage.locator("#project-verify").click();
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE") ||
+            document.querySelector("#project-status").textContent.startsWith("PARKED_CONFLICT"),
+            null,{timeout:90000});
+          assert.match(await stressPage.locator("#project-status").textContent(),/^APPLY_AVAILABLE/,
+            "25 separate native definitions and 128 parts must revalidate");
+          const budgetText=await stressPage.locator("#project-status").textContent();
+          const bm=/(\d+) байт и (\d+) страниц/.exec(budgetText);
+          assert.ok(bm,"native verification must report bounded work");
+          assert.ok(Number(bm[1])<=64*1024*1024);
+          assert.ok(Number(bm[2])<=256);
+          assert.ok((await stressPage.evaluate(()=>window.__studioU3PlacementCalls.length))-
+            nativeBefore>=52,"each 25 MAPs plus U2 source is verified for both roots");
+          await stressPage.locator("#project-apply").click();
+          assert.match(await stressPage.locator("#battlescape-count").textContent(),
+            /25 экземпляров · 25\/25 слотов · 25 проверенных определений/);
+          assert.equal(await stressPage.locator("#object-members button").count(),128);
+          console.log("STUDIO_D4_U6_A06_NATIVE_25_MAPS_128_PARTS_WITHIN_BUDGET_PASS",budgetText);
+
+          // A06 parser and total-read budget must reject over-limit inputs
+          // without partially publishing a replacement of the 25-slot draft.
+          const unchanged=await stressPage.locator("#battlescape-count").textContent();
+          const overMembers=join(u6WorkDir,"too-many-members.json");
+          await writeFile(overMembers,JSON.stringify({...saturated,
+            objectDraft:{...saturated.objectDraft,hypotheses:[{
+              ...saturated.objectDraft.hypotheses[0],
+              members:[...native128,native128[0]]
+            }]}}));
+          await stressPage.locator("#project-file").setInputFiles(overMembers);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          assert.equal(await stressPage.locator("#battlescape-count").textContent(),unchanged);
+          const overInstances=join(u6WorkDir,"too-many-instances.json");
+          await writeFile(overInstances,JSON.stringify({...saturated,
+            battlescapeDraft:{...saturated.battlescapeDraft,instances:[
+              ...saturated.battlescapeDraft.instances,saturated.battlescapeDraft.instances[0]
+            ]}}));
+          await stressPage.locator("#project-file").setInputFiles(overInstances);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          assert.equal(await stressPage.locator("#battlescape-count").textContent(),unchanged);
+
+          const largeMcd=Buffer.alloc(3*1024*1024);
+          await writeFile(join(stressRoot,"TERRAIN","CULTIVAT.MCD"),largeMcd);
+          await writeFile(join(stressRoot,"TERRAIN","DESERT.MCD"),largeMcd);
+          await stressPage.locator("#project-file").setInputFiles(saturatedPath);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stressPage.locator("#project-folder").setInputFiles(stressRoot);
+          await stressPage.locator("#project-verify").click();
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_VERIFY_BUDGET"),null,{timeout:30000});
+          assert.equal(await stressPage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stressPage.locator("#battlescape-count").textContent(),unchanged);
+          console.log("STUDIO_D4_U6_A06_TOTAL_64MIB_LIMIT_AND_25_PINNED_PASS");
+
+        }finally{await stressPage.close()}
+
+        // A06 hard pagination boundary: exactly 128 *real* R02 part identities
+        // across 128 floors, with one on the 3rd page of floor 0. A separate
+        // project-root verification and then live-root verification demand
+        // 130+130 native floor/page batches; the 257th must be rejected.
+        const paginationRoot=join(u6WorkDir,"page-budget-128-floors");
+        await writeStudioUfoCatalogFixture(paginationRoot);
+        await writeFile(join(paginationRoot,"MAPS","CULTA10.MAP"),
+          makeU3Map(10,10,128,4));
+        const pagesPage=await network.context.newPage();
+        await instrumentProjectPage(pagesPage);
+        pagesPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await pagesPage.goto(url+"/");
+          await pagesPage.locator("#directory").setInputFiles(paginationRoot);
+          await pagesPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await pagesPage.locator("#catalog-map").selectOption("CULTA10");
+          await pagesPage.waitForFunction(()=>document.querySelector("#source-floor")
+            .options.length===128&&document.querySelectorAll(
+              "#source-grid button[data-source-part-ref]").length===128,
+              null,{timeout:60000});
+          const nativeRef=()=>pagesPage.locator(
+            "#source-grid button[data-source-part-ref]").first().evaluate(button=>{
+              const match=/ · ([A-Z0-9_]+) №(\d+) · \((\d+),(\d+),(\d+)\)$/.exec(button.title);
+              if(!match)throw Error("E_U6_TEST_NATIVE_REF");
+              return {sourcePartRef:button.dataset.sourcePartRef,
+                tile:[Number(match[3]),Number(match[4]),Number(match[5])],
+                part:button.dataset.part,dataset:match[1],record:Number(match[2])};
+            });
+          const floor=pagesPage.locator("#source-floor"),refs=[];
+          await pagesPage.locator("#source-next").click();
+          await pagesPage.waitForFunction(()=>document.querySelector("#source-page-status")
+            .textContent.includes("показано 129–256"),null,{timeout:30000});
+          await pagesPage.locator("#source-next").click();
+          await pagesPage.waitForFunction(()=>document.querySelector("#source-page-status")
+            .textContent.includes("показано 257–384"),null,{timeout:30000});
+          refs.push(await nativeRef()); // floor 0, offset=256
+          for(let z=1;z<128;z++){
+            await floor.selectOption(String(z));
+            await pagesPage.waitForFunction(expected=>
+              document.querySelector("#source-page-status")
+                .textContent.includes("Z="+expected+" · показано 1–128"),
+              z,{timeout:30000});
+            refs.push(await nativeRef());
+          }
+          assert.equal(new Set(refs.map(x=>x.sourcePartRef)).size,128);
+          // Export an actual U2 owner bound to the same native source and
+          // extend the intended membership with 127 valid R02 occurrences.
+          await pagesPage.locator("#source-grid button[data-source-part-ref]").first().click();
+          await pagesPage.locator('#studio-workspaces [data-workspace="object"]').click();
+          await pagesPage.locator("#object-name").fill("Page budget exact 128");
+          await pagesPage.locator("#object-create").click();
+          await pagesPage.locator("#object-add").click();
+          const download=pagesPage.waitForEvent("download");
+          await pagesPage.locator("#project-save").click();
+          const exported=await download;
+          const p=JSON.parse(await readFile(await exported.path(),"utf8"));
+          assert.equal(p.objectDraft.hypotheses.length,1);
+          const originalIntents=p.objectDraft.intents;
+          assert.equal(originalIntents.length,2);
+          const history=refs.slice(0,127).map((member,i)=>({
+            ordinal:i+3,op:"assign",hypothesisId:"h1",
+            sourceKey:{...p.objectDraft.source},
+            sourcePartRef:member.sourcePartRef,outcome:"APPLIED"
+          }));
+          const project={...p,objectDraft:{...p.objectDraft,
+            hypotheses:[{...p.objectDraft.hypotheses[0],members:refs}],
+            intents:[...originalIntents,...history]}};
+          const projectPath=join(u6WorkDir,"page-budget-256.json");
+          await writeFile(projectPath,JSON.stringify(project));
+          await pagesPage.locator("#project-file").setInputFiles(projectPath);
+          await pagesPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await pagesPage.locator("#project-folder").setInputFiles(paginationRoot);
+          const countBefore=await pagesPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await pagesPage.locator("#project-verify").click();
+          await pagesPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_VERIFY_BUDGET"),null,{timeout:90000});
+          assert.equal(await pagesPage.locator("#project-apply").isDisabled(),true);
+          const requests=await pagesPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          assert.equal(requests-countBefore,256,
+            "257th native catalog-placements request must be refused before dispatch");
+          assert.match(await pagesPage.locator("#object-draft-state").textContent(),/DRAFT/);
+          console.log("STUDIO_D4_U6_A06_256_REAL_NATIVE_PAGE_CAP_PASS");
+        }finally{await pagesPage.close()}
+
+        // R1 §6 negative format and native binding checks: strict UTF-8,
+        // oversize pre-read, unrecognized receipt, forged existing-looking
+        // SourcePartRef. None may change current Source/U2/U4.
+        const negativePage=await network.context.newPage();
+        negativePage.on("dialog",dialog=>dialog.accept());
+        try{
+          await negativePage.goto(url+"/");
+          const noMutation=await negativePage.locator("#downloads button").count();
+          const invalidCases=[
+            ["oversized.json",Buffer.alloc(512*1024+1,0x20)],
+            ["invalid-utf8.json",Buffer.from([0xff,0xfe,0xfa])],
+            ["forged-receipt.json",Buffer.from(JSON.stringify({...u6JSON,nativeProof:{approved:true}}))],
+            ["polluted.json",Buffer.from(JSON.stringify({...u6JSON,__proto__:null,
+              presentation:{...u6JSON.presentation,constructor:{prototype:{x:1}}}}))]
+          ];
+          for(const [name,buffer] of invalidCases){
+            await negativePage.locator("#project-file").setInputFiles([
+              {name,mimeType:"application/json",buffer}]);
+            await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+              .textContent.startsWith("REJECTED"),null,{timeout:30000});
+            assert.equal(await negativePage.locator("#project-apply").isDisabled(),true);
+            assert.equal(await negativePage.locator("#downloads button").count(),noMutation);
+          }
+
+          const overlapped={...u6JSON,battlescapeDraft:{
+            ...u6JSON.battlescapeDraft,
+            instances:u6JSON.battlescapeDraft.instances.map((item,index)=>
+              index===1?{...item,anchor:0}:item)
+          }};
+          await negativePage.locator("#project-file").setInputFiles([{
+            name:"forged-overlap.json",mimeType:"application/json",
+            buffer:Buffer.from(JSON.stringify(overlapped))
+          }]);
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          const protoJson='{"__proto__":{"compromised":true},'+JSON.stringify(u6JSON).slice(1);
+          await negativePage.locator("#project-file").setInputFiles([{
+            name:"prototype-injection.json",mimeType:"application/json",
+            buffer:Buffer.from(protoJson)
+          }]);
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          assert.equal(await negativePage.evaluate(()=>Object.prototype.compromised),undefined);
+          const forgedPart={...u6JSON,objectDraft:{...u6JSON.objectDraft,
+            hypotheses:u6JSON.objectDraft.hypotheses.map((h,i)=>i!==0?h:{
+              ...h,members:h.members.map((m,j)=>j!==0?m:{
+                ...m,sourcePartRef:u6JSON.objectDraft.source.sourceDigest+"/999999-0"
+              })
+            })}};
+          await negativePage.locator("#project-file").setInputFiles([{
+            name:"forged-native-part.json",mimeType:"application/json",
+            buffer:Buffer.from(JSON.stringify(forgedPart))
+          }]);
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await negativePage.locator("#project-folder").setInputFiles(rootDir);
+          await negativePage.locator("#project-verify").click();
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_PART_MISMATCH"),null,{timeout:60000});
+          assert.equal(await negativePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await negativePage.locator("#downloads button").count(),noMutation);
+          console.log("STUDIO_D4_U6_R1_UTF8_OVERSIZE_UNKNOWN_PROOF_REJECTED_PASS");
+          console.log("STUDIO_D4_U6_R1_OVERLAP_PROTO_NATIVE_PART_REJECTION_PASS");
+        }finally{await negativePage.close()}
+      }finally{await rm(u6WorkDir,{recursive:true,force:true})}
+
       await workspace("mapblock").click();
       await library.selectOption("CULTA11");
       await page.waitForFunction(()=>document.querySelector("#mapblock-status")
