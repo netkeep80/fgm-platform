@@ -1539,7 +1539,8 @@ try{
             {...u6JSON.battlescapeDraft.instances[0]}
           ]}}));
         await page.locator("#project-file").setInputFiles(u6Rejected);
-        assert.match(await page.locator("#project-status").textContent(),/REJECTED/);
+        await page.waitForFunction(()=>document.querySelector("#project-status")
+          .textContent.startsWith("REJECTED"),null,{timeout:30000});
         assert.equal(await u4Count.textContent(),u6Before.u4);
         assert.equal(await page.locator("#metrics").textContent(),u6Before.metrics);
         console.log("STUDIO_D4_U6_CORRUPT_PROJECT_ZERO_MUTATION_PASS");
@@ -1551,6 +1552,8 @@ try{
         await writeStudioUfoCatalogFixture(u6Other);
         await writeFile(join(u6Other,"MAPS","CULTA10.MAP"),Buffer.from([10,10,1,...Array(400).fill(1)]));
         await page.locator("#project-file").setInputFiles(u6ProjectPath);
+        await page.waitForFunction(()=>document.querySelector("#project-status")
+          .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
         await page.locator("#project-folder").setInputFiles(u6Other);
         await page.locator("#project-verify").click();
         await page.waitForFunction(()=>/PARKED_CONFLICT|PARKED_UNBOUND/.test(
@@ -1575,7 +1578,8 @@ try{
           await projectPage.waitForFunction(()=>document.querySelectorAll(
             "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
           await projectPage.locator("#project-file").setInputFiles(u6ProjectPath);
-          assert.match(await projectPage.locator("#project-status").textContent(),/PARKED_UNBOUND/);
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
           await projectPage.locator("#project-verify").click();
           await projectPage.waitForFunction(()=>document.querySelector("#project-status")
             .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
@@ -1600,6 +1604,8 @@ try{
           await projectPage.locator("#catalog-map")
             .locator('option[value="CULTA10"]').waitFor({state:"attached"});
           await projectPage.locator("#project-file").setInputFiles(u6U4);
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
           await projectPage.locator("#project-verify").click();
           await projectPage.waitForFunction(()=>document.querySelector("#project-status")
             .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
