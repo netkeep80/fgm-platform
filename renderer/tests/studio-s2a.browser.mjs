@@ -1506,6 +1506,10 @@ try{
       await page.locator("#whole-run").click();
       await page.waitForFunction(()=>document.querySelector("#whole-status")
         .dataset.state==="COMPLETED",null,{timeout:60000});
+      // GPU draw is asynchronous after native Whole completion; wait for the
+      // final frame before comparing owner-stable states across a declined event.
+      await page.waitForFunction(()=>window.__u5WholeEvents.at(-1)?.state===
+        "WHOLE_FRAME_READY",null,{timeout:60000});
       assert.equal(await page.locator("#whole-downloads button").count(),5);
 
 
