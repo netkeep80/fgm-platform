@@ -464,6 +464,70 @@ try {
           if((await device.lost).reason!=="destroyed")throw Error("E_TEST_GPU_LOSS_REASON");
           if((await gpu.renderFrame(active)).status!=="device-lost")throw Error("E_TEST_GPU_AFTER_LOSS");
           faults.loss="device-lost";
+          // U5: a separate real GPU device is lost AFTER a settled visible frame.
+          // No subsequent renderFrame() is requested before verifying notification.
+          const passiveCanvas=document.createElement("canvas");document.body.append(passiveCanvas);
+          let passiveDevice=null;
+          const create=GPUAdapter.prototype.requestDevice;
+          GPUAdapter.prototype.requestDevice=async function(...args){
+            passiveDevice=await create.apply(this,args);return passiveDevice;
+          };
+          let passive;
+          try{
+            passive=await createRendererSessionV1({
+              canvas:passiveCanvas,preferredBackend:"webgpu",fallbackPolicy:"reject"});
+          }finally{GPUAdapter.prototype.requestDevice=create;}
+          const events=[],exceptions=[];
+          const unsub=passive.subscribeBackendEvents(e=>{events.push(e);throw Error("OBSERVER_ISOLATION")});
+          const unsubSecond=passive.subscribeBackendEvents(e=>exceptions.push(e));
+          const loadedPassive=await passive.loadScene(poison("none"));
+          const passiveView=passive.setView(view);
+          const renderedPassive=await passive.renderFrame({
+            expectedSceneRevision:loadedPassive.sceneRevision,
+            expectedViewRevision:passiveView.viewRevision,sessionEpoch:passiveView.sessionEpoch});
+          if(renderedPassive.status!=="rendered")throw Error("E_U5_PASSIVE_FRAME_NOT_RENDERED");
+          passiveDevice.destroy();
+          await passiveDevice.lost;
+          await Promise.resolve();
+          if(events.length!==1||exceptions.length!==1||events[0].state!=="device-lost"||
+             events[0].reason!=="E_SESSION_DEVICE_LOST"||
+             events[0].backendKind!=="webgpu"||
+             events[0].schema!=="fgmv-renderer-backend-event/1"||
+             events[0].sceneRevision!==loadedPassive.sceneRevision||
+             events[0].viewRevision!==passiveView.viewRevision||
+             events[0].sessionEpoch!==passiveView.sessionEpoch)
+            throw Error("E_U5_GPU_PASSIVE_SIGNAL");
+          if(passiveCanvas.getContext("2d").getImageData(0,0,1,1).data[3]!==0)
+            throw Error("E_U5_GPU_PASSIVE_CLEAR");
+          const late=[],lateSubscriber=e=>late.push(e);
+          const detachLate=passive.subscribeBackendEvents(lateSubscriber);
+          if(late.length!==1||late[0]!==events[0])throw Error("E_U5_GPU_LATE_REPLAY");
+          detachLate();detachLate();
+          passive.subscribeBackendEvents(lateSubscriber)();
+          if(late.length!==1)throw Error("E_U5_GPU_DUPLICATE");
+          unsub();unsub();unsubSecond();unsubSecond();
+          await passive.dispose();
+          if(events.length!==1||exceptions.length!==1)throw Error("E_U5_GPU_DISPOSE_NOTIFICATION");
+          passiveCanvas.remove();
+          // Deliberate disposal of an *unlost* GPU must not be reported as a fault.
+          const cleanupCanvas=document.createElement("canvas");
+          const cleanup=await createRendererSessionV1({
+            canvas:cleanupCanvas,preferredBackend:"webgpu",fallbackPolicy:"reject"});
+          const cleanupEvents=[];cleanup.subscribeBackendEvents(e=>cleanupEvents.push(e));
+          await cleanup.dispose();
+          await Promise.resolve();
+          if(cleanupEvents.length)throw Error("E_U5_GPU_CLEAN_DISPOSE");
+          const fallbackEvents=[];
+          const fallback=await createRendererSessionV1({
+            canvas:document.createElement("canvas"),
+            preferredBackend:"canvas2d-diagnostic",fallbackPolicy:"reject"});
+          fallback.subscribeBackendEvents(e=>fallbackEvents.push(e));
+          await fallback.dispose();
+          if(fallbackEvents.length)throw Error("E_U5_GPU_FALSE_FALLBACK");
+          faults.passiveLoss="one-typed-event-without-redraw";
+          faults.lateSubscriber="once";
+          faults.cleanDispose="silent";
+          faults.diagnosticFallback="silent";
         }
         await gpu.dispose();
         gpuCanvas.remove();
@@ -478,13 +542,14 @@ try {
     assert.deepEqual(report.map(x=>x.cellCount),[2,4,8]);
     assert.deepEqual(report.map(x=>x.checkedCenters),[12288,24576,49152]);
     assert.deepEqual(report[2].burst,{requests:4,readbacks:2,peak:1,mappedBytes:33177600});
-    assert.deepEqual(report[0].faults,{readback:"failed",allocation:"failed",validation:"failed",cleanup:"failed-and-recoverable",cleanupStale:"stale-preserved",loss:"device-lost"});
+    assert.deepEqual(report[0].faults,{readback:"failed",allocation:"failed",validation:"failed",cleanup:"failed-and-recoverable",cleanupStale:"stale-preserved",loss:"device-lost",passiveLoss:"one-typed-event-without-redraw",lateSubscriber:"once",cleanDispose:"silent",diagnosticFallback:"silent"});
     assert.ok(report.every(x=>x.rendered==="rendered"&&x.backend==="canvas2d-diagnostic"));
     assert.ok(report.every(x=>x.gpu==="rendered"&&x.geometryPixels>20&&x.selectedPixels>0));
     assert.deepEqual(errors,[]);
     assert.deepEqual(unknown,[]);
     console.log("RENDERER_SESSION_S3_S2B_REAL_WASM_BROWSER_PASS",report);
     console.log("RENDERER_SESSION_S3_S2C_REAL_WEBGPU_BROWSER_PASS");
+    console.log("RENDERER_SESSION_D4_U5_PASSIVE_GPU_LOSS_SUBSCRIPTION_PASS");
     console.log("RENDERER_SESSION_S3_S2D_BOUNDED_READBACK_PASS",report[2].burst);
     console.log("RENDERER_SESSION_S3_S2E_GPU_FAILURES_PASS",report[0].faults);
     await page.close();
