@@ -1645,3 +1645,472 @@ function startStudioWorkspaces() {
   render();
 }
 startStudioWorkspaces();
+
+
+
+// D4-U6: standalone local author-intent project, not a native proof or second Core.
+// Import/rebind runs in a separate Worker and NEVER calls source/whole owner resets.
+const U6_SCHEMA="fgmp-studio-project/1",U6_FILE_MAX=512*1024;
+const U6_READ_MAX=64*1024*1024,U6_PAGE_MAX=256,U6_DEADLINE_MS=90000;
+const U6_SHA=/^[0-9a-f]{64}$/;
+let u6Meta={projectId:crypto.randomUUID(),revision:0};
+let u6Project=null,u6FolderFiles=null,u6Epoch=0,u6Pending=null,u6Ready=null;
+let u6CommittedMap="";
+const u6Node=id=>$(id);
+const u6Valid=(condition,code="E_U6_SCHEMA")=>{if(!condition)throw Error(code)};
+const u6Exact=(value,keys,optional=[])=>{
+  u6Valid(value!==null&&typeof value==="object"&&!Array.isArray(value));
+  const set=new Set([...keys,...optional]);
+  u6Valid(Object.keys(value).every(key=>set.has(key))&&keys.every(key=>Object.hasOwn(value,key)));
+  return value;
+};
+const u6Str=(v,max=80,min=1)=>u6Valid(typeof v==="string"&&v.length>=min&&v.length<=max);
+const u6Int=(v,min,max=Number.MAX_SAFE_INTEGER)=>u6Valid(Number.isSafeInteger(v)&&v>=min&&v<=max);
+const u6Id=(v)=>{u6Str(v,48);u6Valid(/^[a-zA-Z0-9_-]+$/.test(v));return v;};
+const u6Digest=v=>{u6Valid(typeof v==="string"&&U6_SHA.test(v));return v;};
+const u6Part=(v,source)=>{
+  u6Exact(v,["sourcePartRef","tile","part","dataset","record"]);
+  u6Valid(typeof v.sourcePartRef==="string"&&
+    new RegExp("^"+source.sourceDigest+"/[0-9]+-[0-3]$").test(v.sourcePartRef));
+  u6Valid(Array.isArray(v.tile)&&v.tile.length===3);
+  for(const n of v.tile)u6Int(n,0,254);
+  u6Valid(["floor","west_wall","north_wall","object"].includes(v.part));
+  u6Id(v.dataset);u6Int(v.record,0,65535);
+  return {sourcePartRef:v.sourcePartRef,tile:v.tile.slice(),part:v.part,
+    dataset:v.dataset,record:v.record};
+};
+const u6Source=v=>{u6Exact(v,["mapId","sourceDigest"]);u6Id(v.mapId);u6Digest(v.sourceDigest);return {...v};};
+function u6Object(v){
+  if(v===null)return null;
+  u6Exact(v,["source","activeId","nextId","hypotheses","intents"]);
+  const source=u6Source(v.source);
+  u6Valid(Array.isArray(v.hypotheses)&&v.hypotheses.length<=U2_MAX_HYPOTHESES);
+  u6Valid(Array.isArray(v.intents)&&v.intents.length<=U2_MAX_INTENTS);
+  u6Valid(typeof v.activeId==="string");
+  const ids=new Set(),members=new Set(),out=[];
+  let maxId=0;
+  for(const h of v.hypotheses){
+    u6Exact(h,["hypothesisId","label","members"]);
+    u6Valid(typeof h.hypothesisId==="string"&&/^h[1-9][0-9]*$/.test(h.hypothesisId));
+    const id=Number(h.hypothesisId.slice(1));u6Int(id,1);
+    u6Valid(!ids.has(h.hypothesisId));ids.add(h.hypothesisId);maxId=Math.max(maxId,id);
+    u6Str(h.label,80);u6Valid(Array.isArray(h.members));
+    const bound=h.members.map(m=>{
+      const part=u6Part(m,source);
+      u6Valid(!members.has(part.sourcePartRef));members.add(part.sourcePartRef);
+      return part;
+    });
+    out.push({hypothesisId:h.hypothesisId,label:h.label,members:bound});
+  }
+  u6Valid(members.size<=U2_MAX_MEMBERS);
+  u6Valid(v.activeId===""||ids.has(v.activeId));
+  u6Int(v.nextId,maxId+1);
+  const intents=v.intents.map((e,i)=>{
+    u6Exact(e,["ordinal","op","hypothesisId","sourceKey","outcome"],
+      ["sourcePartRef","code"]);
+    u6Valid(e.ordinal===i+1&&["create","rename","delete","assign","unassign"].includes(e.op));
+    u6Valid(typeof e.hypothesisId==="string"&&
+      (e.hypothesisId===""||/^h[1-9][0-9]*$/.test(e.hypothesisId)));
+    const key=u6Source(e.sourceKey);
+    u6Valid(key.mapId===source.mapId&&key.sourceDigest===source.sourceDigest);
+    u6Valid(["APPLIED","REJECTED"].includes(e.outcome));
+    if(e.sourcePartRef!==undefined){
+      u6Valid(typeof e.sourcePartRef==="string"&&
+        (e.sourcePartRef===""||new RegExp("^"+source.sourceDigest+"/[0-9]+-[0-3]$").test(e.sourcePartRef)));
+    }
+    if(e.code!==undefined)u6Valid(typeof e.code==="string"&&/^E_U2_[A-Z_]+$/.test(e.code));
+    const safe={ordinal:e.ordinal,op:e.op,hypothesisId:e.hypothesisId,sourceKey:key,outcome:e.outcome};
+    if(e.sourcePartRef!==undefined)safe.sourcePartRef=e.sourcePartRef;
+    if(e.code!==undefined)safe.code=e.code;
+    return safe;
+  });
+  return {source,activeId:v.activeId,nextId:v.nextId,hypotheses:out,intents};
+}
+function u6Layout(v){
+  if(v===null)return null;
+  u6Exact(v,["grid","sourceDefinitions","instances","selectedSlot","nextSequence"]);
+  u6Exact(v.grid,["widthSlots","heightSlots","slotCells"]);
+  u6Valid(v.grid.widthSlots===5&&v.grid.heightSlots===5&&v.grid.slotCells===10);
+  u6Valid(Array.isArray(v.sourceDefinitions)&&v.sourceDefinitions.length<=25&&
+    Array.isArray(v.instances)&&v.instances.length<=25);
+  const definitions=new Map(),instances=[],slots=Array(25).fill(null);
+  for(const d of v.sourceDefinitions){
+    u6Exact(d,["mapId","sourceDigest","dimensions","datasets"]);
+    u6Id(d.mapId);u6Digest(d.sourceDigest);
+    u6Valid(Array.isArray(d.dimensions)&&d.dimensions.length===3&&
+      ((d.dimensions[0]===10&&d.dimensions[1]===10)||
+       (d.dimensions[0]===20&&d.dimensions[1]===20)));
+    u6Int(d.dimensions[2],1,255);
+    u6Valid(Array.isArray(d.datasets)&&d.datasets.length>=1&&d.datasets.length<=16);
+    d.datasets.forEach(u6Id);
+    u6Valid(new Set(d.datasets).size===d.datasets.length&&!definitions.has(d.mapId));
+    definitions.set(d.mapId,{mapId:d.mapId,sourceDigest:d.sourceDigest,
+      dimensions:[...d.dimensions],datasets:[...d.datasets],slots:d.dimensions[0]/10});
+  }
+  const ids=new Set();let maxSequence=0;
+  for(const item of v.instances){
+    u6Exact(item,["id","mapId","sourceDigest","anchor","slots"]);
+    u6Valid(typeof item.id==="string"&&/^mbi-[1-9][0-9]*$/.test(item.id));
+    const id=Number(item.id.slice(4));u6Int(id,1);
+    maxSequence=Math.max(maxSequence,id);
+    u6Valid(!ids.has(item.id));ids.add(item.id);
+    u6Id(item.mapId);u6Digest(item.sourceDigest);
+    const def=definitions.get(item.mapId);
+    u6Valid(def&&def.sourceDigest===item.sourceDigest&&def.slots===item.slots);
+    u6Int(item.anchor,0,24);
+    const cells=u4Footprint(def,item.anchor);
+    for(const cell of cells){u6Valid(slots[cell]===null,"E_U6_OVERLAP");slots[cell]=item.id;}
+    instances.push({id:item.id,mapId:item.mapId,sourceDigest:item.sourceDigest,
+      anchor:item.anchor,slots:item.slots});
+  }
+  u6Valid([...definitions.keys()].every(key=>instances.some(item=>item.mapId===key)));
+  u6Int(v.selectedSlot,0,24);u6Int(v.nextSequence,maxSequence);
+  return {grid:{widthSlots:5,heightSlots:5,slotCells:10},
+    sourceDefinitions:[...definitions.values()].map(({mapId,sourceDigest,dimensions,datasets})=>
+      ({mapId,sourceDigest,dimensions,datasets})),
+    instances,selectedSlot:v.selectedSlot,nextSequence:v.nextSequence};
+}
+function u6Parse(data){
+  u6Exact(data,["schema","projectId","revision","label","objectDraft","battlescapeDraft","presentation"]);
+  u6Valid(data.schema===U6_SCHEMA,"E_U6_VERSION");
+  u6Str(data.projectId,80);u6Valid(/^[a-zA-Z0-9_-]+$/.test(data.projectId));
+  u6Int(data.revision,1,1000000000);u6Str(data.label,80);
+  u6Exact(data.presentation,["workspace","viewport"]);
+  u6Valid(["source","object","mapblock","map","world"].includes(data.presentation.workspace)&&
+    ["source","whole","compare"].includes(data.presentation.viewport));
+  return {schema:U6_SCHEMA,projectId:data.projectId,revision:data.revision,label:data.label,
+    objectDraft:u6Object(data.objectDraft),battlescapeDraft:u6Layout(data.battlescapeDraft),
+    presentation:{workspace:data.presentation.workspace,viewport:data.presentation.viewport}};
+}
+function u6Capture(){
+  return u6Parse({schema:U6_SCHEMA,projectId:u6Meta.projectId,
+    revision:Math.max(1,u6Meta.revision+1),label:u6Node("project-label").value.trim()||"Новый проект",
+    objectDraft:objectDraft?{source:{...objectDraft.source},activeId:objectDraft.activeId,
+      nextId:objectDraft.nextId,hypotheses:objectDraft.hypotheses.map(h=>({
+        hypothesisId:h.hypothesisId,label:h.label,members:h.members.map(m=>({...m,tile:[...m.tile]}))
+      })),intents:objectDraft.intents.map(e=>({...e,sourceKey:{...e.sourceKey}}))}:null,
+    battlescapeDraft:u4Instances.size?{grid:{widthSlots:5,heightSlots:5,slotCells:10},
+      sourceDefinitions:[...u4Definitions.values()].map(d=>({
+        mapId:d.mapId,sourceDigest:d.sourceDigest,dimensions:[...d.dimensions],datasets:[...d.datasets]
+      })),instances:[...u4Instances.values()].map(x=>({...x})),
+      selectedSlot:u4SelectedSlot,nextSequence:u4Sequence}:null,
+    presentation:{workspace:document.body.dataset.workspace,
+      viewport:document.getElementById("u5-view-choice").value}});
+}
+function u6Status(state,message){
+  const node=u6Node("project-status");
+  node.dataset.state=state==="PARKED_CONFLICT"?"CONFLICT":state==="APPLY_AVAILABLE"?"READY":
+    state==="REJECTED"?"ERROR":"PARKED";
+  node.textContent=state+" · "+message;
+  u6Node("project-verify").disabled=!u6Project||!!u6Pending;
+  u6Node("project-apply").disabled=!u6Ready;
+}
+function u6Preview(){
+  const p=u6Project;
+  u6Node("project-preview").textContent=p
+    ? p.label+" · проект "+p.projectId+" · revision "+p.revision+
+      "\nU2: "+(p.objectDraft?.hypotheses.length??0)+" гипотез, "+
+      (p.objectDraft?.hypotheses.reduce((n,h)=>n+h.members.length,0)??0)+
+      " частей\nU4: "+(p.battlescapeDraft?.instances.length??0)+
+      " экземпляров, "+(p.battlescapeDraft?.sourceDefinitions.length??0)+
+      " исходных MAP\nИсходные файлы и результаты реконструкции НЕ сохранены."
+    : "Файл проекта ещё не выбран.";
+}
+function u6Retire(){
+  ++u6Epoch;u6Ready=null;
+  if(u6Pending){u6Pending.controller.abort();u6Pending.worker.terminate();
+    clearTimeout(u6Pending.timeout);u6Pending=null;}
+  u6Node("project-apply").disabled=true;
+}
+function u6Download(name,body){
+  const link=document.createElement("a"),url=URL.createObjectURL(
+    new Blob([body],{type:"application/json"}));
+  link.href=url;link.download=name;link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+u6Node("project-save").addEventListener("click",()=>{
+  try{
+    const value=u6Capture(),bytes=JSON.stringify(value);
+    u6Valid(new TextEncoder().encode(bytes).length<=U6_FILE_MAX,"E_U6_LIMIT");
+    u6Meta={projectId:value.projectId,revision:value.revision};
+    u6Download("fgm-studio-project.json",bytes);
+    u6Status("SAVED_LOCAL","Сохранены только черновики U2/U4; R05/R06/GPU не включены.");
+  }catch(error){u6Status("REJECTED",error.message);}
+});
+u6Node("project-file").addEventListener("change",async event=>{
+  const input=event.currentTarget,chosen=input.files?.[0];
+  u6Retire();u6Project=null;u6FolderFiles=null;u6Preview();
+  const token=u6Epoch;
+  input.value="";
+  if(!chosen){u6Status("NO_PROJECT","Файл не выбран.");return;}
+  try{
+    u6Valid(chosen.size>0&&chosen.size<=U6_FILE_MAX,"E_U6_LIMIT");
+    const bytes=new Uint8Array(await chosen.arrayBuffer());
+    if(token!==u6Epoch)return;
+    u6Valid(bytes.length<=U6_FILE_MAX,"E_U6_LIMIT");
+    const decoded=new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+    const project=u6Parse(JSON.parse(decoded));
+    if(token!==u6Epoch)return;
+    u6Project=project;
+    u6Node("project-label").value=project.label;
+    u6Preview();u6Status("PARKED_UNBOUND","Загрузите исходный Source, затем проверьте проект через R02.");
+  }catch(error){if(token===u6Epoch)u6Status("REJECTED",/^E_U6_/.test(error.message)?
+    error.message:"E_U6_SCHEMA");}
+});
+u6Node("project-folder").addEventListener("change",event=>{
+  u6Retire();
+  const files=[...event.currentTarget.files];
+  event.currentTarget.value="";
+  u6FolderFiles=files.length?files:null;
+  u6Status(u6Project?"PARKED_UNBOUND":"NO_PROJECT",
+    files.length?"Отдельная папка выбрана; текущее Source не переключено.":"Отдельная папка не выбрана.");
+});
+u6Node("project-cancel").addEventListener("click",()=>{
+  u6Retire();u6Project=null;u6FolderFiles=null;u6Preview();
+  u6Status("NO_PROJECT","Импорт отменён. Текущие U2/U4 и Source/Whole не изменены.");
+});
+// Whole is also a *target* listener for these same events. A cancelled normal
+// source switch must be intercepted in capture phase BEFORE either owner runs.
+for(const id of ["directory","local-files","catalog-map","demo"]){
+  const control=u6Node(id),eventType=id==="demo"?"click":"change";
+  document.addEventListener(eventType,event=>{
+    if(event.target!==control)return;
+    const draftDirty=!!objectDraft||u4Instances.size>0;
+    const hasWork=draftDirty||!!result||
+      u6Node("whole-status").dataset.state==="COMPLETED";
+    if(hasWork&&!window.confirm("Смена обычного источника может сбросить U2/U4, R05 и Whole R06. Несохранённое лучше экспортировать. Продолжить?")){
+      event.preventDefault();event.stopImmediatePropagation();
+      if(id==="catalog-map")control.value=u6CommittedMap;
+      if(id==="directory"||id==="local-files")control.value="";
+      return;
+    }
+    u6Retire();
+    if(id==="catalog-map")u6CommittedMap=control.value;
+    else u6CommittedMap="";
+    if(u6Project)u6Status("PARKED_UNBOUND",
+      "Обычный Source изменён; требуется новая проверка привязки проекта.");
+  },true);
+}
+async function u6NativeVerify(project,stagedFiles,token){
+  const controller=new AbortController(),worker=new Worker("./engine/worker.mjs",{type:"module"});
+  let budgetBytes=0,budgetPages=0,expired=false;
+  const timeout=setTimeout(()=>{expired=true;controller.abort();worker.terminate();},
+    U6_DEADLINE_MS);
+  u6Pending={worker,controller,timeout,token};
+  const call=connection(worker,controller.signal);
+  const check=()=>{
+    if(expired)throw Error("E_U6_VERIFY_TIMEOUT");
+    if(token!==u6Epoch||controller.signal.aborted)throw Error("E_U6_STALE");
+  };
+  const read=async file=>{
+    u6Valid(file.size>0&&file.size<=MAX,"E_U6_VERIFY_BUDGET");
+    budgetBytes+=file.size;
+    u6Valid(budgetBytes<=U6_READ_MAX,"E_U6_VERIFY_BUDGET");
+    const bytes=new Uint8Array(await file.arrayBuffer());check();
+    u6Valid(bytes.length===file.size,"E_U6_VERIFY_BUDGET");
+    return bytes;
+  };
+  const page=async (mapId,digest,floor,offset)=>{
+    check();u6Valid(++budgetPages<=U6_PAGE_MAX,"E_U6_VERIFY_BUDGET");
+    const {catalog:answer}=await call({
+      action:"catalog-placements",map:mapId,floor,offset,limit:128,sourceDigest:digest??""
+    });check();
+    return verifyPlacementPage(answer,mapId,digest,floor,offset);
+  };
+  const expected=new Map();
+  for(const d of project.battlescapeDraft?.sourceDefinitions??[])
+    expected.set(d.mapId,{definition:d,members:[]});
+  const od=project.objectDraft;
+  if(od){
+    const entry=expected.get(od.source.mapId)??{definition:null,members:[]};
+    entry.members.push(...od.hypotheses.flatMap(h=>h.members));
+    expected.set(od.source.mapId,entry);
+  }
+  u6Valid(expected.size<=26,"E_U6_VERIFY_BUDGET");
+  const pinnedCatalog=catalog,pinnedMap=inspectedMap,gen=generation,
+    u4epoch=u4Epoch,u4request=u4Request;
+  u6Valid(sourceMode==="catalog"&&pinnedCatalog&&u4Catalog===pinnedCatalog,
+    "E_U6_SOURCE_UNBOUND");
+  if(od)u6Valid(pinnedMap&&pinnedMap.mapId===od.source.mapId&&
+    pinnedMap.sourceDigest===od.source.sourceDigest,"E_U6_SOURCE_MISMATCH");
+  const loadRoot=async files=>{
+    check();
+    const spec=indexGameFolder(files);
+    const {catalog:result}=await call(spec.request);check();
+    u6Valid(result?.schema==="fgmr-ufo-library/1"&&Array.isArray(result.maps),
+      "E_U6_CATALOG");
+    return {index:spec.index,result,maps:new Map(result.maps.map(m=>[m.id,m]))};
+  };
+  const verifyRoot=async (root,label)=>{
+    const output=new Map();
+    for(const [id,expect] of [...expected.entries()].sort((a,b)=>a[0].localeCompare(b[0]))){
+      check();
+      const map=root.maps.get(id);
+      u6Valid(map?.datasets&&map.datasets.length&&!map.missing.length,
+        "E_U6_SOURCE_MISSING");
+      const spec=expect.definition;
+      if(spec)u6Valid(JSON.stringify(map.datasets)===JSON.stringify(spec.datasets),
+        "E_U6_DEFINITION_MISMATCH");
+      const datasets=map.datasets.map((dataset,i)=>({id:dataset,file:"ds"+i}));
+      const inputFiles=new Map([["map",resolveFile(root.index,map.path)],
+        ...datasets.map(({id:dataset,file})=>[file,
+          resolveFile(root.index,root.result.terrain[dataset].mcd)])]);
+      checkInputSizes(inputFiles);
+      await call({action:"clear"});check();
+      for(const [filename,input] of inputFiles){
+        const bytes=await read(input);
+        for(let offset=0;offset<bytes.length;offset+=CHUNK){
+          await call({action:"append",file:filename,offset,
+            hex:hex(bytes.subarray(offset,offset+CHUNK))});
+          check();
+        }
+      }
+      const {catalog:report}=await call({action:"catalog-map",map:id});check();
+      u6Valid(report?.schema==="fgmr-ufo-map-elements/1"&&report.map===id&&
+        Array.isArray(report.dimensions)&&report.dimensions.length===3,
+        "E_U6_NATIVE_SCHEMA");
+      const initial=await page(id,null,0,0),digest=initial.sourceDigest;
+      const targetDigest=spec?.sourceDigest??od?.source.sourceDigest;
+      u6Valid(digest===targetDigest,"E_U6_SOURCE_MISMATCH");
+      if(spec){
+        u6Valid(JSON.stringify(report.dimensions)===JSON.stringify(spec.dimensions)&&
+          initial.total>0,"E_U6_DEFINITION_MISMATCH");
+        u3CheckPage(initial,{mapId:id,sourceDigest:digest,
+          dimensions:report.dimensions},0,0,null,-1);
+      }
+      const byFloor=new Map();
+      for(const part of expect.members){
+        const floor=part.tile[2];
+        if(!byFloor.has(floor))byFloor.set(floor,new Map());
+        byFloor.get(floor).set(part.sourcePartRef,part);
+      }
+      for(const [floor,wanted] of byFloor){
+        u6Valid(floor<report.dimensions[2],"E_U6_PART_MISMATCH");
+        let offset=0,first=true;
+        while(wanted.size){
+          const current=first&&floor===0?initial:await page(id,digest,floor,offset);
+          first=false;
+          for(const entry of current.placements){
+            const target=wanted.get(entry.sourcePartRef);
+            if(!target)continue;
+            u6Valid(entry.tile.length===3&&
+              entry.tile.every((x,i)=>x===target.tile[i])&&
+              entry.part===target.part&&entry.dataset===target.dataset&&
+              entry.record===target.record,"E_U6_PART_MISMATCH");
+            wanted.delete(entry.sourcePartRef);
+          }
+          if(!wanted.size)break;
+          if(current.nextOffset===null)throw Error("E_U6_PART_MISMATCH");
+          u6Valid(current.nextOffset>offset,"E_U6_NATIVE_SCHEMA");
+          offset=current.nextOffset;
+        }
+      }
+      output.set(id,{mapId:id,path:map.path,sourceDigest:digest,
+        dimensions:report.dimensions,datasets:[...map.datasets],slots:report.dimensions[0]/10,
+        signature:JSON.stringify([id,digest,report.dimensions,map.datasets])});
+    }
+    return output;
+  };
+  try{
+    const localRoot=stagedFiles?await loadRoot(stagedFiles):pinnedCatalog;
+    const staged=await verifyRoot(localRoot,"project");
+    const live=localRoot===pinnedCatalog?staged:await verifyRoot(pinnedCatalog,"active");
+    for(const [key,entry] of staged)
+      u6Valid(entry.signature===live.get(key)?.signature,"E_U6_SOURCE_MISMATCH");
+    check();
+    u6Valid(catalog===pinnedCatalog&&sourceMode==="catalog"&&generation===gen&&
+      inspectedMap===pinnedMap&&u4Epoch===u4epoch&&u4Request===u4request&&
+      !u4Pending,"E_U6_STALE");
+    return {token,project,catalog:pinnedCatalog,inspectedMap:pinnedMap,gen,
+      u4epoch,u4request,live,staged,budgetBytes,budgetPages};
+  }finally{
+    clearTimeout(timeout);controller.abort();worker.terminate();
+    if(u6Pending?.token===token)u6Pending=null;
+  }
+}
+u6Node("project-verify").addEventListener("click",async()=>{
+  if(!u6Project)return;
+  u6Retire();const token=u6Epoch,project=u6Project,folder=u6FolderFiles;
+  u6Status("VERIFYING","Настоящий нативный R02; ни один живой владелец не изменяется.");
+  try{
+    const candidate=await u6NativeVerify(project,folder,token);
+    if(token!==u6Epoch)return;
+    u6Ready=candidate;
+    u6Status("APPLY_AVAILABLE","R02 сверил действующий Source; "+
+      candidate.budgetBytes+" байт и "+candidate.budgetPages+
+      " страниц. Подтвердите замену черновиков.");
+  }catch(error){
+    if(token!==u6Epoch)return;
+    u6Ready=null;
+    const code=expiredFromError(error);
+    u6Status(code==="E_U6_SOURCE_UNBOUND"?"PARKED_UNBOUND":"PARKED_CONFLICT",
+      code+" · текущие Source/U2/U4/Whole не изменены.");
+  }finally{if(token===u6Epoch)u6Node("project-verify").disabled=false;}
+});
+function expiredFromError(error){
+  return /^E_[A-Z0-9_]+$/.test(error?.message??"")?error.message:"E_U6_NATIVE";
+}
+function u6IsReady(q){
+  if(!q||q.token!==u6Epoch||u6Project!==q.project||u6Pending||
+    catalog!==q.catalog||sourceMode!=="catalog"||u4Catalog!==catalog||
+    generation!==q.gen||inspectedMap!==q.inspectedMap||
+    u4Epoch!==q.u4epoch||u4Request!==q.u4request||u4Pending)return false;
+  const od=q.project.objectDraft;
+  return !od||Boolean(u2Same(u2Key(),od.source));
+}
+u6Node("project-apply").addEventListener("click",()=>{
+  const candidate=u6Ready;
+  if(!u6IsReady(candidate)){
+    u6Ready=null;u6Status("PARKED_CONFLICT","Source или Worker изменился; нужна повторная проверка.");
+    return;
+  }
+  if(!window.confirm("Заменить оба текущих черновика U2 и U4 содержимым локального проекта? Отмена сохраняет текущую работу."))return;
+  if(!u6IsReady(candidate)){
+    u6Ready=null;u6Status("PARKED_CONFLICT","Source изменился во время подтверждения.");
+    return;
+  }
+  const p=candidate.project,nextEpoch=u4Epoch+1;
+  // All validation and construction happens BEFORE the atomic assignment group.
+  let nextDraft=null;
+  if(p.objectDraft){
+    const o=p.objectDraft;
+    nextDraft={source:{...o.source},hypotheses:o.hypotheses.map(h=>({
+      hypothesisId:h.hypothesisId,label:h.label,members:h.members.map(m=>({...m,tile:[...m.tile]}))
+    })),intents:o.intents.map(e=>({...e,sourceKey:{...e.sourceKey}})),
+      activeId:o.activeId,nextId:o.nextId,stale:false};
+  }
+  const layout=p.battlescapeDraft,definitions=new Map(),instances=new Map(),
+    slots=Array(25).fill(null);
+  if(layout){
+    for(const def of layout.sourceDefinitions){
+      const verified=candidate.live.get(def.mapId);
+      if(!verified||verified.sourceDigest!==def.sourceDigest){
+        u6Ready=null;u6Status("PARKED_CONFLICT","Нативное определение изменилось.");return;
+      }
+      definitions.set(def.mapId,Object.freeze({mapId:def.mapId,path:verified.path,
+        sourceDigest:def.sourceDigest,dimensions:Object.freeze([...def.dimensions]),
+        datasets:Object.freeze([...def.datasets]),slots:def.dimensions[0]/10,session:nextEpoch}));
+    }
+    for(const item of layout.instances){
+      const snapshot=Object.freeze({...item});
+      instances.set(item.id,snapshot);
+      for(const index of u4Footprint(definitions.get(item.mapId),item.anchor)){
+        if(slots[index]){u6Ready=null;u6Status("PARKED_CONFLICT","E_U6_OVERLAP");return;}
+        slots[index]=item.id;
+      }
+    }
+  }
+  // Exactly one synchronous owner commit; NO await, Worker or source transition.
+  ++u4Request;u4Epoch=nextEpoch;u4Candidate=null;
+  objectDraft=nextDraft;objectLastError="";
+  u4Catalog=catalog;u4Definitions=definitions;u4Instances=instances;
+  u4Slots=slots;u4SelectedSlot=layout?.selectedSlot??0;u4Sequence=layout?.nextSequence??0;
+  u6Meta={projectId:p.projectId,revision:p.revision};
+  u6Ready=null;
+  renderObjectDraft();u4Render();u4Status("DRAFT_RESTORED · R02 источник проверен; не Stage A.");
+  u6Status("ACTIVE_DRAFT","Черновики U2/U4 восстановлены, Source/R05/R06/Whole не изменены.");
+  const tab=document.querySelector('#studio-workspaces [data-workspace="'+p.presentation.workspace+'"]');
+  tab?.click();
+  u6Node("u5-view-choice").value=p.presentation.viewport;
+  u6Node("u5-view-choice").dispatchEvent(new Event("change",{bubbles:true}));
+});
