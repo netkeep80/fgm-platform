@@ -106,6 +106,16 @@ export interface RendererCapabilitiesV1 {
   readonly supportsWholeObject: boolean;
   readonly supportsDeviceRecovery: boolean;
 }
+/** One terminal backend loss fact; not a frame receipt or source provenance. */
+export interface RendererBackendEventV1 {
+  readonly schema: "fgmv-renderer-backend-event/1";
+  readonly state: "device-lost";
+  readonly reason: "E_SESSION_DEVICE_LOST";
+  readonly backendKind: "webgpu";
+  readonly sessionEpoch: number;
+  readonly sceneRevision: string | null;
+  readonly viewRevision: string | null;
+}
 export interface RendererSessionRequest {
   readonly preferredBackend: RendererBackendKind;
   readonly fallbackPolicy: "reject" | "allow-diagnostic";
@@ -137,6 +147,9 @@ export type FrameOutcomeV1 =
 export interface RendererSessionV1 {
   readonly schema: "fgmv-renderer-session/1";
   readonly capabilities: RendererCapabilitiesV1;
+  /** Terminal WebGPU device-loss notification; subscribe after loss replays it once.
+   * The returned function is an idempotent unsubscribe; no GPUDevice is exposed. */
+  subscribeBackendEvents(listener: (event: Readonly<RendererBackendEventV1>) => void): () => void;
   /**
    * Запрещает публикацию кадра до проверки package bytes, digest и
    * ссылочной целостности экземпляров. Входы должны быть скопированы

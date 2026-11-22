@@ -5,7 +5,7 @@
  */
 import type {
   CreateRendererSessionV1, RendererSessionV1, RendererSessionRequest,
-  RendererCapabilitiesV1, SceneLoadRequest, SceneSnapshotV1,
+  RendererCapabilitiesV1, RendererBackendEventV1, SceneLoadRequest, SceneSnapshotV1,
   ViewStateV1, FrameContextV1, FrameOutcomeV1, SceneReceipt, ViewReceipt,
   DerivedGeometryV1, Sha256Hex, WorldXYZ
 } from "../contracts/renderer-session-v1";
@@ -275,7 +275,7 @@ type GpuFrame =
   | {pixels:Uint8ClampedArray<ArrayBuffer>}
   | {reason:GpuFrameFailure};
 
-async function createWebGpu(canvas:RendererSessionRequest["canvas"]) {
+async function createWebGpu(canvas:RendererSessionRequest["canvas"], notifyLoss:()=>void) {
   const api=globalThis.navigator?.gpu;
   if (!api) return null;
   let device:GPUDevice|undefined;
@@ -303,7 +303,7 @@ async function createWebGpu(canvas:RendererSessionRequest["canvas"]) {
     const markLost=()=>{
       if (lost) return;
       lost=true;
-      if (!disposed) output.clearRect(0,0,canvas.width,canvas.height);
+      if (!disposed) {output.clearRect(0,0,canvas.width,canvas.height);notifyLoss();}
     };
     void gpu.lost.then(markLost);
     return {
@@ -390,7 +390,10 @@ export const createRendererSessionV1: CreateRendererSessionV1 = async (request: 
     fail("E_SESSION_BACKEND_UNSUPPORTED");
   if(request.fallbackPolicy !== "reject" && request.fallbackPolicy !== "allow-diagnostic")
     fail("E_SESSION_FALLBACK_POLICY");
-  const gpu=request.preferredBackend==="webgpu" ? await createWebGpu(request.canvas) : null;
+  // gpu.lost may settle before the asynchronous factory has returned.
+  // The final session latches that fact after initialization.
+  let reportLoss:()=>void=()=>{};
+  const gpu=request.preferredBackend==="webgpu" ? await createWebGpu(request.canvas,()=>reportLoss()) : null;
   if(request.preferredBackend==="webgpu" && !gpu && request.fallbackPolicy==="reject")
     fail("E_SESSION_BACKEND_UNSUPPORTED");
   const output=gpu?.output ?? request.canvas.getContext("2d") as
@@ -417,7 +420,34 @@ export const createRendererSessionV1: CreateRendererSessionV1 = async (request: 
   const clearPublished=()=>output?.clearRect(0,0,request.canvas.width,request.canvas.height);
   const current = (ctx: FrameContextV1) => !!loaded && !!view && ctx.sessionEpoch===epoch
     && ctx.expectedSceneRevision===loaded.snapshot.revision && ctx.expectedViewRevision===view.revision;
+  const listeners=new Set<(event:Readonly<RendererBackendEventV1>)=>void>();
+  const delivered=new WeakSet<(event:Readonly<RendererBackendEventV1>)=>void>();
+  let backendLoss:RendererBackendEventV1|null=null;
+  const notifyOne=(listener:(event:Readonly<RendererBackendEventV1>)=>void,event:RendererBackendEventV1)=>{
+    if(delivered.has(listener))return;
+    delivered.add(listener);
+    try{listener(event)}catch{/* An observer may not break renderer loss handling. */}
+  };
+  const publishLoss=()=>{
+    if(closed||backendLoss||!gpu)return;
+    backendLoss=Object.freeze({schema:"fgmv-renderer-backend-event/1" as const,
+      state:"device-lost" as const,reason:"E_SESSION_DEVICE_LOST" as const,
+      backendKind:"webgpu" as const,sessionEpoch:epoch,
+      sceneRevision:loaded?.snapshot.revision??null,viewRevision:view?.revision??null});
+    for(const listener of listeners)notifyOne(listener,backendLoss);
+    listeners.clear();
+  };
+  reportLoss=publishLoss;
+  if(gpu?.lost)publishLoss();
   const session:RendererSessionV1={
+    subscribeBackendEvents(listener){
+      ensureOpen();
+      if(typeof listener!=="function")fail("E_SESSION_BACKEND_LISTENER");
+      if(backendLoss)notifyOne(listener,backendLoss);
+      else listeners.add(listener);
+      let active=true;
+      return ()=>{if(!active)return;active=false;listeners.delete(listener)};
+    },
     schema:"fgmv-renderer-session/1",capabilities:gpu ? Object.freeze({
       ...CAPABILITIES, backendKind:"webgpu",backendVersion:"s3-s2e/1"
     }) : CAPABILITIES,
@@ -500,7 +530,7 @@ export const createRendererSessionV1: CreateRendererSessionV1 = async (request: 
     },
     async recoverDevice(){ensureOpen();fail("E_SESSION_BACKEND_UNSUPPORTED")},
     async dispose(){if(closed)return;closed=true;++epoch;loaded=null;view=null;
-      clearPublished();wakeGpuWaiter();gpu?.dispose()}
+      clearPublished();wakeGpuWaiter();listeners.clear();gpu?.dispose()}
   };
   return session;
 };
