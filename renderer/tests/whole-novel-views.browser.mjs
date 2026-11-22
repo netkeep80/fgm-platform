@@ -57,6 +57,10 @@ const upload=async()=>{
 const run=async()=>{await page.locator('#whole-run').click();await page.waitForFunction(()=>['COMPLETED','ERROR'].includes(document.querySelector('#whole-status').dataset.state),null,{timeout:90000});};
 try{
   await page.addInitScript(()=>{
+    window.__u5WholeEvidence=[];
+    document.addEventListener("fgm-studio:whole-evidence",e=>{
+      window.__u5WholeEvidence.push(e.detail);
+    });
     const original=GPUBuffer.prototype.mapAsync;
     window.__gateView=false;window.__viewGated=false;
     GPUBuffer.prototype.mapAsync=async function(...args){
@@ -161,9 +165,19 @@ try{
   assert.equal(sha(Buffer.from(await previewPixels())),currentPreview,'canceled factory cleared the new preview');
   assert.equal(await page.locator('#whole-view-receipt').textContent(),currentReceipt);
   assert.equal(await page.locator('#whole-views canvas').count(),4);
-  // Current asynchronous device loss must still clear the actual displayed preview.
+  // U5: after a settled frame, passive GPU loss must revoke Whole frame readiness.
+  await page.waitForFunction(()=>window.__u5WholeEvidence.some(e=>e.state==="WHOLE_FRAME_READY"),null,{timeout:60000});
+  const metricsBeforeLoss=await page.locator("#whole-metrics").textContent();
+  const readyBeforeLoss=await page.evaluate(()=>window.__u5WholeEvidence.filter(e=>e.state==="WHOLE_FRAME_READY").length);
   await page.evaluate(async()=>{window.__replacementDevice.destroy();await window.__replacementDevice.lost});
+  await page.waitForFunction(()=>window.__u5WholeEvidence.some(e=>e.state==="WHOLE_FRAME_UNAVAILABLE"),null,{timeout:30000});
+  assert.equal(await page.locator("#whole-metrics").textContent(),metricsBeforeLoss);
+  assert.match(await page.locator("#whole-view-status").textContent(),/E_SESSION_DEVICE_LOST/);
+  assert.match(await page.locator("#whole-status").textContent(),/^COMPLETED/);
+  assert.equal(await page.evaluate(()=>window.__u5WholeEvidence.filter(e=>e.state==="WHOLE_FRAME_READY").length),readyBeforeLoss,
+    "GPU loss must not implicitly request another frame");
   assert.ok((await previewPixels()).every((n,i)=>i%4!==3||n===0),'lost current device retained visible pixels');
+  console.log('WHOLE_D4_U5_PASSIVE_DEVICE_LOSS_OWNER_PASS');
   // A device-less client keeps its validated FGM/OBJ/C05 and gets no asserted view proof.
   await page.evaluate(()=>navigator.gpu.requestAdapter=async()=>null);
   await run();assert.match(await page.locator('#whole-status').textContent(),/^COMPLETED/);

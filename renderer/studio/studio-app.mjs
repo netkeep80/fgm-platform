@@ -42,6 +42,18 @@ function updateRunButton() {
      type?.tile[2]===placementPage.floor));
   $("run").disabled=Boolean(activeWorker) || !bound;
 }
+// Owner-issued Source evidence: a native-verified R05 is never inferred from an OBJ frame.
+function u5SourceEvidence(){
+  const state=observation&&modeControl.value!=="mesh"?"R05_READY":mesh?"OBJ_DIAGNOSTIC":"NO_VERIFIED_VIEW";
+  const proof=result?JSON.parse(result.proof):null;
+  return {state,generation,sourcePartRef:result?selectedPlacement?.sourcePartRef??null:null,
+    sourceDigest:result?inspectedMap?.sourceDigest??null:null,
+    modelSha256:proof?.model_sha256??null,mode:modeControl.value};
+}
+function u5PublishSource(state){
+  document.dispatchEvent(new CustomEvent("fgm-studio:source-evidence",
+    {detail:{...u5SourceEvidence(),...(state?{state}:{})}}));
+}
 // A source mutation invalidates the entire prior run, including its async replies.
 function invalidateRun() {
   ++generation;
@@ -53,7 +65,7 @@ function invalidateRun() {
   $("metrics").textContent="Результатов пока нет";
   $("stage").textContent="Алгоритм r06-cell/1, одна атомарная операция step";
   updateRunButton();$("cancel").disabled=true;
-  paint();
+  paint();u5PublishSource("SOURCE_INVALIDATED");
 }
 function resetElements() {
   // Invalidate the old source's semantic applicability BEFORE any async File/Worker read.
@@ -679,13 +691,13 @@ async function execute() {
       });
       $("downloads").append(button);
     }
-    paint();
+    paint();u5PublishSource();
   } catch(error) {
     if(runEpoch===generation) {
       result=null;mesh=null;observation=null;
       $("downloads").replaceChildren();
       $("metrics").textContent="Результатов пока нет";
-      paint();
+      paint();u5PublishSource("SOURCE_INVALIDATED");
       setState("ERROR",/^E_[A-Z0-9_]+$/.test(error.message)?error.message:"E_STUDIO_UI");
     }
   } finally {
@@ -751,7 +763,7 @@ function paint() {
     context.fill();context.strokeStyle="#91b7c1";context.lineWidth=.8;context.stroke();
   }
 }
-modeControl.addEventListener("change",()=>{drag=null;paint()});
+modeControl.addEventListener("change",()=>{drag=null;paint();u5PublishSource()});
 view.addEventListener("pointerdown",e=>{if(modeControl.value!=="mesh")return;drag={x:e.clientX,y:e.clientY};view.setPointerCapture(e.pointerId)});
 view.addEventListener("pointermove",e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.012;pitch=Math.max(-1.3,Math.min(1.3,pitch+(e.clientY-drag.y)*.01));drag={x:e.clientX,y:e.clientY};paint()});
 view.addEventListener("pointerup",()=>drag=null);
@@ -1544,31 +1556,51 @@ function startStudioWorkspaces() {
   });
   const tabs=[...document.querySelectorAll("#studio-workspaces [data-workspace]")];
   const placeholder=$("studio-workspace-placeholder"),heading=$("studio-workspace-heading"),
-        description=$("studio-workspace-description"),inspector=$("studio-workspace-context");
-  let workspace="source",wholeAvailable=false,preferredView="source";
+    description=$("studio-workspace-description"),inspector=$("studio-workspace-context");
+  const choice=$("u5-view-choice"),pair=$("u5-viewport-pair"),sourcePane=$("u5-source-pane"),
+    wholePane=$("u5-whole-pane"),sourceStatus=$("u5-source-capability"),
+    wholeEmpty=$("u5-whole-empty"),comparison=$("u5-compare-status");
+  let workspace="source",wholeAvailable=false,userChosen=false;
+  let wholeEvidence={state:"WHOLE_INVALIDATED",backendKind:null,modelSha256:null};
   const render=()=>{
     document.body.dataset.workspace=workspace;
-    const useWhole=wholeAvailable&&(workspace==="object"||(workspace==="source"&&preferredView==="whole"));
-    const useSource=workspace==="source"&&!useWhole;
-    $("preview").hidden=!useSource;
-    const whole=document.getElementById("whole-preview"); // owner can replace canvas node
-    if(whole)whole.hidden=!useWhole;
-    const empty=(workspace==="world")||(workspace==="object"&&!useWhole);
+    const sourceWorkspace=workspace==="source",objectWorkspace=workspace==="object";
+    const mode=choice.value,compare=sourceWorkspace&&mode==="compare";
+    const sourceVisible=sourceWorkspace&&(mode==="source"||compare);
+    const wholeVisible=(objectWorkspace&&wholeAvailable)||(sourceWorkspace&&(mode==="whole"||compare));
+    const wholeFrame=wholeEvidence.state==="WHOLE_FRAME_READY"&&wholeAvailable;
+    pair.hidden=!sourceVisible&&!wholeVisible;
+    pair.dataset.layout=compare?"compare":"single";
+    document.body.dataset.u5View=compare?"compare":"single";
+    sourcePane.hidden=!sourceVisible;wholePane.hidden=!wholeVisible;
+    $("preview").hidden=!sourceVisible;
+    const whole=document.getElementById("whole-preview"); // Whole owner may replace this node.
+    if(whole)whole.hidden=!wholeVisible||!wholeAvailable;
+    sourceStatus.textContent=u5SourceEvidence().state+
+      (u5SourceEvidence().sourcePartRef?" · "+u5SourceEvidence().sourcePartRef:" · SOURCE_SCOPE_ONLY");
+    wholeEmpty.hidden=!wholeVisible||wholeFrame;
+    wholeEmpty.textContent=wholeEvidence.state+" · "+
+      (wholeEvidence.modelSha256??"NO_VERIFIED_WHOLE_MODEL")+
+      " · "+(wholeEvidence.backendKind??"NO_BACKEND");
+    comparison.hidden=!compare;
+    comparison.textContent="UNBOUND_DIAGNOSTIC · NOT_PIXEL_COMPARABLE · "+
+      u5SourceEvidence().state+" / "+wholeEvidence.state;
+    const empty=workspace==="world"||(objectWorkspace&&!wholeAvailable);
     $("mapblock-inspector").hidden=workspace!=="mapblock";
     $("battlescape-panel").hidden=workspace!=="map";
     placeholder.hidden=!empty;
     if(empty){
       heading.textContent=names[workspace][0];
       const owner=$("whole-status");
-      description.textContent=workspace!=="object"?names[workspace][1]
+      description.textContent=!objectWorkspace?names[workspace][1]
         :owner.dataset.state==="COMPLETED"
           ? "COMPLETED · Сборка проверена, но графический viewport недоступен. Метрики и артефакты остаются в инструментах объекта."
           :owner.textContent||names[workspace][1];
     }
-    $("view-toolbar").hidden=!useSource;
-    $("hint").hidden=!useSource;
-    $("whole-views").hidden=!useWhole;
-    $("whole-view-status").hidden=!useWhole;
+    $("view-toolbar").hidden=!sourceWorkspace;
+    $("hint").hidden=!sourceVisible;
+    $("whole-views").hidden=!wholeVisible||!wholeAvailable;
+    $("whole-view-status").hidden=!wholeVisible||!wholeAvailable;
     inspector.textContent=names[workspace][1];
     for(const tab of tabs){
       if(tab.dataset.workspace===workspace)tab.setAttribute("aria-current","page");
@@ -1577,11 +1609,14 @@ function startStudioWorkspaces() {
   };
   const select=next=>{
     if(!Object.hasOwn(names,next))return;
-    workspace=next;renderObjectDraft(); preferredView=next==="object"?"whole":"source";
+    const previous=workspace;
+    workspace=next;renderObjectDraft();
+    if(next==="source"&&previous!==next){choice.value="source";userChosen=false}
     u3SetActive(next==="mapblock");
-    // No fake change events, no new Worker, no source/run invalidation on navigation.
+    // Navigation is presentation only: no R06 run, Worker, or source/draft mutation.
     render();
   };
+  choice.addEventListener("change",()=>{userChosen=true;render()});
   for(let i=0;i<tabs.length;i++){
     const tab=tabs[i];
     tab.addEventListener("click",()=>select(tab.dataset.workspace));
@@ -1595,12 +1630,15 @@ function startStudioWorkspaces() {
       e.preventDefault();tabs[j].focus();select(tabs[j].dataset.workspace);
     });
   }
+  document.addEventListener("fgm-studio:source-evidence",render);
+  document.addEventListener("fgm-studio:whole-evidence",e=>{
+    wholeEvidence=e.detail??{state:"WHOLE_INVALIDATED"};render();
+  });
   document.addEventListener("fgm-studio:whole-visibility",e=>{
-    wholeAvailable=e.detail?.show===true; // owner reports renderability, not model authenticity
-    if(workspace==="source")preferredView=wholeAvailable?"whole":"source";
+    wholeAvailable=e.detail?.show===true;
+    if(workspace==="source"&&!userChosen)choice.value=wholeAvailable?"whole":"source";
     render();
   });
-  // Whole ERROR/COMPLETED may follow a viewport event asynchronously.
   document.addEventListener("fgm-studio:whole-status",()=>{
     if(workspace==="object")render();
   });

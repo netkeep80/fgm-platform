@@ -121,6 +121,18 @@ body:not([data-workspace=map]) #battlescape-panel{display:none}
 .battlescape-slot:focus-visible,#battlescape-panel button:focus-visible{outline:3px solid #e0df9e;outline-offset:1px}
 #battlescape-selected{font:12px/1.6 monospace}
 @media(max-width:600px){#battlescape-panel{padding:7px}#battlescape-grid{grid-template-columns:repeat(5,67px)}}
+/* D4-U5: layout only; original Source/Whole owners retain canvas and GPU authority. */
+#u5-viewport-pair{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:10px;min-width:0}
+#u5-viewport-pair[hidden],.u5-pane[hidden],#u5-compare-status[hidden],#u5-whole-empty[hidden]{display:none}
+#u5-viewport-pair[data-layout=compare]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.u5-pane{min-width:0;overflow:hidden;border:1px solid #405369;border-radius:6px;background:#142336}
+.u5-pane h2{padding:8px 10px;margin:0;overflow-wrap:anywhere}
+.u5-pane canvas{width:100%;max-width:100%;min-height:260px}
+.u5-pane p{margin:7px 10px;overflow-wrap:anywhere}
+#u5-compare-status{padding:8px 12px;border-top:1px solid #405369;overflow-wrap:anywhere}
+#u5-view-choice{max-width:230px}
+@media(max-width:900px){#u5-viewport-pair[data-layout=compare]{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){#view-toolbar{flex-wrap:wrap;gap:6px}#u5-view-choice{max-width:100%}#u5-viewport-pair{padding:5px}.u5-pane canvas{min-height:280px}}
 </style>
 </head>
 <body data-workspace="source">
@@ -233,7 +245,7 @@ body:not([data-workspace=map]) #battlescape-panel{display:none}
 </section>
 </aside>
 <div id="view">
-<div id="view-toolbar"><label for="view-mode">Режим просмотра</label>
+<div id="view-toolbar"><label for="u5-view-choice">Viewport</label><select id="u5-view-choice" aria-label="Просмотр Source, Whole или Compare"><option value="source">Источник · R05/OBJ</option><option value="whole">FGM · Whole diagnostic</option><option value="compare">Сопоставить · UNBOUND</option></select><label for="view-mode">Режим просмотра</label>
 <select id="view-mode">
 <option value="original">Оригинал</option>
 <option value="reconstructed">Реконструкция</option>
@@ -266,8 +278,14 @@ body:not([data-workspace=map]) #battlescape-panel{display:none}
 <p id="battlescape-count" role="status">DRAFT · 0 экземпляров · 0/25 слотов</p>
 </section>
 <section id="studio-workspace-placeholder" role="status" aria-live="polite" hidden><h2 id="studio-workspace-heading">Режим пока недоступен</h2><p id="studio-workspace-description">Выберите рабочее пространство.</p></section>
+<div id="u5-viewport-pair" aria-label="Source и FGM, раздельные подтверждённые контексты">
+<section id="u5-source-pane" class="u5-pane"><h2>Источник · одноклеточный R05 / OBJ</h2>
 <canvas id="preview" width="840" height="630" aria-label="Сравнение реконструкции R05" aria-describedby="hint"></canvas>
+<p id="u5-source-capability" role="status" class="muted">NO_VERIFIED_VIEW</p></section>
+<section id="u5-whole-pane" class="u5-pane" hidden><h2>FGM · независимый Whole R06/R07</h2>
 <canvas id="whole-preview" width="840" height="630" aria-label="Общая FGM-модель; игровая клеточная сетка" hidden></canvas>
+<p id="u5-whole-empty" role="status" class="muted">NO_CURRENT_FRAME</p></section>
+</div><p id="u5-compare-status" class="muted" role="status" hidden>UNBOUND_DIAGNOSTIC · NOT_PIXEL_COMPARABLE</p>
 <div id="whole-view-status" role="status">Четыре глобальных вида ещё не построены</div>
 <div id="whole-views" aria-label="Четыре глобальных 3D-вида одной модели"></div>
 <div id="hint"></div>

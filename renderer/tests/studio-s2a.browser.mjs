@@ -50,6 +50,10 @@ try{
     globalThis.__studioBadPlacementDigest=false;
     globalThis.__studioGateThumb=false;globalThis.__studioThumbGated=false;
     globalThis.__studioReleaseThumb=null;
+    globalThis.__u5WholeEvents=[];
+    globalThis.__u5SourceEvents=[];
+    document.addEventListener("fgm-studio:whole-evidence",e=>globalThis.__u5WholeEvents.push(e.detail));
+    document.addEventListener("fgm-studio:source-evidence",e=>globalThis.__u5SourceEvents.push(e.detail));
     globalThis.__studioReads={};
     globalThis.__studioFileReadCalls=[];
     const readFileBytes=File.prototype.arrayBuffer;
@@ -613,8 +617,19 @@ try{
   assert.match(await page.locator("#whole-status").textContent(),/^COMPLETED/);
   const beforeGpuLoss=await page.locator("#whole-metrics").textContent();
   assert.equal(await page.evaluate(()=>Boolean(window.__studioU0Device)),true,"GPU test requires real RendererSession device");
+  await workspace("source").click();
+  await page.locator("#u5-view-choice").selectOption("compare");
+  await page.waitForFunction(()=>document.querySelector("#u5-compare-status").textContent.includes("WHOLE_FRAME_READY"),null,{timeout:60000});
+  assert.match(await page.locator("#u5-compare-status").textContent(),/UNBOUND_DIAGNOSTIC · NOT_PIXEL_COMPARABLE/);
+  assert.match(await page.locator("#u5-source-capability").textContent(),/R05_READY/);
+  assert.equal(await page.locator("#u5-source-pane").isVisible(),true);
+  assert.equal(await page.locator("#u5-whole-pane").isVisible(),true);
+  const successfulFrames=await page.evaluate(()=>window.__u5WholeEvents.filter(e=>e.state==="WHOLE_FRAME_READY").length);
   await workspace("mapblock").click();
   await page.evaluate(async()=>{window.__studioU0Device.destroy();await window.__studioU0Device.lost});
+  await page.waitForFunction(()=>window.__u5WholeEvents.some(e=>e.state==="WHOLE_FRAME_UNAVAILABLE"),null,{timeout:30000});
+  assert.equal(await page.evaluate(()=>window.__u5WholeEvents.filter(e=>e.state==="WHOLE_FRAME_READY").length),successfulFrames,
+    "passive loss cannot invoke hidden background redraw");
   await workspace("object").click();
   const alpha=await page.locator("#whole-preview").evaluate(c=>{
     const bytes=c.getContext("2d").getImageData(0,0,c.width,c.height).data;
@@ -625,7 +640,19 @@ try{
   assert.equal(alpha,0,"lost GPU republished an old visible frame");
   assert.equal(await page.locator("#whole-metrics").textContent(),beforeGpuLoss,
     "GPU loss must not invalidate independently verified C++/WASM model");
+  await workspace("source").click();
+  await page.locator("#u5-view-choice").selectOption("compare");
+  assert.match(await page.locator("#u5-compare-status").textContent(),/WHOLE_FRAME_UNAVAILABLE/);
+  assert.match(await page.locator("#u5-source-capability").textContent(),/R05_READY/);
+  await page.setViewportSize({width:390,height:844});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+  assert.equal(await page.locator("#u5-whole-pane").isVisible(),true);
+  await page.setViewportSize({width:1280,height:900});
+  await page.locator("#u5-view-choice").focus();
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),"u5-view-choice");
+  assert.equal(await page.locator("#whole-metrics").textContent(),beforeGpuLoss);
   console.log("STUDIO_D4_U0_GPU_LOSS_RETURN_PASS");
+  console.log("STUDIO_D4_U5_COMPARE_PASSIVE_GPU_LOSS_NATIVE_WASM_PASS");
   // Keep the following catalogue tests on a clean GPU/session.
   await page.reload();
 

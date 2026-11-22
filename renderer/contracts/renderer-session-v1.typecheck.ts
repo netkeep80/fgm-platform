@@ -1,7 +1,7 @@
 // Типовые свидетельства: компилируется TypeScript, БЕЗ выполнения backend.
 import type {
   CanonicalPackageRef, CreateRendererSessionV1, DerivedGeometryV1,
-  FrameOutcomeV1, GeometryRecipeV1, RendererSessionV1, SceneSnapshotV1,
+  FrameOutcomeV1, GeometryRecipeV1, RendererSessionV1, RendererBackendEventV1, SceneSnapshotV1,
   Sha256Hex, VerifiedC04Identity, ViewStateV1
 } from "./renderer-session-v1";
 
@@ -37,7 +37,24 @@ const view: ViewStateV1 = {
   camera:{kind:"r05-isometric",quarterTurns:0,zoom:1,focusWorld:{x:0,y:0,z:0}},
   viewport:{width:840,height:630,pixelRatio:1},showCellGrid:true
 };
+const terminal:RendererBackendEventV1 = {
+  schema:"fgmv-renderer-backend-event/1",state:"device-lost",
+  reason:"E_SESSION_DEVICE_LOST",backendKind:"webgpu",
+  sessionEpoch:1,sceneRevision:"s",viewRevision:"v"
+};
+// @ts-expect-error A backend loss cannot assert successful rendering.
+const badBackendFrame:RendererBackendEventV1={...terminal,frameNumber:1};
+// @ts-expect-error No device vendor object may appear in typed events.
+const badBackendDevice:RendererBackendEventV1={...terminal,gpuDevice:{}};
+// @ts-expect-error Only WebGPU can report GPU device loss.
+const badBackendKind:RendererBackendEventV1={...terminal,backendKind:"canvas2d-diagnostic"};
 async function consumer(session:RendererSessionV1) {
+  const stop=session.subscribeBackendEvents(event=>{
+    const state:"device-lost"=event.state;
+    const revision:string|null=event.sceneRevision;
+    void state;void revision;
+  });
+  stop();stop();
   const loaded=await session.loadScene({
     snapshot,packages:[{modelKey:"structure",bytes:new Uint8Array(64)}],
     geometries:[{geometry,bytes:new Uint8Array(32)}]
@@ -73,3 +90,5 @@ type _NoCameraInPackage = Check<"camera" extends keyof CanonicalPackageRef ? fal
 type _NoC05InView = Check<"c05" extends keyof ViewStateV1 ? false : true>;
 type _NoGameRulesInSession = Check<"damage" extends keyof RendererSessionV1 ? false : true>;
 void badModel;void badC04;void badPlacement;void badFrame;void factoryUse;
+
+void badBackendFrame;void badBackendDevice;void badBackendKind;

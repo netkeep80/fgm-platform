@@ -12,6 +12,15 @@ let fittedState="none",fitSelection=0;
 let sceneRevision=null;
 let yaw=-0.8,pitch=0.6,zoom=1,drag=null;
 let canvas=$("whole-preview"),ctx=canvas.getContext("2d");
+let detachBackendLoss=()=>{},wholeViewEpoch=0,wholeModelHash=null,wholeFrame=null;
+function publishWholeEvidence(state,receipt=null){
+  document.dispatchEvent(new CustomEvent("fgm-studio:whole-evidence",{detail:{
+    state,ownerEpoch:epoch,modelSha256:wholeModelHash,sceneRevision,
+    backendKind:session?.capabilities.backendKind??null,
+    frame:receipt?{sceneRevision:receipt.sceneRevision,viewRevision:receipt.viewRevision,
+      sessionEpoch:receipt.sessionEpoch,frameNumber:receipt.frameNumber}:null
+  }}));
+}
 function status(state,message){
   $("whole-status").dataset.state=state;
   $("whole-status").textContent=state+" · "+message;
@@ -31,7 +40,8 @@ function showWhole(show){
   document.dispatchEvent(new CustomEvent("fgm-studio:whole-visibility",{detail:{show}}));
 }
 function reset(){
-  ++epoch;
+  ++epoch;++wholeViewEpoch;detachBackendLoss();detachBackendLoss=()=>{};
+  wholeModelHash=null;wholeFrame=null;
   if(controller)controller.abort();
   if(worker)worker.terminate();
   worker=null;controller=null;output=null;
@@ -49,6 +59,7 @@ function reset(){
   $("whole-fit-observations").replaceChildren();
   $("whole-slice").textContent="Срезы ещё не построены";
   showWhole(false);
+  publishWholeEvidence("WHOLE_INVALIDATED");
   enable();
 }
 function orderedNames(files){
@@ -322,6 +333,7 @@ async function frame(activeSession,scene,viewState,runEpoch){
   if(runEpoch!==epoch)throw Error("E_WHOLE_CANCELLED");
   if(result.status!=="rendered")throw Error("E_WHOLE_VIEW_FRAME");
   if(activeSession!==session)throw Error("E_WHOLE_CANCELLED");
+  return result;
 }
 async function makeViews(checked,files,modelHash,previewHash,runEpoch){
   // An unresolved factory owns an unattached canvas; only the current run attaches it.
@@ -331,6 +343,13 @@ async function makeViews(checked,files,modelHash,previewHash,runEpoch){
   if(runEpoch!==epoch){await active.dispose();throw Error("E_WHOLE_CANCELLED")}
   canvas.replaceWith(target);canvas=target;ctx=canvas.getContext("2d");bindPreview(canvas);
   session=active;
+  // Only the concrete active Whole session may revoke a Whole frame.
+  detachBackendLoss=active.subscribeBackendEvents(event=>{
+    if(epoch!==runEpoch||session!==active)return;
+    ++wholeViewEpoch;wholeFrame=null;
+    $("whole-view-status").textContent="E_SESSION_DEVICE_LOST · GPU кадр недоступен; подтверждённая модель сохранена";
+    publishWholeEvidence("WHOLE_FRAME_UNAVAILABLE");
+  });
   const packageBytes=encoder.encode(files["model.fgm.json"]),meshBytes=encoder.encode(files["preview.obj"]);
   const identity="whole-"+modelHash;
   const loaded=await active.loadScene({snapshot:{schema:"fgmv-scene-snapshot/1",revision:identity,
@@ -377,7 +396,8 @@ async function makeViews(checked,files,modelHash,previewHash,runEpoch){
 }
 function draw(){
   if(!output||!session||!sceneRevision)return;
-  const active=session,runEpoch=epoch;
+  const active=session,runEpoch=epoch,ticket=++wholeViewEpoch;
+  wholeFrame=null;publishWholeEvidence("WHOLE_FRAME_PENDING");
   const index=$("whole-cell").value;
   const state=view("interactive-"+String(++draw.counter),yaw,pitch,1/zoom,840,630);
   state.showCellGrid=true;
@@ -385,9 +405,14 @@ function draw(){
     const cell=output.slices.cells[Number(index)];
     state.selectedCell={x:cell.local_xyz[0],y:cell.local_xyz[1],z:cell.local_xyz[2]};
   }
-  void frame(active,sceneRevision,state,runEpoch).catch(e=>{
-    if(epoch===runEpoch&&session===active&&e.message!=="E_WHOLE_VIEW_FRAME")
-      $("whole-view-status").textContent="Кадр недоступен";
+  void frame(active,sceneRevision,state,runEpoch).then(receipt=>{
+    if(epoch!==runEpoch||session!==active||ticket!==wholeViewEpoch)return;
+    wholeFrame=receipt;publishWholeEvidence("WHOLE_FRAME_READY",receipt);
+  }).catch(e=>{
+    if(epoch!==runEpoch||session!==active||ticket!==wholeViewEpoch)return;
+    wholeFrame=null;
+    $("whole-view-status").textContent="Кадр недоступен · "+e.message;
+    publishWholeEvidence("WHOLE_FRAME_UNAVAILABLE");
   });
 }
 draw.counter=0;
@@ -517,7 +542,8 @@ $("whole-run").addEventListener("click",async()=>{
       viewError=error.message;
     }
     if(epoch!==runEpoch)return;
-    output={...checked,files};
+    output={...checked,files};wholeModelHash=modelHash;
+    publishWholeEvidence("WHOLE_RESULT_READY");
     if(novel){
       $("whole-views").replaceChildren(...novel.cards);
       $("whole-view-receipt").textContent=JSON.stringify(novel.receipt,null,2);
@@ -561,7 +587,9 @@ $("whole-run").addEventListener("click",async()=>{
     status("COMPLETED",fitted?"Поверхность native R07; C05 и метрики перепроверены в WASM":"Единый OBJ и "+lofts.length+" производных среза; C05 проверен");
   }catch(error){
     if(epoch===runEpoch){
-      output=null;showWhole(false);
+      output=null;wholeModelHash=null;++wholeViewEpoch;wholeFrame=null;
+      detachBackendLoss();detachBackendLoss=()=>{};
+      publishWholeEvidence("WHOLE_INVALIDATED");showWhole(false);
       if(session)void session.dispose();session=null;sceneRevision=null;
       $("whole-views").replaceChildren();$("whole-view-downloads").replaceChildren();
       $("whole-view-receipt").textContent="";
