@@ -1591,6 +1591,43 @@ try{
         console.log("STUDIO_D4_U6_DIFFERENT_ROOT_NATIVE_CONFLICT_PASS");
         await page.locator("#project-cancel").click();
 
+        // A05 combined owner regression: original source A has genuine
+        // unsaved U2+U4 and a completed real Whole R06/GPU frame. A delayed
+        // project-only R02 reply after cancel must not mutate any owner.
+        await page.locator("#project-file").setInputFiles(u6ProjectPath);
+        await page.waitForFunction(()=>document.querySelector("#project-status")
+          .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+        await page.locator("#project-folder").setInputFiles(rootDir);
+        await page.evaluate(()=>{
+          window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+        });
+        await page.locator("#project-verify").click();
+        await page.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),
+          null,{timeout:30000});
+        await page.locator("#project-cancel").click();
+        await page.evaluate(()=>{
+          window.__studioGateCatalog=false;
+          try{window.__studioReleaseCatalog?.()}catch{/* terminated real native Worker */}
+        });
+        await page.waitForTimeout(150);
+        const afterLate=await page.evaluate(()=>({
+          map:document.querySelector("#catalog-map").value,
+          metrics:document.querySelector("#metrics").textContent,
+          u2:document.querySelector("#object-draft-state").textContent,
+          u4:document.querySelector("#battlescape-count").textContent,
+          whole:document.querySelector("#whole-status").textContent,
+          wholeProof:document.querySelector("#whole-metrics").textContent,
+          wholeButtons:document.querySelectorAll("#whole-downloads button").length,
+          wholeEvidence:window.__u5WholeEvents.at(-1)?.state??null
+        }));
+        assert.deepEqual(afterLate,{
+          map:u6Before.map,metrics:u6Before.metrics,u2:u6Before.u2,u4:u6Before.u4,
+          whole:u6Before.whole,wholeProof:u6Before.wholeProof,
+          wholeButtons:u6Before.wholeButtons,wholeEvidence:u6Before.wholeEvidence
+        },"late native reply after cancel preserves U2/U4/R05 and Whole GPU evidence");
+        assert.equal(await page.locator("#project-apply").isDisabled(),true);
+        console.log("STUDIO_D4_U6_A05_DELAYED_WORKER_WHOLE_AND_UNSAVED_SOURCE_PASS");
+
         // Reload creates no project state or native proof. Explicitly open the
         // same real source, import, revalidate in separate native R02 and Apply.
         const projectPage=await network.context.newPage();
