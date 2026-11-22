@@ -1872,9 +1872,21 @@ try{
         const stressRoot=join(u6WorkDir,"stress-25");
         await writeStudioUfoCatalogFixture(stressRoot);
         await writeFile(join(stressRoot,"MAPS","CULTA10.MAP"),makeU3Map(20,20,2));
-        const ids=Array.from({length:25},(_,i)=>"CULTA"+String(i+20));
-        for(const id of ids)
+        // R02's native catalog recognizes CULTA00..18 (not CULTA20..44).
+        // Reserve CULTA10 for the U2 20x20 source and combine 18 CULTA
+        // definitions with 7 genuine DESERT00..06 native profiles.
+        const cultaIds=Array.from({length:19},(_,i)=>"CULTA"+String(i).padStart(2,"0"))
+          .filter(id=>id!=="CULTA10");
+        const desertIds=Array.from({length:7},(_,i)=>"DESERT"+String(i).padStart(2,"0"));
+        const ids=[...cultaIds,...desertIds];
+        assert.equal(ids.length,25);
+        for(const id of cultaIds)
           await writeFile(join(stressRoot,"MAPS",id+".MAP"),makeU3Map(10,10,1,2));
+        for(const ext of ["MCD","PCK","TAB"])
+          await writeFile(join(stressRoot,"TERRAIN","DESERT."+ext),
+            await readFile(join(stressRoot,"TERRAIN","CULTIVAT."+ext)));
+        for(const id of desertIds)
+          await writeFile(join(stressRoot,"MAPS",id+".MAP"),makeU3Map(10,10,1,1));
         const stressPage=await network.context.newPage();
         await instrumentProjectPage(stressPage);
         stressPage.on("dialog",dialog=>dialog.accept());
@@ -1883,6 +1895,15 @@ try{
           await stressPage.locator("#directory").setInputFiles(stressRoot);
           await stressPage.locator("#catalog-map")
             .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await stressPage.locator("#catalog-map")
+            .locator('option[value="DESERT00"]').waitFor({state:"attached"});
+          await stressPage.locator("#catalog-map").selectOption("DESERT00");
+          await stressPage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          const desertDigest=(await stressPage.locator(
+            "#source-grid button[data-source-part-ref]").first()
+            .getAttribute("data-source-part-ref")).split("/")[0];
+          assert.match(desertDigest,/^[a-f0-9]{64}$/);
           await stressPage.locator("#catalog-map").selectOption("CULTA10");
           await stressPage.waitForFunction(()=>
             document.querySelectorAll("#source-grid button[data-source-part-ref]").length===128,
@@ -1901,13 +1922,16 @@ try{
           const baseDef=u6JSON.battlescapeDraft.sourceDefinitions.find(
             d=>d.mapId==="CULTA11");
           assert.ok(baseDef,"same native MAP bytes as 10x10 source definition");
+          const validDefs=ids.map(id=>id.startsWith("DESERT")
+            ? {...baseDef,mapId:id,sourceDigest:desertDigest,datasets:["BLANKS","DESERT"]}
+            : {...baseDef,mapId:id});
           const saturated={...u6JSON,
             objectDraft:{...u6JSON.objectDraft,
               hypotheses:[{...u6JSON.objectDraft.hypotheses[0],members:native128}]},
             battlescapeDraft:{...u6JSON.battlescapeDraft,
-              sourceDefinitions:ids.map(id=>({...baseDef,mapId:id})),
-              instances:ids.map((id,i)=>({id:"mbi-"+(i+1),mapId:id,
-                sourceDigest:baseDef.sourceDigest,anchor:i,slots:1})),
+              sourceDefinitions:validDefs,
+              instances:validDefs.map((d,i)=>({id:"mbi-"+(i+1),mapId:d.mapId,
+                sourceDigest:d.sourceDigest,anchor:i,slots:1})),
               nextSequence:25,selectedSlot:0}};
           const saturatedPath=join(u6WorkDir,"saturation-25-128.json");
           await writeFile(saturatedPath,JSON.stringify(saturated));
@@ -1961,6 +1985,7 @@ try{
 
           const largeMcd=Buffer.alloc(3*1024*1024);
           await writeFile(join(stressRoot,"TERRAIN","CULTIVAT.MCD"),largeMcd);
+          await writeFile(join(stressRoot,"TERRAIN","DESERT.MCD"),largeMcd);
           await stressPage.locator("#project-file").setInputFiles(saturatedPath);
           await stressPage.waitForFunction(()=>document.querySelector("#project-status")
             .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
