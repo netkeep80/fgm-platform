@@ -1971,7 +1971,94 @@ try{
           assert.equal(await stressPage.locator("#project-apply").isDisabled(),true);
           assert.equal(await stressPage.locator("#battlescape-count").textContent(),unchanged);
           console.log("STUDIO_D4_U6_A06_TOTAL_64MIB_LIMIT_AND_25_PINNED_PASS");
+
         }finally{await stressPage.close()}
+
+        // A06 hard pagination boundary: exactly 128 *real* R02 part identities
+        // across 128 floors, with one on the 3rd page of floor 0. A separate
+        // project-root verification and then live-root verification demand
+        // 130+130 native floor/page batches; the 257th must be rejected.
+        const paginationRoot=join(u6WorkDir,"page-budget-128-floors");
+        await writeStudioUfoCatalogFixture(paginationRoot);
+        await writeFile(join(paginationRoot,"MAPS","CULTA10.MAP"),
+          makeU3Map(10,10,128,4));
+        const pagesPage=await network.context.newPage();
+        await instrumentProjectPage(pagesPage);
+        pagesPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await pagesPage.goto(url+"/");
+          await pagesPage.locator("#directory").setInputFiles(paginationRoot);
+          await pagesPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await pagesPage.locator("#catalog-map").selectOption("CULTA10");
+          await pagesPage.waitForFunction(()=>document.querySelector("#source-floor")
+            .options.length===128&&document.querySelectorAll(
+              "#source-grid button[data-source-part-ref]").length===128,
+              null,{timeout:60000});
+          const nativeRef=()=>pagesPage.locator(
+            "#source-grid button[data-source-part-ref]").first().evaluate(button=>{
+              const match=/ · ([A-Z0-9_]+) №(\d+) · \((\d+),(\d+),(\d+)\)$/.exec(button.title);
+              if(!match)throw Error("E_U6_TEST_NATIVE_REF");
+              return {sourcePartRef:button.dataset.sourcePartRef,
+                tile:[Number(match[3]),Number(match[4]),Number(match[5])],
+                part:button.dataset.part,dataset:match[1],record:Number(match[2])};
+            });
+          const floor=pagesPage.locator("#source-floor"),refs=[];
+          await pagesPage.locator("#source-next").click();
+          await pagesPage.waitForFunction(()=>document.querySelector("#source-page-status")
+            .textContent.includes("показано 129–256"),null,{timeout:30000});
+          await pagesPage.locator("#source-next").click();
+          await pagesPage.waitForFunction(()=>document.querySelector("#source-page-status")
+            .textContent.includes("показано 257–384"),null,{timeout:30000});
+          refs.push(await nativeRef()); // floor 0, offset=256
+          for(let z=1;z<128;z++){
+            await floor.selectOption(String(z));
+            await pagesPage.waitForFunction(expected=>
+              document.querySelector("#source-page-status")
+                .textContent.includes("Z="+expected+" · показано 1–128"),
+              z,{timeout:30000});
+            refs.push(await nativeRef());
+          }
+          assert.equal(new Set(refs.map(x=>x.sourcePartRef)).size,128);
+          // Export an actual U2 owner bound to the same native source and
+          // extend the intended membership with 127 valid R02 occurrences.
+          await pagesPage.locator("#source-grid button[data-source-part-ref]").first().click();
+          await pagesPage.locator('#studio-workspaces [data-workspace="object"]').click();
+          await pagesPage.locator("#object-name").fill("Page budget exact 128");
+          await pagesPage.locator("#object-create").click();
+          await pagesPage.locator("#object-add").click();
+          const download=pagesPage.waitForEvent("download");
+          await pagesPage.locator("#project-save").click();
+          const exported=await download;
+          const p=JSON.parse(await readFile(await exported.path(),"utf8"));
+          assert.equal(p.objectDraft.hypotheses.length,1);
+          const originalIntents=p.objectDraft.intents;
+          assert.equal(originalIntents.length,2);
+          const history=refs.slice(0,127).map((member,i)=>({
+            ordinal:i+3,op:"assign",hypothesisId:"h1",
+            sourceKey:{...p.objectDraft.source},
+            sourcePartRef:member.sourcePartRef,outcome:"APPLIED"
+          }));
+          const project={...p,objectDraft:{...p.objectDraft,
+            hypotheses:[{...p.objectDraft.hypotheses[0],members:refs}],
+            intents:[...originalIntents,...history]}};
+          const projectPath=join(u6WorkDir,"page-budget-256.json");
+          await writeFile(projectPath,JSON.stringify(project));
+          await pagesPage.locator("#project-file").setInputFiles(projectPath);
+          await pagesPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await pagesPage.locator("#project-folder").setInputFiles(paginationRoot);
+          const countBefore=await pagesPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await pagesPage.locator("#project-verify").click();
+          await pagesPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_VERIFY_BUDGET"),null,{timeout:90000});
+          assert.equal(await pagesPage.locator("#project-apply").isDisabled(),true);
+          const requests=await pagesPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          assert.equal(requests-countBefore,256,
+            "257th native catalog-placements request must be refused before dispatch");
+          assert.match(await pagesPage.locator("#object-draft-state").textContent(),/DRAFT/);
+          console.log("STUDIO_D4_U6_A06_256_REAL_NATIVE_PAGE_CAP_PASS");
+        }finally{await pagesPage.close()}
 
         // R1 §6 negative format and native binding checks: strict UTF-8,
         // oversize pre-read, unrecognized receipt, forged existing-looking
