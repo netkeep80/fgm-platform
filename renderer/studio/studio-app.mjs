@@ -1654,7 +1654,7 @@ const U6_SCHEMA="fgmp-studio-project/1",U6_FILE_MAX=512*1024;
 const U6_READ_MAX=64*1024*1024,U6_PAGE_MAX=256,U6_DEADLINE_MS=90000;
 const U6_SHA=/^[0-9a-f]{64}$/;
 let u6Meta={projectId:crypto.randomUUID(),revision:0};
-let u6Project=null,u6FolderFiles=null,u6Epoch=0,u6Pending=null,u6Ready=null;
+let u6Project=null,u6FolderFiles=null,u6Epoch=0,u6Pending=null,u6Ready=null,u6Staged=null;
 let u6CommittedMap="";
 const u6Node=id=>$(id);
 const u6Valid=(condition,code="E_U6_SCHEMA")=>{if(!condition)throw Error(code)};
@@ -1816,8 +1816,11 @@ function u6Preview(){
       " исходных MAP\nИсходные файлы и результаты реконструкции НЕ сохранены."
     : "Файл проекта ещё не выбран.";
 }
-function u6Retire(){
+function u6Retire(preserveVerifiedPreview=false){
   ++u6Epoch;u6Ready=null;
+  // Staged native facts may remain visible as non-authoritative preview after
+  // a deliberate ordinary Source switch; eligibility is always invalidated.
+  if(!preserveVerifiedPreview)u6Staged=null;
   if(u6Pending){u6Pending.controller.abort();u6Pending.worker.terminate();
     clearTimeout(u6Pending.timeout);u6Pending=null;}
   u6Node("project-apply").disabled=true;
@@ -1885,7 +1888,7 @@ for(const id of ["directory","local-files","catalog-map","demo"]){
       if(id==="directory"||id==="local-files")control.value="";
       return;
     }
-    u6Retire();
+    u6Retire(true);
     if(id==="catalog-map")u6CommittedMap=control.value;
     else u6CommittedMap="";
     if(u6Project)u6Status("PARKED_UNBOUND",
@@ -2009,12 +2012,27 @@ async function u6NativeVerify(project,stagedFiles,token){
     return output;
   };
   try{
-    u6Valid(sourceMode==="catalog"&&pinnedCatalog&&u4Catalog===pinnedCatalog,
+    // FIRST: native-check project-local MAP/MCD/SourcePartRef even with no
+    // active Source or an incompatible Source. This stage never writes owners.
+    // Without a separately chosen folder the current catalog may serve as
+    // stage input, but cannot be conjured from a project JSON descriptor.
+    if(!stagedFiles)u6Valid(sourceMode==="catalog"&&pinnedCatalog,
       "E_U6_SOURCE_UNBOUND");
-    if(od)u6Valid(pinnedMap&&pinnedMap.mapId===od.source.mapId&&
-      pinnedMap.sourceDigest===od.source.sourceDigest,"E_U6_SOURCE_MISMATCH");
     const localRoot=stagedFiles?await loadRoot(stagedFiles):pinnedCatalog;
     const staged=await verifyRoot(localRoot,"project");
+    check();
+    const candidate={token,project,staged,live:null,catalog:pinnedCatalog,
+      inspectedMap:pinnedMap,gen,u4epoch,u4request,budgetBytes,budgetPages};
+    // SECOND: a separately authorized *existing* live Source is required
+    // for Apply, not for independent native project staging.
+    const hasLive=sourceMode==="catalog"&&pinnedCatalog&&u4Catalog===pinnedCatalog;
+    const matchingMap=!od||(pinnedMap&&pinnedMap.mapId===od.source.mapId&&
+      pinnedMap.sourceDigest===od.source.sourceDigest);
+    if(!hasLive||!matchingMap){
+      candidate.state=hasLive?"PARKED_CONFLICT":"PARKED_UNBOUND";
+      candidate.reason=hasLive?"E_U6_SOURCE_MISMATCH":"E_U6_SOURCE_UNBOUND";
+      return candidate;
+    }
     const live=localRoot===pinnedCatalog?staged:await verifyRoot(pinnedCatalog,"active");
     for(const [key,entry] of staged)
       u6Valid(entry.signature===live.get(key)?.signature,"E_U6_SOURCE_MISMATCH");
@@ -2022,8 +2040,13 @@ async function u6NativeVerify(project,stagedFiles,token){
     u6Valid(catalog===pinnedCatalog&&sourceMode==="catalog"&&generation===gen&&
       inspectedMap===pinnedMap&&u4Epoch===u4epoch&&u4Request===u4request&&
       !u4Pending,"E_U6_STALE");
-    return {token,project,catalog:pinnedCatalog,inspectedMap:pinnedMap,gen,
-      u4epoch,u4request,live,staged,budgetBytes,budgetPages};
+    return {...candidate,state:"APPLY_AVAILABLE",live,
+      budgetBytes,budgetPages};
+  }catch(error){
+    // An AbortSignal rejection may beat the post-await check. Preserve
+    // the project-level 90-second deadline as the reported error.
+    if(expired)throw Error("E_U6_VERIFY_TIMEOUT");
+    throw error;
   }finally{
     clearTimeout(timeout);controller.abort();worker.terminate();
     if(u6Pending?.token===token)u6Pending=null;
@@ -2036,13 +2059,16 @@ u6Node("project-verify").addEventListener("click",async()=>{
   try{
     const candidate=await u6NativeVerify(project,folder,token);
     if(token!==u6Epoch)return;
-    u6Ready=candidate;
-    u6Status("APPLY_AVAILABLE","R02 сверил действующий Source; "+
-      candidate.budgetBytes+" байт и "+candidate.budgetPages+
-      " страниц. Подтвердите замену черновиков.");
+    u6Staged=candidate;u6Ready=candidate.state==="APPLY_AVAILABLE"?candidate:null;
+    const bytes=candidate.budgetBytes,pg=candidate.budgetPages;
+    if(u6Ready)u6Status("APPLY_AVAILABLE","R02 сверил действующий Source; "+
+      bytes+" байт и "+pg+" страниц. Подтвердите замену черновиков.");
+    else u6Status(candidate.state,"STAGED_NATIVE_VERIFIED · "+
+      candidate.reason+" · "+bytes+" байт и "+pg+
+      " страниц. Проект проверен, но применить его нельзя до совпадения текущего Source.");
   }catch(error){
     if(token!==u6Epoch)return;
-    u6Ready=null;
+    u6Ready=null;u6Staged=null;
     const code=expiredFromError(error);
     u6Status(code==="E_U6_SOURCE_UNBOUND"?"PARKED_UNBOUND":"PARKED_CONFLICT",
       code+" · текущие Source/U2/U4/Whole не изменены.");
