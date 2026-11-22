@@ -1510,6 +1510,7 @@ try{
         sourceEvents:window.__u5SourceEvents.length,
         wholeEvents:window.__u5WholeEvents.length
       }));
+      await workspace("source").click();
       await page.evaluate(()=>{window.__u6DialogDecision=false});
       await mapMenu.selectOption("CULTA11");
       await page.locator("#directory").setInputFiles(rootDir);
