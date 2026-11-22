@@ -38,6 +38,8 @@ try{
   // The optional proof mutation operates on a real finalize reply.
   await page.addInitScript(() => {
     const NativeWorker=globalThis.Worker;
+    globalThis.__u6DialogDecision=true;
+    globalThis.confirm=()=>globalThis.__u6DialogDecision;
     globalThis.__studioGateStep=false;
     globalThis.__studioStepGated=false;
     globalThis.__studioReleaseStep=null;
@@ -1462,6 +1464,154 @@ try{
       }));
       assert.deepEqual(afterU4,beforeU4,"U4 must not mutate native Source/U2/R06 owners");
       console.log("STUDIO_D4_U4_NATIVE_22_INSTANCES_25_SLOTS_PASS");
+
+      // D4-U6/SCOPE-R2: author intent round-trip, honest local project format.
+      // The ordinary active Source must be selected explicitly; project rebind
+      // never promotes stored JSON to native verification on its own.
+      await workspace("source").click();
+      await mapMenu.selectOption("CULTA10");
+      await page.waitForFunction(()=>document.querySelectorAll(
+        "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+      await page.locator("#source-grid button[data-source-part-ref]").first().click();
+      await page.locator("#run").click();await waitState("COMPLETED");
+      await workspace("object").click();
+      await page.locator("#object-reset").click();
+      await page.locator("#object-name").fill("U6 source-bound hypothesis");
+      await page.locator("#object-create").click();
+      await page.locator("#object-add").click();
+      assert.match(await page.locator("#object-draft-state").textContent(),/DRAFT/);
+      await workspace("map").click();
+      assert.match(await u4Count.textContent(),/22 экземпляров · 25\/25 слотов/);
+      const u6Download=page.waitForEvent("download");
+      await page.locator("#project-save").click();
+      const u6File=await u6Download;
+      assert.equal(u6File.suggestedFilename(),"fgm-studio-project.json");
+      const u6Bytes=await readFile(await u6File.path(),"utf8");
+      const u6JSON=JSON.parse(u6Bytes);
+      assert.equal(u6JSON.schema,"fgmp-studio-project/1");
+      assert.equal(u6JSON.objectDraft.hypotheses.length,1);
+      assert.equal(u6JSON.objectDraft.hypotheses[0].members.length,1);
+      assert.equal(u6JSON.battlescapeDraft.instances.length,22);
+      assert.equal(u6JSON.battlescapeDraft.sourceDefinitions.length,2);
+      for(const forbidden of ["indices_hex","palette_rgb8","lofts","wholeFrame",
+        "WHOLE_FRAME_READY","filePath","webkitRelativePath"])
+        assert.equal(u6Bytes.includes(forbidden),false,"no private source bytes/proof");
+      console.log("STUDIO_D4_U6_EXPORT_LOCAL_BOUNDED_DRAFT_PASS");
+
+      // A07: DECLINE ordinary source mutations in capture phase. Both the
+      // existing Source handlers and independent Whole target listeners must
+      // remain untouched; this is not the project-only folder selector.
+      const u6Before=await page.evaluate(()=>({
+        map:document.querySelector("#catalog-map").value,
+        metrics:document.querySelector("#metrics").textContent,
+        u2:document.querySelector("#object-draft-state").textContent,
+        u4:document.querySelector("#battlescape-count").textContent,
+        whole:document.querySelector("#whole-status").textContent,
+        sourceEvents:window.__u5SourceEvents.length,
+        wholeEvents:window.__u5WholeEvents.length
+      }));
+      await page.evaluate(()=>{window.__u6DialogDecision=false});
+      await mapMenu.selectOption("CULTA11");
+      await page.locator("#directory").setInputFiles(rootDir);
+      const u6After=await page.evaluate(()=>({
+        map:document.querySelector("#catalog-map").value,
+        metrics:document.querySelector("#metrics").textContent,
+        u2:document.querySelector("#object-draft-state").textContent,
+        u4:document.querySelector("#battlescape-count").textContent,
+        whole:document.querySelector("#whole-status").textContent,
+        sourceEvents:window.__u5SourceEvents.length,
+        wholeEvents:window.__u5WholeEvents.length
+      }));
+      assert.deepEqual(u6After,u6Before,
+        "decline must block both Source and independent Whole before event dispatch");
+      await page.evaluate(()=>{window.__u6DialogDecision=true});
+      console.log("STUDIO_D4_U6_A07_CANCEL_BEFORE_OWNER_DISPATCH_PASS");
+
+      const u6WorkDir=await mkdtemp(join(tmpdir(),"studio-u6-project-"));
+      try{
+        const u6ProjectPath=join(u6WorkDir,"studio-project.json");
+        await writeFile(u6ProjectPath,u6Bytes);
+        const u6Rejected=join(u6WorkDir,"forged-project.json");
+        await writeFile(u6Rejected,JSON.stringify({...u6JSON,
+          battlescapeDraft:{...u6JSON.battlescapeDraft,instances:[
+            ...u6JSON.battlescapeDraft.instances,
+            {...u6JSON.battlescapeDraft.instances[0]}
+          ]}}));
+        await page.locator("#project-file").setInputFiles(u6Rejected);
+        assert.match(await page.locator("#project-status").textContent(),/REJECTED/);
+        assert.equal(await u4Count.textContent(),u6Before.u4);
+        assert.equal(await page.locator("#metrics").textContent(),u6Before.metrics);
+        console.log("STUDIO_D4_U6_CORRUPT_PROJECT_ZERO_MUTATION_PASS");
+
+        // Verify independent native project root B while current source A and
+        // its real R05/U2/U4 stay intact. Same MAP ID with altered bytes fails.
+        const u6Other=join(u6WorkDir,"changed-ufo");
+        await mkdir(u6Other);
+        await writeStudioUfoCatalogFixture(u6Other);
+        await writeFile(join(u6Other,"MAPS","CULTA10.MAP"),Buffer.from([10,10,1,...Array(400).fill(1)]));
+        await page.locator("#project-file").setInputFiles(u6ProjectPath);
+        await page.locator("#project-folder").setInputFiles(u6Other);
+        await page.locator("#project-verify").click();
+        await page.waitForFunction(()=>/PARKED_CONFLICT|PARKED_UNBOUND/.test(
+          document.querySelector("#project-status").textContent),null,{timeout:60000});
+        assert.equal(await page.locator("#project-apply").isDisabled(),true);
+        assert.equal(await u4Count.textContent(),u6Before.u4);
+        assert.equal(await page.locator("#metrics").textContent(),u6Before.metrics);
+        console.log("STUDIO_D4_U6_DIFFERENT_ROOT_NATIVE_CONFLICT_PASS");
+        await page.locator("#project-cancel").click();
+
+        // Reload creates no project state or native proof. Explicitly open the
+        // same real source, import, revalidate in separate native R02 and Apply.
+        const projectPage=await network.context.newPage();
+        projectPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await projectPage.goto(url+"/");
+          assert.match(await projectPage.locator("#project-status").textContent(),/NO_PROJECT/);
+          await projectPage.locator("#directory").setInputFiles(rootDir);
+          const importedMap=projectPage.locator("#catalog-map");
+          await importedMap.locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await importedMap.selectOption("CULTA10");
+          await projectPage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await projectPage.locator("#project-file").setInputFiles(u6ProjectPath);
+          assert.match(await projectPage.locator("#project-status").textContent(),/PARKED_UNBOUND/);
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await projectPage.locator("#project-apply").click();
+          assert.match(await projectPage.locator("#project-status").textContent(),/ACTIVE_DRAFT/);
+          assert.match(await projectPage.locator("#object-draft-state").textContent(),/DRAFT/);
+          assert.match(await projectPage.locator("#battlescape-count").textContent(),
+            /22 экземпляров · 25\/25 слотов/);
+          assert.equal(await projectPage.locator("#object-members button").count(),1);
+          assert.equal(await projectPage.locator("#downloads button").count(),0,
+            "R05/R06 must not be fabricated on project rehydrate");
+          assert.notEqual(await projectPage.locator("#whole-status").getAttribute("data-state"),
+            "COMPLETED");
+          console.log("STUDIO_D4_U6_RELOAD_REAL_NATIVE_R02_ATOMIC_APPLY_PASS");
+
+          // A04: U4-only projects need only an active compatible catalog.
+          const layoutOnly={...u6JSON,objectDraft:null};
+          const u6U4=join(u6WorkDir,"map-only.json");
+          await writeFile(u6U4,JSON.stringify(layoutOnly));
+          await projectPage.reload();
+          await projectPage.locator("#directory").setInputFiles(rootDir);
+          await projectPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await projectPage.locator("#project-file").setInputFiles(u6U4);
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await projectPage.locator("#project-apply").click();
+          assert.match(await projectPage.locator("#battlescape-count").textContent(),
+            /22 экземпляров · 25\/25 слотов/);
+          console.log("STUDIO_D4_U6_U4_ONLY_NO_INSPECTED_MAP_PASS");
+          await projectPage.setViewportSize({width:390,height:844});
+          assert.deepEqual(await projectPage.evaluate(()=>[
+            document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
+        }finally{await projectPage.close()}
+      }finally{await rm(u6WorkDir,{recursive:true,force:true})}
+
       await workspace("mapblock").click();
       await library.selectOption("CULTA11");
       await page.waitForFunction(()=>document.querySelector("#mapblock-status")

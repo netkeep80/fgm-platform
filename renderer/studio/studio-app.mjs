@@ -1929,10 +1929,6 @@ async function u6NativeVerify(project,stagedFiles,token){
   u6Valid(expected.size<=26,"E_U6_VERIFY_BUDGET");
   const pinnedCatalog=catalog,pinnedMap=inspectedMap,gen=generation,
     u4epoch=u4Epoch,u4request=u4Request;
-  u6Valid(sourceMode==="catalog"&&pinnedCatalog&&u4Catalog===pinnedCatalog,
-    "E_U6_SOURCE_UNBOUND");
-  if(od)u6Valid(pinnedMap&&pinnedMap.mapId===od.source.mapId&&
-    pinnedMap.sourceDigest===od.source.sourceDigest,"E_U6_SOURCE_MISMATCH");
   const loadRoot=async files=>{
     check();
     const spec=indexGameFolder(files);
@@ -2012,6 +2008,10 @@ async function u6NativeVerify(project,stagedFiles,token){
     return output;
   };
   try{
+    u6Valid(sourceMode==="catalog"&&pinnedCatalog&&u4Catalog===pinnedCatalog,
+      "E_U6_SOURCE_UNBOUND");
+    if(od)u6Valid(pinnedMap&&pinnedMap.mapId===od.source.mapId&&
+      pinnedMap.sourceDigest===od.source.sourceDigest,"E_U6_SOURCE_MISMATCH");
     const localRoot=stagedFiles?await loadRoot(stagedFiles):pinnedCatalog;
     const staged=await verifyRoot(localRoot,"project");
     const live=localRoot===pinnedCatalog?staged:await verifyRoot(pinnedCatalog,"active");
