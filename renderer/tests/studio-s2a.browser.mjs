@@ -1532,6 +1532,12 @@ try{
       await page.evaluate(()=>{window.__u6DialogDecision=false});
       await mapMenu.selectOption("CULTA11");
       await page.locator("#directory").setInputFiles(rootDir);
+      await page.locator("#local-files").setInputFiles([
+        {name:"manual.map",mimeType:"application/octet-stream",buffer:Buffer.from([1,1,1,1])}
+      ]);
+      assert.equal(await page.locator("#local-files").evaluate(el=>el.files.length),0,
+        "decline clears FileList; browser cannot restore previous selection");
+      await page.locator("#demo").click();
       const u6After=await page.evaluate(()=>({
         map:document.querySelector("#catalog-map").value,
         metrics:document.querySelector("#metrics").textContent,
@@ -1634,10 +1640,205 @@ try{
           assert.match(await projectPage.locator("#battlescape-count").textContent(),
             /22 экземпляров · 25\/25 слотов/);
           console.log("STUDIO_D4_U6_U4_ONLY_NO_INSPECTED_MAP_PASS");
+
+          // A04 symmetric case: U2-only cannot activate until a matching
+          // active inspectedMap is separately loaded through normal Source.
+          const u6OnlyU2=join(u6WorkDir,"object-only.json");
+          await writeFile(u6OnlyU2,JSON.stringify({...u6JSON,battlescapeDraft:null}));
+          await projectPage.reload();
+          await projectPage.locator("#directory").setInputFiles(rootDir);
+          await projectPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await projectPage.locator("#project-file").setInputFiles(u6OnlyU2);
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("STAGED_NATIVE_VERIFIED"),null,{timeout:60000});
+          assert.match(await projectPage.locator("#project-status").textContent(),/PARKED_CONFLICT/);
+          assert.equal(await projectPage.locator("#project-apply").isDisabled(),true);
+          await projectPage.locator("#catalog-map").selectOption("CULTA10");
+          await projectPage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await projectPage.locator("#project-verify").click();
+          await projectPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await projectPage.locator("#project-apply").click();
+          assert.match(await projectPage.locator("#object-draft-state").textContent(),/DRAFT/);
+          assert.equal(await projectPage.locator("#object-members button").count(),1);
+          assert.match(await projectPage.locator("#battlescape-count").textContent(),
+            /0 экземпляров · 0\/25 слотов/);
+          console.log("STUDIO_D4_U6_A04_U2_ONLY_EXACT_MAP_PASS");
           await projectPage.setViewportSize({width:390,height:844});
           assert.deepEqual(await projectPage.evaluate(()=>[
             document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
         }finally{await projectPage.close()}
+
+        // P2-01: stage genuine project files with NO active Source. Rebind and
+        // native proof are independent of activation; later Source selection
+        // only enables Apply after a fresh second native comparison.
+        const stagePage=await network.context.newPage();
+        stagePage.on("dialog",dialog=>dialog.accept());
+        try{
+          await stagePage.goto(url+"/");
+          assert.equal(await stagePage.locator("#catalog-map").isDisabled(),true);
+          await stagePage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          const firstR02=await stagePage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await stagePage.locator("#project-folder").setInputFiles(rootDir);
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("STAGED_NATIVE_VERIFIED"),null,{timeout:90000});
+          assert.match(await stagePage.locator("#project-status").textContent(),/PARKED_UNBOUND/);
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#catalog-map").isDisabled(),true);
+          assert.equal(await stagePage.locator("#downloads button").count(),0);
+          assert.ok((await stagePage.evaluate(()=>window.__studioU3PlacementCalls.length))>firstR02,
+            "native R02 pages must be read despite Source being absent");
+          console.log("STUDIO_D4_U6_P2_01_NATIVE_STAGED_NO_ACTIVE_SOURCE_PASS");
+          await stagePage.locator("#directory").setInputFiles(rootDir);
+          await stagePage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await stagePage.locator("#catalog-map").selectOption("CULTA10");
+          await stagePage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE"),null,{timeout:90000});
+          await stagePage.locator("#project-apply").click();
+          assert.match(await stagePage.locator("#battlescape-count").textContent(),
+            /22 экземпляров · 25\/25 слотов/);
+          console.log("STUDIO_D4_U6_P2_01_NATIVE_STAGE_THEN_COMPATIBLE_APPLY_PASS");
+
+          // A05: deterministically delay a real native catalog-map request,
+          // cancel or reimport a project and release the stale Worker action.
+          const stableBefore=await stagePage.locator("#battlescape-count").textContent();
+          await stagePage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+          });
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),
+            null,{timeout:30000});
+          await stagePage.locator("#project-cancel").click();
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=false;
+            try{window.__studioReleaseCatalog?.()}catch{/* canceled native Worker */}
+          });
+          await stagePage.waitForTimeout(150);
+          assert.match(await stagePage.locator("#project-status").textContent(),/^NO_PROJECT/);
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#battlescape-count").textContent(),stableBefore);
+          await stagePage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+          });
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>Boolean(window.__studioReleaseCatalog),
+            null,{timeout:30000});
+          await stagePage.locator("#project-file").setInputFiles(join(u6WorkDir,"map-only.json"));
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__studioGateCatalog=false;
+            try{window.__studioReleaseCatalog?.()}catch{/* superseded native Worker */}
+          });
+          await stagePage.waitForTimeout(150);
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#battlescape-count").textContent(),stableBefore);
+          console.log("STUDIO_D4_U6_A05_CANCEL_REIMPORT_LATE_NATIVE_PASS");
+
+          // A06: a forced deadline uses the real Worker, not fabricated
+          // responses. Only the test's 90s alarm is shortened deterministically.
+          await stagePage.evaluate(()=>{
+            const real=window.setTimeout;
+            window.__u6RestoreTimeout=()=>{window.setTimeout=real};
+            window.setTimeout=(fn,delay,...rest)=>real(fn,delay===90000?80:delay,...rest);
+            window.__studioGateCatalog=true;window.__studioReleaseCatalog=null;
+          });
+          await stagePage.locator("#project-verify").click();
+          await stagePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_VERIFY_TIMEOUT"),null,{timeout:30000});
+          await stagePage.evaluate(()=>{
+            window.__u6RestoreTimeout();
+            window.__studioGateCatalog=false;
+            try{window.__studioReleaseCatalog?.()}catch{/* timed-out native Worker */}
+          });
+          assert.equal(await stagePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stagePage.locator("#battlescape-count").textContent(),stableBefore);
+          console.log("STUDIO_D4_U6_A06_GLOBAL_DEADLINE_TIMEOUT_PASS");
+        }finally{await stagePage.close()}
+
+        // Source A may be incompatible while separately selected project B is
+        // successfully checked by R02. Source A remains selected and untouched.
+        const conflictPage=await network.context.newPage();
+        conflictPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await conflictPage.goto(url+"/");
+          await conflictPage.locator("#directory").setInputFiles(u6Other);
+          await conflictPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await conflictPage.locator("#catalog-map").selectOption("CULTA10");
+          await conflictPage.waitForFunction(()=>document.querySelector("#catalog-map").value===
+            "CULTA10"&&document.querySelector("#source-grid button[data-source-part-ref]"),
+            null,{timeout:60000});
+          const beforeMap=await conflictPage.locator("#catalog-map").inputValue();
+          await conflictPage.locator("#project-file").setInputFiles(u6ProjectPath);
+          await conflictPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await conflictPage.locator("#project-folder").setInputFiles(rootDir);
+          const callsBefore=await conflictPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await conflictPage.locator("#project-verify").click();
+          await conflictPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("STAGED_NATIVE_VERIFIED"),null,{timeout:90000});
+          assert.match(await conflictPage.locator("#project-status").textContent(),/PARKED_CONFLICT/);
+          assert.ok((await conflictPage.evaluate(()=>window.__studioU3PlacementCalls.length))>
+            callsBefore);
+          assert.equal(await conflictPage.locator("#catalog-map").inputValue(),beforeMap);
+          assert.equal(await conflictPage.locator("#project-apply").isDisabled(),true);
+          console.log("STUDIO_D4_U6_P2_01_INCOMPATIBLE_ACTIVE_NATIVE_STAGE_PASS");
+        }finally{await conflictPage.close()}
+
+        // A03/A07 accepted ordinary switch is explicitly destructive and does
+        // invalidate the independent Whole owner. Declined events were checked
+        // earlier with a settled real GPU frame and all four controls.
+        const acceptedPage=await network.context.newPage();
+        acceptedPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await acceptedPage.goto(url+"/");
+          await acceptedPage.locator("#directory").setInputFiles(rootDir);
+          await acceptedPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await acceptedPage.locator("#catalog-map").selectOption("CULTA10");
+          await acceptedPage.waitForFunction(()=>document.querySelectorAll(
+            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
+          await acceptedPage.locator("#source-grid button[data-source-part-ref]").first().click();
+          await acceptedPage.locator('#studio-workspaces [data-workspace="object"]').click();
+          await acceptedPage.locator("#object-name").fill("A03 draft");
+          await acceptedPage.locator("#object-create").click();
+          await acceptedPage.locator("#object-add").click();
+          await acceptedPage.locator('#studio-workspaces [data-workspace="source"]').click();
+          await acceptedPage.locator("#whole-demo").click();
+          await acceptedPage.waitForFunction(()=>!document.querySelector("#whole-run").disabled);
+          await acceptedPage.locator("#whole-run").click();
+          await acceptedPage.waitForFunction(()=>document.querySelector("#whole-status")
+            .dataset.state==="COMPLETED",null,{timeout:60000});
+          await acceptedPage.locator("#catalog-map").selectOption("CULTA11");
+          assert.match(await acceptedPage.locator("#object-draft-state").textContent(),
+            /STALE|SOURCE_MISMATCH/);
+          assert.notEqual(await acceptedPage.locator("#whole-status").getAttribute("data-state"),
+            "COMPLETED");
+          await acceptedPage.locator("#directory").setInputFiles(rootDir);
+          await acceptedPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          assert.equal(await acceptedPage.locator("#battlescape-grid .battlescape-slot[data-occupied=true]").count(),0);
+          console.log("STUDIO_D4_U6_A03_A07_ACCEPTED_SOURCE_INVALIDATION_PASS");
+        }finally{await acceptedPage.close()}
       }finally{await rm(u6WorkDir,{recursive:true,force:true})}
 
       await workspace("mapblock").click();
