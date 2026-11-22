@@ -1839,6 +1839,139 @@ try{
           assert.equal(await acceptedPage.locator("#battlescape-grid .battlescape-slot[data-occupied=true]").count(),0);
           console.log("STUDIO_D4_U6_A03_A07_ACCEPTED_SOURCE_INVALIDATION_PASS");
         }finally{await acceptedPage.close()}
+
+
+        // A06: 25 *distinct* native MAP definitions, each occupying one of
+        // 25 slots, together with 128 genuine SourcePartRefs in the original
+        // 20x20 MAP. No fake Worker replies or in-memory trusted receipts.
+        const stressRoot=join(u6WorkDir,"stress-25");
+        await writeStudioUfoCatalogFixture(stressRoot);
+        await writeFile(join(stressRoot,"MAPS","CULTA10.MAP"),makeU3Map(20,20,2));
+        const ids=Array.from({length:25},(_,i)=>"CULTA"+String(i+20));
+        for(const id of ids)
+          await writeFile(join(stressRoot,"MAPS",id+".MAP"),makeU3Map(10,10,1,2));
+        const stressPage=await network.context.newPage();
+        stressPage.on("dialog",dialog=>dialog.accept());
+        try{
+          await stressPage.goto(url+"/");
+          await stressPage.locator("#directory").setInputFiles(stressRoot);
+          await stressPage.locator("#catalog-map")
+            .locator('option[value="CULTA10"]').waitFor({state:"attached"});
+          await stressPage.locator("#catalog-map").selectOption("CULTA10");
+          await stressPage.waitForFunction(()=>
+            document.querySelectorAll("#source-grid button[data-source-part-ref]").length===128,
+            null,{timeout:60000});
+          const native128=await stressPage.locator(
+            "#source-grid button[data-source-part-ref]").evaluateAll(buttons=>
+              buttons.slice(0,128).map(button=>{
+                const match=/ · ([A-Z0-9_]+) №(\d+) · \((\d+),(\d+),(\d+)\)$/.exec(button.title);
+                if(!match)throw Error("E_U6_TEST_NATIVE_PART_METADATA");
+                return {sourcePartRef:button.dataset.sourcePartRef,
+                  tile:[Number(match[3]),Number(match[4]),Number(match[5])],
+                  part:button.dataset.part,dataset:match[1],record:Number(match[2])};
+              }));
+          assert.equal(native128.length,128);
+          assert.equal(new Set(native128.map(m=>m.sourcePartRef)).size,128);
+          const baseDef=u6JSON.battlescapeDraft.sourceDefinitions.find(
+            d=>d.mapId==="CULTA11");
+          assert.ok(baseDef,"same native MAP bytes as 10x10 source definition");
+          const saturated={...u6JSON,
+            objectDraft:{...u6JSON.objectDraft,
+              hypotheses:[{...u6JSON.objectDraft.hypotheses[0],members:native128}]},
+            battlescapeDraft:{...u6JSON.battlescapeDraft,
+              sourceDefinitions:ids.map(id=>({...baseDef,mapId:id})),
+              instances:ids.map((id,i)=>({id:"mbi-"+(i+1),mapId:id,
+                sourceDigest:baseDef.sourceDigest,anchor:i,slots:1})),
+              nextSequence:25,selectedSlot:0}};
+          const saturatedPath=join(u6WorkDir,"saturation-25-128.json");
+          await writeFile(saturatedPath,JSON.stringify(saturated));
+          await stressPage.locator("#project-file").setInputFiles(saturatedPath);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          const nativeBefore=await stressPage.evaluate(()=>window.__studioU3PlacementCalls.length);
+          await stressPage.locator("#project-folder").setInputFiles(stressRoot);
+          await stressPage.locator("#project-verify").click();
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("APPLY_AVAILABLE") ||
+            document.querySelector("#project-status").textContent.startsWith("PARKED_CONFLICT"),
+            null,{timeout:90000});
+          assert.match(await stressPage.locator("#project-status").textContent(),/^APPLY_AVAILABLE/,
+            "25 separate native definitions and 128 parts must revalidate");
+          const budgetText=await stressPage.locator("#project-status").textContent();
+          const bm=/(\d+) байт и (\d+) страниц/.exec(budgetText);
+          assert.ok(bm,"native verification must report bounded work");
+          assert.ok(Number(bm[1])<=64*1024*1024);
+          assert.ok(Number(bm[2])<=256);
+          assert.ok((await stressPage.evaluate(()=>window.__studioU3PlacementCalls.length))-
+            nativeBefore>=52,"each 25 MAPs plus U2 source is verified for both roots");
+          await stressPage.locator("#project-apply").click();
+          assert.match(await stressPage.locator("#battlescape-count").textContent(),
+            /25 экземпляров · 25\/25 слотов · 25 проверенных определений/);
+          assert.equal(await stressPage.locator("#object-members button").count(),128);
+          console.log("STUDIO_D4_U6_A06_NATIVE_25_MAPS_128_PARTS_WITHIN_BUDGET_PASS",budgetText);
+
+          // A06 parser and total-read budget must reject over-limit inputs
+          // without partially publishing a replacement of the 25-slot draft.
+          const unchanged=await stressPage.locator("#battlescape-count").textContent();
+          const overMembers=join(u6WorkDir,"too-many-members.json");
+          await writeFile(overMembers,JSON.stringify({...saturated,
+            objectDraft:{...saturated.objectDraft,hypotheses:[{
+              ...saturated.objectDraft.hypotheses[0],
+              members:[...native128,native128[0]]
+            }]}}));
+          await stressPage.locator("#project-file").setInputFiles(overMembers);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          assert.equal(await stressPage.locator("#battlescape-count").textContent(),unchanged);
+          const overInstances=join(u6WorkDir,"too-many-instances.json");
+          await writeFile(overInstances,JSON.stringify({...saturated,
+            battlescapeDraft:{...saturated.battlescapeDraft,instances:[
+              ...saturated.battlescapeDraft.instances,saturated.battlescapeDraft.instances[0]
+            ]}}));
+          await stressPage.locator("#project-file").setInputFiles(overInstances);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          assert.equal(await stressPage.locator("#battlescape-count").textContent(),unchanged);
+
+          const largeMcd=Buffer.alloc(3*1024*1024);
+          await writeFile(join(stressRoot,"TERRAIN","CULTIVAT.MCD"),largeMcd);
+          await stressPage.locator("#project-file").setInputFiles(saturatedPath);
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await stressPage.locator("#project-folder").setInputFiles(stressRoot);
+          await stressPage.locator("#project-verify").click();
+          await stressPage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_VERIFY_BUDGET"),null,{timeout:30000});
+          assert.equal(await stressPage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await stressPage.locator("#battlescape-count").textContent(),unchanged);
+          console.log("STUDIO_D4_U6_A06_TOTAL_64MIB_LIMIT_AND_25_PINNED_PASS");
+        }finally{await stressPage.close()}
+
+        // R1 §6 negative format and native binding checks: strict UTF-8,
+        // oversize pre-read, unrecognized receipt, forged existing-looking
+        // SourcePartRef. None may change current Source/U2/U4.
+        const negativePage=await network.context.newPage();
+        negativePage.on("dialog",dialog=>dialog.accept());
+        try{
+          await negativePage.goto(url+"/");
+          const noMutation=await negativePage.locator("#downloads button").count();
+          const invalidCases=[
+            ["oversized.json",Buffer.alloc(512*1024+1,0x20)],
+            ["invalid-utf8.json",Buffer.from([0xff,0xfe,0xfa])],
+            ["forged-receipt.json",Buffer.from(JSON.stringify({...u6JSON,nativeProof:{approved:true}}))],
+            ["polluted.json",Buffer.from(JSON.stringify({...u6JSON,__proto__:null,
+              presentation:{...u6JSON.presentation,constructor:{prototype:{x:1}}}}))]
+          ];
+          for(const [name,buffer] of invalidCases){
+            await negativePage.locator("#project-file").setInputFiles([
+              {name,mimeType:"application/json",buffer}]);
+            await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+              .textContent.startsWith("REJECTED"),null,{timeout:30000});
+            assert.equal(await negativePage.locator("#project-apply").isDisabled(),true);
+            assert.equal(await negativePage.locator("#downloads button").count(),noMutation);
+          }
+          console.log("STUDIO_D4_U6_R1_UTF8_OVERSIZE_UNKNOWN_PROOF_REJECTED_PASS");
+        }finally{await negativePage.close()}
       }finally{await rm(u6WorkDir,{recursive:true,force:true})}
 
       await workspace("mapblock").click();
