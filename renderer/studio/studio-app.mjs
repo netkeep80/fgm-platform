@@ -1943,6 +1943,22 @@ async function u6NativeVerify(project,stagedFiles,token){
   };
   const verifyRoot=async (root,label)=>{
     const output=new Map();
+    // Fail closed BEFORE native execution on an inevitably over-budget root.
+    // Each MAP independently reads its MAP plus ordered MCD inputs; the same
+    // MCD may be read again for another definition and must be counted again.
+    let projected=0;
+    for(const id of expected.keys()){
+      check();
+      const map=root.maps.get(id);
+      u6Valid(map?.datasets&&map.datasets.length&&!map.missing.length,
+        "E_U6_SOURCE_MISSING");
+      const sizes=[resolveFile(root.index,map.path).size,...map.datasets.map(dataset=>
+        resolveFile(root.index,root.result.terrain[dataset].mcd).size)];
+      u6Valid(sizes.every(n=>Number.isSafeInteger(n)&&n>0),"E_U6_VERIFY_BUDGET");
+      u6Valid(sizes.reduce((a,b)=>a+b,0)<=MAX,"E_U6_VERIFY_BUDGET");
+      projected+=sizes.reduce((a,b)=>a+b,0);
+      u6Valid(budgetBytes+projected<=U6_READ_MAX,"E_U6_VERIFY_BUDGET");
+    }
     for(const [id,expect] of [...expected.entries()].sort((a,b)=>a[0].localeCompare(b[0]))){
       check();
       const map=root.maps.get(id);
