@@ -1497,6 +1497,16 @@ try{
         "WHOLE_FRAME_READY","filePath","webkitRelativePath"])
         assert.equal(u6Bytes.includes(forbidden),false,"no private source bytes/proof");
       console.log("STUDIO_D4_U6_EXPORT_LOCAL_BOUNDED_DRAFT_PASS");
+      // A07 must preserve an ACTUAL native Whole R06 result, not only
+      // an empty owner. Synthetic whole fixture still runs real C++20/WASM.
+      await page.locator("#whole-demo").click();
+      await page.waitForFunction(()=>!document.querySelector("#whole-run").disabled,
+        null,{timeout:20000});
+      await page.locator("#whole-run").click();
+      await page.waitForFunction(()=>document.querySelector("#whole-status")
+        .dataset.state==="COMPLETED",null,{timeout:60000});
+      assert.equal(await page.locator("#whole-downloads button").count(),5);
+
 
       // A07: DECLINE ordinary source mutations in capture phase. Both the
       // existing Source handlers and independent Whole target listeners must
@@ -1507,6 +1517,9 @@ try{
         u2:document.querySelector("#object-draft-state").textContent,
         u4:document.querySelector("#battlescape-count").textContent,
         whole:document.querySelector("#whole-status").textContent,
+        wholeProof:document.querySelector("#whole-metrics").textContent,
+        wholeButtons:document.querySelectorAll("#whole-downloads button").length,
+        wholeEvidence:window.__u5WholeEvents.at(-1)?.state??null,
         sourceEvents:window.__u5SourceEvents.length,
         wholeEvents:window.__u5WholeEvents.length
       }));
@@ -1520,6 +1533,9 @@ try{
         u2:document.querySelector("#object-draft-state").textContent,
         u4:document.querySelector("#battlescape-count").textContent,
         whole:document.querySelector("#whole-status").textContent,
+        wholeProof:document.querySelector("#whole-metrics").textContent,
+        wholeButtons:document.querySelectorAll("#whole-downloads button").length,
+        wholeEvidence:window.__u5WholeEvents.at(-1)?.state??null,
         sourceEvents:window.__u5SourceEvents.length,
         wholeEvents:window.__u5WholeEvents.length
       }));

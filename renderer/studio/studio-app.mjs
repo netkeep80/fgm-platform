@@ -1875,9 +1875,10 @@ for(const id of ["directory","local-files","catalog-map","demo"]){
   const control=u6Node(id),eventType=id==="demo"?"click":"change";
   document.addEventListener(eventType,event=>{
     if(event.target!==control)return;
+    // Derived Source/Whole output alone is reproducible and must not block
+    // unattended historical catalogue/HTTP smoke; guard actual unsaved intent.
     const draftDirty=!!objectDraft||u4Instances.size>0;
-    const hasWork=draftDirty||!!result||
-      u6Node("whole-status").dataset.state==="COMPLETED";
+    const hasWork=draftDirty||!!u6Project;
     if(hasWork&&!window.confirm("Смена обычного источника может сбросить U2/U4, R05 и Whole R06. Несохранённое лучше экспортировать. Продолжить?")){
       event.preventDefault();event.stopImmediatePropagation();
       if(id==="catalog-map")control.value=u6CommittedMap;
