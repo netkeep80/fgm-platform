@@ -1499,6 +1499,7 @@ try{
       console.log("STUDIO_D4_U6_EXPORT_LOCAL_BOUNDED_DRAFT_PASS");
       // A07 must preserve an ACTUAL native Whole R06 result, not only
       // an empty owner. Synthetic whole fixture still runs real C++20/WASM.
+      await workspace("source").click();
       await page.locator("#whole-demo").click();
       await page.waitForFunction(()=>!document.querySelector("#whole-run").disabled,
         null,{timeout:20000});
