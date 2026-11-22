@@ -107,6 +107,20 @@ body:not([data-workspace=object]) #object-hypothesis-panel{display:none}
 .object-member span{flex:1;min-width:140px;font:11px/1.5 monospace;overflow-wrap:anywhere}
 #object-draft-state,#object-action-status{overflow-wrap:anywhere}
 #object-action-status[data-state=ERROR]{color:#ffad91}
+
+/* D4-U4: source-bound 50x50 DRAFT layout; independent of the U1/U3 native inspectors. */
+body:not([data-workspace=map]) #battlescape-panel{display:none}
+#battlescape-panel{display:flex;flex-direction:column;gap:9px;min-width:0;padding:12px}
+#battlescape-panel[hidden]{display:none}
+#battlescape-panel .muted,#battlescape-status,#battlescape-selected{overflow-wrap:anywhere}
+#battlescape-scroll{max-width:100%;overflow:auto;overscroll-behavior:contain;border:1px solid #526b83;border-radius:5px}
+#battlescape-grid{display:grid;grid-template-columns:repeat(5,minmax(66px,1fr));gap:3px;padding:5px;min-width:340px}
+.battlescape-slot{min-height:65px;padding:5px;font-size:11px;line-height:1.4;overflow-wrap:anywhere;background:#243d50}
+.battlescape-slot[data-occupied=true]{background:#23534c}
+.battlescape-slot[aria-pressed=true]{outline:3px solid #f1dc91;outline-offset:-3px}
+.battlescape-slot:focus-visible,#battlescape-panel button:focus-visible{outline:3px solid #e0df9e;outline-offset:1px}
+#battlescape-selected{font:12px/1.6 monospace}
+@media(max-width:600px){#battlescape-panel{padding:7px}#battlescape-grid{grid-template-columns:repeat(5,67px)}}
 </style>
 </head>
 <body data-workspace="source">
@@ -238,6 +252,18 @@ body:not([data-workspace=object]) #object-hypothesis-panel{display:none}
 <p id="mapblock-selected" role="status">Клетка не выбрана.</p>
 <div id="mapblock-parts" role="group" aria-label="Нативные части выбранной клетки"></div>
 <button id="mapblock-open-source" type="button" disabled>К исходным частям R04/R06</button>
+</section>
+<section id="battlescape-panel" hidden aria-labelledby="battlescape-heading">
+<h2 id="battlescape-heading">Карта 50×50 · D4-U4 / DRAFT_LAYOUT_2D</h2>
+<p class="muted">Локальная схема из исходных блоков MAP, а не оригинальная тактическая карта, не 3D, не RMP и не реконструкция FGM. Шаг размещения 10 клеток, сетка 5×5.</p>
+<label for="battlescape-template">Шаблон из текущего каталога (не готов, пока не проверен нативно)</label>
+<select id="battlescape-template" disabled><option value="">— выберите папку UFO —</option></select>
+<button id="battlescape-verify" type="button" disabled>Проверить шаблон через R02/WASM</button>
+<p id="battlescape-status" role="status" aria-live="polite">NO_SOURCE · выберите папку UFO.</p>
+<div id="battlescape-scroll"><div id="battlescape-grid" role="group" aria-label="Схема тактического поля: 5 на 5 слотов по 10 клеток"></div></div>
+<p id="battlescape-selected" role="status">Слот (0,0) не занят.</p>
+<div class="row"><button id="battlescape-place" type="button">Разместить</button><button id="battlescape-replace" type="button">Заменить</button><button id="battlescape-remove" type="button">Удалить</button></div>
+<p id="battlescape-count" role="status">DRAFT · 0 экземпляров · 0/25 слотов</p>
 </section>
 <section id="studio-workspace-placeholder" role="status" aria-live="polite" hidden><h2 id="studio-workspace-heading">Режим пока недоступен</h2><p id="studio-workspace-description">Выберите рабочее пространство.</p></section>
 <canvas id="preview" width="840" height="630" aria-label="Сравнение реконструкции R05" aria-describedby="hint"></canvas>
