@@ -1674,10 +1674,34 @@ try{
             document.documentElement.scrollWidth,document.documentElement.clientWidth]),[390,390]);
         }finally{await projectPage.close()}
 
+        // Test-only transparent Worker interception on each *new* page.
+        // Original page.addInitScript is page-scoped, not inherited by pages
+        // created later in the same BrowserContext.
+        const instrumentProjectPage=async target=>target.addInitScript(()=>{
+          window.__studioU3PlacementCalls=[];
+          window.__studioGateCatalog=false;window.__studioReleaseCatalog=null;
+          const NativeWorker=window.Worker;
+          window.Worker=class U6ObservedWorker extends NativeWorker{
+            postMessage(data,...args){
+              const request=typeof data==="string"?JSON.parse(data):null;
+              if(request?.action==="catalog-placements")
+                window.__studioU3PlacementCalls.push({
+                  map:request.map,floor:request.floor,offset:request.offset
+                });
+              if(window.__studioGateCatalog&&request?.action==="catalog-map"){
+                window.__studioReleaseCatalog=()=>super.postMessage(data,...args);
+                return;
+              }
+              return super.postMessage(data,...args);
+            }
+          };
+        });
+
         // P2-01: stage genuine project files with NO active Source. Rebind and
         // native proof are independent of activation; later Source selection
         // only enables Apply after a fresh second native comparison.
         const stagePage=await network.context.newPage();
+        await instrumentProjectPage(stagePage);
         stagePage.on("dialog",dialog=>dialog.accept());
         try{
           await stagePage.goto(url+"/");
@@ -1777,6 +1801,7 @@ try{
         // Source A may be incompatible while separately selected project B is
         // successfully checked by R02. Source A remains selected and untouched.
         const conflictPage=await network.context.newPage();
+        await instrumentProjectPage(conflictPage);
         conflictPage.on("dialog",dialog=>dialog.accept());
         try{
           await conflictPage.goto(url+"/");
@@ -1851,6 +1876,7 @@ try{
         for(const id of ids)
           await writeFile(join(stressRoot,"MAPS",id+".MAP"),makeU3Map(10,10,1,2));
         const stressPage=await network.context.newPage();
+        await instrumentProjectPage(stressPage);
         stressPage.on("dialog",dialog=>dialog.accept());
         try{
           await stressPage.goto(url+"/");
