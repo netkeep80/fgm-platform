@@ -1934,13 +1934,25 @@ try{
             .locator('option[value="CULTA10"]').waitFor({state:"attached"});
           await stressPage.locator("#catalog-map")
             .locator('option[value="DESERT00"]').waitFor({state:"attached"});
-          await stressPage.locator("#catalog-map").selectOption("DESERT00");
-          await stressPage.waitForFunction(()=>document.querySelectorAll(
-            "#source-grid button[data-source-part-ref]").length>0,null,{timeout:60000});
-          const desertDigest=(await stressPage.locator(
-            "#source-grid button[data-source-part-ref]").first()
-            .getAttribute("data-source-part-ref")).split("/")[0];
-          assert.match(desertDigest,/^[a-f0-9]{64}$/);
+          // Source digest is deliberately bound to MAP ID as well as bytes and
+          // ordered MCD IDs; do not reuse a digest across identical MAP files.
+          const nativeDigests=new Map();
+          for(const id of ids){
+            await stressPage.locator("#catalog-map").selectOption(id);
+            await stressPage.waitForFunction(expected=>
+              document.querySelector("#catalog-map").value===expected &&
+              document.querySelectorAll("#source-grid button[data-source-part-ref]").length>0 &&
+              document.querySelector("#source-page-status").textContent.includes("SHA-256"),
+              id,{timeout:60000});
+            const ref=await stressPage.locator(
+              "#source-grid button[data-source-part-ref]").first()
+              .getAttribute("data-source-part-ref");
+            const digest=ref.split("/")[0];
+            assert.match(digest,/^[a-f0-9]{64}$/);
+            nativeDigests.set(id,digest);
+          }
+          assert.equal(nativeDigests.size,25);
+          assert.equal(new Set(nativeDigests.values()).size,25);
           await stressPage.locator("#catalog-map").selectOption("CULTA10");
           await stressPage.waitForFunction(()=>
             document.querySelectorAll("#source-grid button[data-source-part-ref]").length===128,
@@ -1959,9 +1971,9 @@ try{
           const baseDef=u6JSON.battlescapeDraft.sourceDefinitions.find(
             d=>d.mapId==="CULTA11");
           assert.ok(baseDef,"same native MAP bytes as 10x10 source definition");
-          const validDefs=ids.map(id=>id.startsWith("DESERT")
-            ? {...baseDef,mapId:id,sourceDigest:desertDigest,datasets:["BLANKS","DESERT"]}
-            : {...baseDef,mapId:id});
+          const validDefs=ids.map(id=>({...baseDef,mapId:id,
+            sourceDigest:nativeDigests.get(id),
+            datasets:id.startsWith("DESERT")?["BLANKS","DESERT"]:[...baseDef.datasets]}));
           const saturated={...u6JSON,
             objectDraft:{...u6JSON.objectDraft,
               hypotheses:[{...u6JSON.objectDraft.hypotheses[0],members:native128}]},
