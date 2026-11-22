@@ -2108,7 +2108,46 @@ try{
             assert.equal(await negativePage.locator("#project-apply").isDisabled(),true);
             assert.equal(await negativePage.locator("#downloads button").count(),noMutation);
           }
+
+          const overlapped={...u6JSON,battlescapeDraft:{
+            ...u6JSON.battlescapeDraft,
+            instances:u6JSON.battlescapeDraft.instances.map((item,index)=>
+              index===1?{...item,anchor:0}:item)
+          }};
+          await negativePage.locator("#project-file").setInputFiles([{
+            name:"forged-overlap.json",mimeType:"application/json",
+            buffer:Buffer.from(JSON.stringify(overlapped))
+          }]);
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          const protoJson='{"__proto__":{"compromised":true},'+JSON.stringify(u6JSON).slice(1);
+          await negativePage.locator("#project-file").setInputFiles([{
+            name:"prototype-injection.json",mimeType:"application/json",
+            buffer:Buffer.from(protoJson)
+          }]);
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("REJECTED"),null,{timeout:30000});
+          assert.equal(await negativePage.evaluate(()=>Object.prototype.compromised),undefined);
+          const forgedPart={...u6JSON,objectDraft:{...u6JSON.objectDraft,
+            hypotheses:u6JSON.objectDraft.hypotheses.map((h,i)=>i!==0?h:{
+              ...h,members:h.members.map((m,j)=>j!==0?m:{
+                ...m,sourcePartRef:u6JSON.objectDraft.source.sourceDigest+"/999999-0"
+              })
+            })}};
+          await negativePage.locator("#project-file").setInputFiles([{
+            name:"forged-native-part.json",mimeType:"application/json",
+            buffer:Buffer.from(JSON.stringify(forgedPart))
+          }]);
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.startsWith("PARKED_UNBOUND"),null,{timeout:30000});
+          await negativePage.locator("#project-folder").setInputFiles(rootDir);
+          await negativePage.locator("#project-verify").click();
+          await negativePage.waitForFunction(()=>document.querySelector("#project-status")
+            .textContent.includes("E_U6_PART_MISMATCH"),null,{timeout:60000});
+          assert.equal(await negativePage.locator("#project-apply").isDisabled(),true);
+          assert.equal(await negativePage.locator("#downloads button").count(),noMutation);
           console.log("STUDIO_D4_U6_R1_UTF8_OVERSIZE_UNKNOWN_PROOF_REJECTED_PASS");
+          console.log("STUDIO_D4_U6_R1_OVERLAP_PROTO_NATIVE_PART_REJECTION_PASS");
         }finally{await negativePage.close()}
       }finally{await rm(u6WorkDir,{recursive:true,force:true})}
 
