@@ -6,7 +6,8 @@ import {performance} from 'node:perf_hooks';
 import {createHash} from 'node:crypto';
 import os from 'node:os';
 
-const EPS=1e-9;
+// Depth comparison tolerance is NEVER geometric coverage or hit arbitration.
+const VERIFY_DEPTH_EPS=1e-9;
 const plus=(a,b)=>a.map((x,i)=>x+b[i]);
 const mul=(a,s)=>a.map(x=>x*s);
 const dot=(a,b)=>a.reduce((v,x,i)=>v+x*b[i],0);
@@ -26,8 +27,8 @@ const boxes=[
 // Entire global scene is pinned. IDs refer to semantic instances, not work regions.
 const hash=createHash('sha256').update(JSON.stringify(boxes)).digest('hex');
 // Exact global hit precedence is a strict total order for the declared finite domain.
-// EPS is used only when comparing independently computed results, NEVER as pairwise
-// fuzzy depth equality. A pairwise |t1-t2|<=EPS tie is not transitive.
+// VERIFY_DEPTH_EPS is used only when comparing independently computed results, NEVER as pairwise
+// fuzzy depth equality. A pairwise |t1-t2|<=VERIFY_DEPTH_EPS tie is not transitive.
 function validHit(a){
   return a!==null && typeof a==='object' && Number.isFinite(a.t) &&
     Number.isSafeInteger(a.priority) && typeof a.id==='string' &&
@@ -59,28 +60,28 @@ const oracleBetter=(a,b)=>!b || a.t<b.t || (a.t===b.t &&
 function slab(r,b){
   let near=-Infinity,far=Infinity,faceNear='',faceFar='';
   for(let k=0;k<3;k++){
-    if(Math.abs(r.d[k])<1e-14){if(r.o[k]<b.lo[k] || r.o[k]>b.hi[k])return null;continue;}
+    if(r.d[k]===0){if(r.o[k]<b.lo[k] || r.o[k]>b.hi[k])return null;continue;}
     let t1=(b.lo[k]-r.o[k])/r.d[k], t2=(b.hi[k]-r.o[k])/r.d[k];
     let f1=`${k}-`,f2=`${k}+`;
     if(t1>t2){[t1,t2]=[t2,t1];[f1,f2]=[f2,f1];}
     if(t1>near){near=t1;faceNear=f1;}
     if(t2<far){far=t2;faceFar=f2;}
-    if(near>far+EPS)return null;
+    if(near>far)return null;
   }
-  const t=near>EPS?near:far>EPS?far:null;
+  const t=near>0?near:far>0?far:null;
   if(t===null)return null;
-  return {t,id:b.id,priority:b.priority,face:near>EPS?faceNear:faceFar};
+  return {t,id:b.id,priority:b.priority,face:near>0?faceNear:faceFar};
 }
 function oracle(r,scene){let best=null;for(const b of scene){const h=slab(r,b);if(h&&oracleBetter(h,best))best=h;}return best;}
 // Candidate: independent six world-space FACE-plane intersections (not clipped-cell box faces).
 function faces(r,b){
   const out=[];
   for(let k=0;k<3;k++)for(const side of ['-','+']){
-    if(Math.abs(r.d[k])<1e-14)continue;
+    if(r.d[k]===0)continue;
     const t=((side==='-'?b.lo:b.hi)[k]-r.o[k])/r.d[k];
-    if(t<=EPS)continue;
+    if(t<=0)continue;
     const p=plus(r.o,mul(r.d,t));
-    if(p.every((v,i)=>i===k||v>=b.lo[i]-EPS && v<=b.hi[i]+EPS))
+    if(p.every((v,i)=>i===k||v>=b.lo[i] && v<=b.hi[i]))
       out.push({t,id:b.id,priority:b.priority,face:`${k}${side}`,p});
   }
   return out;
@@ -107,7 +108,7 @@ function pixel(c,x,y,n=48){
   const origin=plus(plus(mul(c.d,-30),mul(c.u,(x+0.5-n/2+c.panU)*c.step)),mul(c.v,(y+0.5-n/2+c.panV)*c.step));
   return ray(origin,c.d);
 }
-const same=(a,b)=>a===null&&b===null || a&&b&&a.id===b.id&&a.face===b.face&&Math.abs(a.t-b.t)<=1e-9;
+const same=(a,b)=>a===null&&b===null || a&&b&&a.id===b.id&&a.face===b.face&&Math.abs(a.t-b.t)<=VERIFY_DEPTH_EPS;
 function compareFrame(scene,cam,n=48,spp=4){
   let misses=0,hits=0,wrong=0;const bad=[];
   const offsets=spp===4?[[.25,.25],[.75,.25],[.25,.75],[.75,.75]]:[[.5,.5]];
@@ -147,7 +148,7 @@ const ordering=test('P2-A0-01 strict depth tie/priority/ID order is permutation-
     (a.id<b.id?-1:a.id>b.id?1:a.face[0]<b.face[0]?-1:
       a.face[0]>b.face[0]?1:a.face[1]===b.face[1]?0:a.face[1]==='-'?-1:1))[0];
   assert.equal(independent.id,'A');
-  const historical=(a,b)=>!b || a.t<b.t-EPS || Math.abs(a.t-b.t)<=EPS &&
+  const historical=(a,b)=>!b || a.t<b.t-VERIFY_DEPTH_EPS || Math.abs(a.t-b.t)<=VERIFY_DEPTH_EPS &&
     (a.priority>b.priority || a.priority===b.priority && a.id<b.id);
   assert(historical(triple[1],triple[0]));
   assert(historical(triple[2],triple[1]));
@@ -199,12 +200,85 @@ const ordering=test('P2-A0-01 strict depth tie/priority/ID order is permutation-
     for(const partition of [1,2,4]){
       const got=candidate(r,scene,partition);
       assert.equal(got.id,'A');assert.equal(got.face,'0-');
-      assert(Math.abs(got.t-ref.t)<=EPS);
+      assert(Math.abs(got.t-ref.t)<=VERIFY_DEPTH_EPS);
     }
   }
   return {triple_sequences:all.length,near_scene_orders:6,partitions:[1,8,64],
     coplanar_permutations:24,invalid_hit_cases:5,expected:'A',historical_cycle_confirmed:true,
     tested_key_policy:'finite_exact_depth_then_priority_desc_then_id_and_face_ordinal'};
+});
+// P2-A0-03: closed AABB geometric membership is exact in this analytic
+// finite-double fixture. Any fuzzy coverage halo must remain forbidden.
+// The slab oracle uses intersection intervals; candidate independently
+// tests six original plane coordinates with strict closed-face containment.
+const coverage=test('P2-A0-03 strict AABB near-miss/grazing/near-parallel hit parity',()=>{
+  const b=box('Boundary',[-1,-1,-1],[1,1,1]);
+  const formerlyFalse=ray([-2,1+VERIFY_DEPTH_EPS/2,0],[1,0,0]);
+  const oldXFacePoint=plus(formerlyFalse.o,mul(formerlyFalse.d,1));
+  assert(oldXFacePoint[1]>b.hi[1]);
+  assert(oldXFacePoint[1]<=b.hi[1]+VERIFY_DEPTH_EPS); // old bug witness
+  assert.equal(slab(formerlyFalse,b),null);
+  for(const partition of [1,2,4])assert.equal(candidate(formerlyFalse,[b],partition),null);
+
+  // Every perpendicular coordinate: inside, exactly on each closed side,
+  // and outside by either 0.5 or 2 verification tolerances.
+  const deltas=[-2*VERIFY_DEPTH_EPS,-VERIFY_DEPTH_EPS/2,0,
+                 VERIFY_DEPTH_EPS/2,2*VERIFY_DEPTH_EPS];
+  let axisSideCases=0,partitionComparisons=0,hits=0,misses=0;
+  for(const constrained of [0,1,2])for(const sign of [-1,1])for(const delta of deltas){
+    const moving=(constrained+1)%3,o=[0,0,0],d=[0,0,0];
+    o[moving]=-2; d[moving]=1; o[constrained]=sign*(1+delta);
+    const r=ray(o,d),expected=delta<=0,reference=slab(r,b);
+    assert.equal(Boolean(reference),expected,JSON.stringify({constrained,sign,delta,reference}));
+    if(reference){hits++;assert.equal(reference.face,`${moving}-`);}
+    else misses++;
+    for(const partition of [1,2,4]){
+      const got=candidate(r,[b],partition);
+      assert(same(reference,got),JSON.stringify({constrained,sign,delta,partition,reference,got}));
+      assert.equal(Boolean(got),expected);
+      partitionComparisons++;
+    }
+    axisSideCases++;
+  }
+
+  // Tangency is a single closed point at t>0; just-outside must remain MISS.
+  const tiny=2**-48;
+  const cases=[
+    {name:'vertex tangent',r:ray([-2,0,0],[1,1,0]),hit:true,face:'0-'},
+    {name:'vertex near-inside',r:ray([-2,-VERIFY_DEPTH_EPS/2,0],[1,1,0]),hit:true,face:'0-'},
+    {name:'vertex near-outside',r:ray([-2,VERIFY_DEPTH_EPS/2,0],[1,1,0]),hit:false},
+    {name:'lower vertex tangent',r:ray([-2,0,0],[1,-1,0]),hit:true,face:'0-'},
+    {name:'lower vertex near-outside',r:ray([-2,-VERIFY_DEPTH_EPS/2,0],[1,-1,0]),hit:false},
+    {name:'closed edge',r:ray([-2,1,1],[1,0,0]),hit:true,face:'0-'},
+    {name:'origin inside, exit',r:ray([0,0,0],[1,0,0]),hit:true,face:'0+'},
+    {name:'on face, outward',r:ray([1,0,0],[1,0,0]),hit:false},
+    {name:'on face, inward exit',r:ray([1,0,0],[-1,0,0]),hit:true,face:'0-'},
+    {name:'near-parallel crosses upper y',r:ray([-2,1+2*tiny,0],[1,-tiny,0]),hit:true,face:'1+'},
+    {name:'near-parallel stays outside',r:ray([-2,1+8*tiny,0],[1,-tiny,0]),hit:false}
+  ];
+  for(const item of cases){
+    const reference=slab(item.r,b);
+    assert.equal(Boolean(reference),item.hit,item.name+' slab');
+    if(item.hit)assert.equal(reference.face,item.face,item.name+' slab face');
+    for(const partition of [1,2,4]){
+      const got=candidate(item.r,[b],partition);
+      assert(same(reference,got),item.name+' partition '+partition+
+        ' '+JSON.stringify({reference,got}));
+      partitionComparisons++;
+    }
+  }
+  // Original near>far+EPS allowed a small positive gap in slab intervals.
+  const gapRay=ray([-2,VERIFY_DEPTH_EPS/2,0],[1,1,0]);
+  const gapNear=1,gapFar=1-VERIFY_DEPTH_EPS/2;
+  assert(gapNear>gapFar && gapNear<=gapFar+VERIFY_DEPTH_EPS);
+  assert.equal(slab(gapRay,b),null);
+  for(const partition of [1,2,4])assert.equal(candidate(gapRay,[b],partition),null);
+  return {coverage_rule:'closed_box_exact_membership_positive_t_only',
+    verification_epsilon_only:VERIFY_DEPTH_EPS,
+    axis_side_cases:axisSideCases,axis_side_hits:hits,axis_side_misses:misses,
+    adversarial_cases:cases.length,partition_comparisons:partitionComparisons+3,
+    false_hit_reproduced_pre_fix:true,near_parallel_nonzero_tested:true,
+    interval_gap_rejected:true};
 });
 const naiveClip=test('R0-01/05 negative: artificial cut-face is invalid',()=>{
   const b=box('whole',[-1,-1,-1],[1,1,1]);const r=ray([-.5,0,0],[1,0,0]);
@@ -254,6 +328,6 @@ function bench(name,fn,runs=11){
 const benchScene=boxes.slice(0,5),benchN=48;
 const benches=[bench('O-H global slab CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)oracle(pixel(baseCam,x,y,benchN),benchScene);}),
  bench('face candidate + 8-region merge CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)candidate(pixel(baseCam,x,y,benchN),benchScene,2);})];
-const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with bucketed global depth/ID',eps_verify_depth:EPS,depth_order_policy:'strict_finite_t_then_priority_then_ascii_id_and_axis_minus_first',eq,ordering,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
+const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with bucketed global depth/ID',eps_verify_depth:VERIFY_DEPTH_EPS,depth_order_policy:'strict_finite_t_then_priority_then_ascii_id_and_axis_minus_first',coverage_policy:'closed_AABB_strict_containment_zero_direction_only_positive_t',eq,ordering,coverage,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
 console.log('R0_PREFLIGHT_JSON '+JSON.stringify(report));
 if(process.exitCode)process.exit(process.exitCode);
