@@ -56,33 +56,93 @@ const oracleBetter=(a,b)=>!b || a.t<b.t || (a.t===b.t &&
   (a.priority>b.priority || (a.priority===b.priority &&
     (a.id<b.id || (a.id===b.id && (a.face[0]<b.face[0] ||
       (a.face[0]===b.face[0] && a.face[1]==='-' && b.face[1]==='+')))))));
+// Float64 inputs denote exact dyadic rationals. Ambiguous boundary decisions
+// use exact BigInt cross products, not rounded point coordinates or EPS halos.
+// The independent slab and original-face methods share decoding, NOT geometry.
+const EXACT_VIEW=new DataView(new ArrayBuffer(8));
+const FLOAT_ERROR_FACTOR=64*Number.EPSILON;
+function dyadic(x){
+  if(!Number.isFinite(x))throw new Error('E_NONFINITE_GEOMETRY');
+  EXACT_VIEW.setFloat64(0,x,false);
+  const hi=EXACT_VIEW.getUint32(0,false),low=EXACT_VIEW.getUint32(4,false);
+  const e=(hi>>>20)&2047;
+  let m=(BigInt(hi&1048575)<<32n)|BigInt(low);
+  if(e!==0)m|=1n<<52n;
+  if(hi>>>31)m=-m;
+  return {m,e:m===0n?0:e===0?-1074:e-1023-52};
+}
+function exactFrame(r,b){
+  const parts=[...r.o,...r.d,...b.lo,...b.hi].map(dyadic);
+  const minE=Math.min(...parts.filter(v=>v.m!==0n).map(v=>v.e),0);
+  const values=parts.map(v=>v.m===0n?0n:v.m<<BigInt(v.e-minE));
+  return {o:values.slice(0,3),d:values.slice(3,6),
+    lo:values.slice(6,9),hi:values.slice(9,12)};
+}
+function exactPlaneT(frame,axis,side){
+  let n=(side==='-'?frame.lo:frame.hi)[axis]-frame.o[axis],d=frame.d[axis];
+  if(d<0n){n=-n;d=-d;}
+  if(d===0n)throw new Error('E_PARALLEL_PLANE_T');
+  return {n,d};
+}
+function exactTimeCmp(frame,a,b){
+  const x=exactPlaneT(frame,a.axis,a.side),y=exactPlaneT(frame,b.axis,b.side);
+  const diff=x.n*y.d-y.n*x.d;
+  return diff<0n?-1:diff>0n?1:0;
+}
+function exactFaceContains(frame,axis,side){
+  const t=exactPlaneT(frame,axis,side);
+  if(t.n<=0n)return false;
+  for(let i=0;i<3;i++)if(i!==axis){
+    const p=frame.o[i]*t.d+frame.d[i]*t.n;
+    if(p<frame.lo[i]*t.d||p>frame.hi[i]*t.d)return false;
+  }
+  return true;
+}
 // O-H reference: classic independent global ray vs AABB slab; no per-fragment compositor.
 function slab(r,b){
-  let near=-Infinity,far=Infinity,faceNear='',faceFar='';
+  let near=null,far=null,exact=null;
+  const cmp=(a,c)=>{
+    const dt=a.t-c.t,scale=Math.max(1,Math.abs(a.t),Math.abs(c.t));
+    if(Number.isFinite(dt)&&Math.abs(dt)>FLOAT_ERROR_FACTOR*scale)return dt<0?-1:1;
+    exact||=exactFrame(r,b);
+    return exactTimeCmp(exact,a,c);
+  };
   for(let k=0;k<3;k++){
-    if(r.d[k]===0){if(r.o[k]<b.lo[k] || r.o[k]>b.hi[k])return null;continue;}
-    let t1=(b.lo[k]-r.o[k])/r.d[k], t2=(b.hi[k]-r.o[k])/r.d[k];
-    let f1=`${k}-`,f2=`${k}+`;
-    if(t1>t2){[t1,t2]=[t2,t1];[f1,f2]=[f2,f1];}
-    if(t1>near){near=t1;faceNear=f1;}
-    if(t2<far){far=t2;faceFar=f2;}
-    if(near>far)return null;
+    if(r.d[k]===0){if(r.o[k]<b.lo[k]||r.o[k]>b.hi[k])return null;continue;}
+    const tlo=(b.lo[k]-r.o[k])/r.d[k],thi=(b.hi[k]-r.o[k])/r.d[k];
+    if(!Number.isFinite(tlo)||!Number.isFinite(thi))throw Error('E_UNREPRESENTABLE_DEPTH');
+    let a={t:tlo,axis:k,side:'-'},c={t:thi,axis:k,side:'+'};
+    if(cmp(a,c)>0)[a,c]=[c,a];
+    if(!near||cmp(a,near)>0)near=a;
+    if(!far||cmp(c,far)<0)far=c;
+    if(cmp(near,far)>0)return null;
   }
-  const t=near>0?near:far>0?far:null;
-  if(t===null)return null;
-  return {t,id:b.id,priority:b.priority,face:near>0?faceNear:faceFar};
+  const selected=near&&near.t>0?near:far&&far.t>0?far:null;
+  if(!selected)return null;
+  return {t:selected.t,id:b.id,priority:b.priority,face:`${selected.axis}${selected.side}`};
 }
 function oracle(r,scene){let best=null;for(const b of scene){const h=slab(r,b);if(h&&oracleBetter(h,best))best=h;}return best;}
 // Candidate: independent six world-space FACE-plane intersections (not clipped-cell box faces).
 function faces(r,b){
-  const out=[];
+  const out=[];let exact=null;
   for(let k=0;k<3;k++)for(const side of ['-','+']){
     if(r.d[k]===0)continue;
     const t=((side==='-'?b.lo:b.hi)[k]-r.o[k])/r.d[k];
+    if(!Number.isFinite(t))throw Error('E_UNREPRESENTABLE_DEPTH');
     if(t<=0)continue;
     const p=plus(r.o,mul(r.d,t));
-    if(p.every((v,i)=>i===k||v>=b.lo[i] && v<=b.hi[i]))
-      out.push({t,id:b.id,priority:b.priority,face:`${k}${side}`,p});
+    let contains=true;
+    for(let i=0;i<3;i++)if(i!==k){
+      const err=FLOAT_ERROR_FACTOR*(1+Math.abs(r.o[i])+Math.abs(r.d[i]*t)+
+        Math.abs(p[i])+Math.abs(b.lo[i])+Math.abs(b.hi[i]));
+      if(p[i]<b.lo[i]-err||p[i]>b.hi[i]+err){contains=false;break;}
+      if(p[i]<=b.lo[i]+err||p[i]>=b.hi[i]-err){
+        exact||=exactFrame(r,b);
+        contains=exactFaceContains(exact,k,side);
+        break;
+      }
+    }
+    if(contains)out.push({t,id:b.id,priority:b.priority,face:`${k}${side}`,p});
   }
   return out;
 }
@@ -273,10 +333,33 @@ const coverage=test('P2-A0-03 strict AABB near-miss/grazing/near-parallel hit pa
   assert(gapNear>gapFar && gapNear<=gapFar+VERIFY_DEPTH_EPS);
   assert.equal(slab(gapRay,b),null);
   for(const partition of [1,2,4])assert.equal(candidate(gapRay,[b],partition),null);
-  return {coverage_rule:'closed_box_exact_membership_positive_t_only',
+
+  // An adversarial ray grazing the X=-1 / Y=+1 corner exposes independent
+  // binary64 rounding in naive slab-vs-recomputed-point predicates.
+  let state=123456789,oldFloatFalseHits=0,nearUlpCompared=0;
+  const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296};
+  const offsets=[0,Number.EPSILON,-Number.EPSILON,
+    2*Number.EPSILON,-2*Number.EPSILON,5e-10,-5e-10,
+    1e-13,-1e-13,1e-15,-1e-15];
+  for(let i=0;i<2200;i++){
+    const y0=-.99+random()*1.98,z0=-.99+random()*1.98;
+    const r=ray([-2,y0,z0],[1,1-y0+offsets[i%offsets.length],0]);
+    const reference=slab(r,b);
+    for(const partition of [1,2,4]){
+      const got=candidate(r,[b],partition);
+      assert(same(reference,got),JSON.stringify({i,partition,reference,got,r}));
+      nearUlpCompared++;
+    }
+    const oldT=(b.hi[1]-r.o[1])/r.d[1];
+    const oldX=r.o[0]+r.d[0]*oldT;
+    if(oldT>0&&oldX>=b.lo[0]&&oldX<=b.hi[0]&&!reference)oldFloatFalseHits++;
+  }
+  assert(oldFloatFalseHits>0,'near-ULP control must catch naive float false hits');
+  return {coverage_rule:'closed_box_exact_dyadic_membership_positive_representable_t',
     verification_epsilon_only:VERIFY_DEPTH_EPS,
     axis_side_cases:axisSideCases,axis_side_hits:hits,axis_side_misses:misses,
-    adversarial_cases:cases.length,partition_comparisons:partitionComparisons+3,
+    adversarial_cases:cases.length,partition_comparisons:partitionComparisons+3+nearUlpCompared,
+    near_ulp_ray_cases:2200,near_ulp_old_false_hits:oldFloatFalseHits,
     false_hit_reproduced_pre_fix:true,near_parallel_nonzero_tested:true,
     interval_gap_rejected:true};
 });
@@ -328,6 +411,6 @@ function bench(name,fn,runs=11){
 const benchScene=boxes.slice(0,5),benchN=48;
 const benches=[bench('O-H global slab CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)oracle(pixel(baseCam,x,y,benchN),benchScene);}),
  bench('face candidate + 8-region merge CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)candidate(pixel(baseCam,x,y,benchN),benchScene,2);})];
-const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with bucketed global depth/ID',eps_verify_depth:VERIFY_DEPTH_EPS,depth_order_policy:'strict_finite_t_then_priority_then_ascii_id_and_axis_minus_first',coverage_policy:'closed_AABB_strict_containment_zero_direction_only_positive_t',eq,ordering,coverage,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
+const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with bucketed global depth/ID',eps_verify_depth:VERIFY_DEPTH_EPS,depth_order_policy:'strict_finite_t_then_priority_then_ascii_id_and_axis_minus_first',coverage_policy:'closed_AABB_exact_dyadic_predicates_for_ambiguous_float64',eq,ordering,coverage,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
 console.log('R0_PREFLIGHT_JSON '+JSON.stringify(report));
 if(process.exitCode)process.exit(process.exitCode);
