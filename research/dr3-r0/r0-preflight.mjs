@@ -25,10 +25,31 @@ const boxes=[
 ];
 // Entire global scene is pinned. IDs refer to semantic instances, not work regions.
 const hash=createHash('sha256').update(JSON.stringify(boxes)).digest('hex');
-const key=(h)=>h ? `${h.id}/${h.face}` : '-';
-const better=(a,b)=>!b || a.t<b.t-EPS || Math.abs(a.t-b.t)<=EPS &&
-  (a.priority>b.priority || a.priority===b.priority && (a.id.localeCompare(b.id)<0 ||
-    a.id===b.id && a.face.localeCompare(b.face)<0));
+// Exact global hit precedence is a strict total order for the declared finite domain.
+// EPS is used only when comparing independently computed results, NEVER as pairwise
+// fuzzy depth equality. A pairwise |t1-t2|<=EPS tie is not transitive.
+function compareHit(a,b){
+  if(!Number.isFinite(a.t)||!Number.isFinite(b.t)||
+    !Number.isSafeInteger(a.priority)||!Number.isSafeInteger(b.priority)||
+    typeof a.id!=='string'||typeof b.id!=='string'||
+    typeof a.face!=='string'||typeof b.face!=='string'||
+    !/^[012][+-]$/.test(a.face)||!/^[012][+-]$/.test(b.face))throw new Error('E_HIT_KEY');
+  if(a.t!==b.t)return a.t<b.t?-1:1;
+  if(a.priority!==b.priority)return a.priority>b.priority?-1:1;
+  if(a.id!==b.id)return a.id<b.id?-1:1;
+  if(a.face!==b.face){
+    if(a.face[0]!==b.face[0])return a.face[0]<b.face[0]?-1:1;
+    return a.face[1]==='-'?-1:1; // canonical axis then '-' before '+'
+  }
+  return 0;
+}
+const better=(a,b)=>!b || compareHit(a,b)<0;
+// O-H keeps a separate implementation of the declared tie policy; it does NOT
+// call the candidate compositor's compareHit/better reduction.
+const oracleBetter=(a,b)=>!b || a.t<b.t || (a.t===b.t &&
+  (a.priority>b.priority || (a.priority===b.priority &&
+    (a.id<b.id || (a.id===b.id && (a.face[0]<b.face[0] ||
+      (a.face[0]===b.face[0] && a.face[1]==='-' && b.face[1]==='+')))))));
 // O-H reference: classic independent global ray vs AABB slab; no per-fragment compositor.
 function slab(r,b){
   let near=-Infinity,far=Infinity,faceNear='',faceFar='';
@@ -45,7 +66,7 @@ function slab(r,b){
   if(t===null)return null;
   return {t,id:b.id,priority:b.priority,face:near>EPS?faceNear:faceFar};
 }
-function oracle(r,scene){let best=null;for(const b of scene){const h=slab(r,b);if(h&&better(h,best))best=h;}return best;}
+function oracle(r,scene){let best=null;for(const b of scene){const h=slab(r,b);if(h&&oracleBetter(h,best))best=h;}return best;}
 // Candidate: independent six world-space FACE-plane intersections (not clipped-cell box faces).
 function faces(r,b){
   const out=[];
@@ -104,6 +125,74 @@ const eq=test('R0-01/03/04/06/09/10 shared hit/ID and 1,8,64 partitions',()=>{
   }
   return compareFrame(boxes,baseCam);
 });
+// P2-A0-01: first isolate arithmetic/tie ordering without geometry; then use
+// actual near-coplanar boxes spanning the x=0 region boundary. The independent
+// expected winner is computed by native Array.sort, not by compareHit/better.
+function permutations(xs){
+  if(xs.length===0)return [[]];
+  return xs.flatMap((x,i)=>permutations(xs.filter((_,j)=>j!==i)).map(rest=>[x,...rest]));
+}
+const ordering=test('P2-A0-01 strict depth tie/priority/ID order is permutation- and partition-invariant',()=>{
+  const triple=[
+    {id:'A',t:10,priority:0,face:'0-'},
+    {id:'B',t:10+0.75e-9,priority:1,face:'0-'},
+    {id:'C',t:10+1.5e-9,priority:2,face:'0-'}
+  ];
+  const independent=triple.slice().sort((a,b)=>a.t-b.t || b.priority-a.priority ||
+    (a.id<b.id?-1:a.id>b.id?1:a.face[0]<b.face[0]?-1:
+      a.face[0]>b.face[0]?1:a.face[1]===b.face[1]?0:a.face[1]==='-'?-1:1))[0];
+  assert.equal(independent.id,'A');
+  const historical=(a,b)=>!b || a.t<b.t-EPS || Math.abs(a.t-b.t)<=EPS &&
+    (a.priority>b.priority || a.priority===b.priority && a.id<b.id);
+  assert(historical(triple[1],triple[0]));
+  assert(historical(triple[2],triple[1]));
+  assert(historical(triple[0],triple[2]));
+  const all=permutations(triple);
+  for(const perm of all){
+    let fold=null;for(const h of perm)if(better(h,fold))fold=h;
+    assert.equal(fold.id,independent.id);
+    // Vary spatial group membership, local ordering and final group ordering.
+    for(const n of [1,2,4])for(const variant of [0,1,2]){
+      const groups=Array.from({length:n},()=>[]);
+      perm.forEach((h,i)=>groups[(i+variant)%n].push(h));
+      for(const arrangement of [groups,groups.slice().reverse()]){
+        let global=null;
+        for(const group of arrangement){
+          let local=null;for(const h of group)if(better(h,local))local=h;
+          if(local&&better(local,global))global=local;
+        }
+        assert.equal(global.id,independent.id);
+      }
+    }
+  }
+  const exact=[
+    {id:'z',t:10,priority:0,face:'0-'},
+    {id:'b',t:10,priority:2,face:'0-'},
+    {id:'a',t:10,priority:2,face:'0+'},
+    {id:'a',t:10,priority:2,face:'0-'}
+  ];
+  for(const order of permutations(exact)){
+    let winner=null;for(const h of order)if(better(h,winner))winner=h;
+    assert.equal(winner.id,'a');assert.equal(winner.face,'0-');
+  }
+  const r=ray([-10-.75e-9,0,0],[1,0,0]);
+  const near=[
+    box('A',[-.75e-9,-.5,-.5],[.1,.5,.5],0),
+    box('B',[0,-.5,-.5],[.1,.5,.5],1),
+    box('C',[.75e-9,-.5,-.5],[.1,.5,.5],2)
+  ];
+  for(const scene of permutations(near)){
+    const ref=oracle(r,scene);assert.equal(ref.id,'A');
+    for(const partition of [1,2,4]){
+      const got=candidate(r,scene,partition);
+      assert.equal(got.id,'A');assert.equal(got.face,'0-');
+      assert(Math.abs(got.t-ref.t)<=EPS);
+    }
+  }
+  return {triple_sequences:all.length,near_scene_orders:6,partitions:[1,8,64],
+    coplanar_permutations:24,expected:'A',historical_cycle_confirmed:true,
+    tested_key_policy:'finite_exact_depth_then_priority_desc_then_id_and_face_ordinal'};
+});
 const naiveClip=test('R0-01/05 negative: artificial cut-face is invalid',()=>{
   const b=box('whole',[-1,-1,-1],[1,1,1]);const r=ray([-.5,0,0],[1,0,0]);
   const trueHit=oracle(r,[b]),clipped=oracle(r,[box('whole',[0,-1,-1],[1,1,1])]);
@@ -152,6 +241,6 @@ function bench(name,fn,runs=11){
 const benchScene=boxes.slice(0,5),benchN=48;
 const benches=[bench('O-H global slab CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)oracle(pixel(baseCam,x,y,benchN),benchScene);}),
  bench('face candidate + 8-region merge CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)candidate(pixel(baseCam,x,y,benchN),benchScene,2);})];
-const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with bucketed global depth/ID',eps_depth:EPS,eq,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
+const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with bucketed global depth/ID',eps_verify_depth:EPS,depth_order_policy:'strict_finite_t_then_priority_then_ascii_id_and_axis_minus_first',eq,ordering,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
 console.log('R0_PREFLIGHT_JSON '+JSON.stringify(report));
 if(process.exitCode)process.exit(process.exitCode);
