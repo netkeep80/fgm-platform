@@ -28,12 +28,14 @@ const hash=createHash('sha256').update(JSON.stringify(boxes)).digest('hex');
 // Exact global hit precedence is a strict total order for the declared finite domain.
 // EPS is used only when comparing independently computed results, NEVER as pairwise
 // fuzzy depth equality. A pairwise |t1-t2|<=EPS tie is not transitive.
+function validHit(a){
+  return a!==null && typeof a==='object' && Number.isFinite(a.t) &&
+    Number.isSafeInteger(a.priority) && typeof a.id==='string' &&
+    /^[A-Za-z][A-Za-z0-9_-]*$/.test(a.id) && typeof a.face==='string' &&
+    /^[012][+-]$/.test(a.face);
+}
 function compareHit(a,b){
-  if(!Number.isFinite(a.t)||!Number.isFinite(b.t)||
-    !Number.isSafeInteger(a.priority)||!Number.isSafeInteger(b.priority)||
-    typeof a.id!=='string'||typeof b.id!=='string'||
-    typeof a.face!=='string'||typeof b.face!=='string'||
-    !/^[012][+-]$/.test(a.face)||!/^[012][+-]$/.test(b.face))throw new Error('E_HIT_KEY');
+  if(!validHit(a)||!validHit(b))throw new Error('E_HIT_KEY');
   if(a.t!==b.t)return a.t<b.t?-1:1;
   if(a.priority!==b.priority)return a.priority>b.priority?-1:1;
   if(a.id!==b.id)return a.id<b.id?-1:1;
@@ -43,7 +45,10 @@ function compareHit(a,b){
   }
   return 0;
 }
-const better=(a,b)=>!b || compareHit(a,b)<0;
+const better=(a,b)=>{
+  if(!validHit(a))throw new Error('E_HIT_KEY');
+  return !b || compareHit(a,b)<0;
+};
 // O-H keeps a separate implementation of the declared tie policy; it does NOT
 // call the candidate compositor's compareHit/better reduction.
 const oracleBetter=(a,b)=>!b || a.t<b.t || (a.t===b.t &&
@@ -153,8 +158,8 @@ const ordering=test('P2-A0-01 strict depth tie/priority/ID order is permutation-
     assert.equal(fold.id,independent.id);
     // Vary spatial group membership, local ordering and final group ordering.
     for(const n of [1,2,4])for(const variant of [0,1,2]){
-      const groups=Array.from({length:n},()=>[]);
-      perm.forEach((h,i)=>groups[(i+variant)%n].push(h));
+      const groups=Array.from({length:n**3},()=>[]);
+      perm.forEach((h,i)=>groups[(i*17+variant*13)%groups.length].push(h));
       for(const arrangement of [groups,groups.slice().reverse()]){
         let global=null;
         for(const group of arrangement){
@@ -164,6 +169,14 @@ const ordering=test('P2-A0-01 strict depth tie/priority/ID order is permutation-
         assert.equal(global.id,independent.id);
       }
     }
+  }
+  for(const invalid of [
+    {...triple[0],t:NaN},{...triple[0],t:Infinity},
+    {...triple[0],priority:0.5},{...triple[0],face:'3-'},
+    {...triple[0],id:'non-ascii-Ω'}
+  ]){
+    assert.throws(()=>better(invalid,null),/E_HIT_KEY/);
+    assert.throws(()=>better(invalid,triple[0]),/E_HIT_KEY/);
   }
   const exact=[
     {id:'z',t:10,priority:0,face:'0-'},
@@ -190,7 +203,7 @@ const ordering=test('P2-A0-01 strict depth tie/priority/ID order is permutation-
     }
   }
   return {triple_sequences:all.length,near_scene_orders:6,partitions:[1,8,64],
-    coplanar_permutations:24,expected:'A',historical_cycle_confirmed:true,
+    coplanar_permutations:24,invalid_hit_cases:5,expected:'A',historical_cycle_confirmed:true,
     tested_key_policy:'finite_exact_depth_then_priority_desc_then_id_and_face_ordinal'};
 });
 const naiveClip=test('R0-01/05 negative: artificial cut-face is invalid',()=>{
