@@ -33,11 +33,15 @@ function validHit(a){
   return a!==null && typeof a==='object' && Number.isFinite(a.t) &&
     Number.isSafeInteger(a.priority) && typeof a.id==='string' &&
     /^[A-Za-z][A-Za-z0-9_-]*$/.test(a.id) && typeof a.face==='string' &&
-    /^[012][+-]$/.test(a.face);
+    /^[012][+-]$/.test(a.face) &&
+    (!Object.hasOwn(a,'sourceDepth') || (a.sourceDepth &&
+      ['origin','bound','direction'].every(k=>Number.isFinite(a.sourceDepth[k])) &&
+      a.sourceDepth.direction!==0));
 }
 function compareHit(a,b){
   if(!validHit(a)||!validHit(b))throw new Error('E_HIT_KEY');
-  if(a.t!==b.t)return a.t<b.t?-1:1;
+  const depthOrder=compareExactDepth(a,b);
+  if(depthOrder!==0)return depthOrder;
   if(a.priority!==b.priority)return a.priority>b.priority?-1:1;
   if(a.id!==b.id)return a.id<b.id?-1:1;
   if(a.face!==b.face){
@@ -52,10 +56,18 @@ const better=(a,b)=>{
 };
 // O-H keeps a separate implementation of the declared tie policy; it does NOT
 // call the candidate compositor's compareHit/better reduction.
-const oracleBetter=(a,b)=>!b || a.t<b.t || (a.t===b.t &&
-  (a.priority>b.priority || (a.priority===b.priority &&
-    (a.id<b.id || (a.id===b.id && (a.face[0]<b.face[0] ||
-      (a.face[0]===b.face[0] && a.face[1]==='-' && b.face[1]==='+')))))));
+const oracleBetter=(a,b)=>{
+  if(!b)return true;
+  // Independent global reduction structure. Only primitive exact dyadic
+  // decoding is shared with the research candidate's comparator.
+  const left=hitRatio(a),right=hitRatio(b);
+  const delta=left.n*right.d-right.n*left.d;
+  if(delta!==0n)return delta<0n;
+  return a.priority>b.priority ||
+    (a.priority===b.priority &&
+      (a.id<b.id || (a.id===b.id && (a.face[0]<b.face[0] ||
+      (a.face[0]===b.face[0] && a.face[1]==='-' && b.face[1]==='+')))));
+};
 // Float64 inputs denote exact dyadic rationals. Ambiguous boundary decisions
 // use exact BigInt cross products, not rounded point coordinates or EPS halos.
 // The independent slab and original-face methods share decoding, NOT geometry.
@@ -76,7 +88,39 @@ function exactFrame(r,b){
   const minE=Math.min(...parts.filter(v=>v.m!==0n).map(v=>v.e),0);
   const values=parts.map(v=>v.m===0n?0n:v.m<<BigInt(v.e-minE));
   return {o:values.slice(0,3),d:values.slice(3,6),
-    lo:values.slice(6,9),hi:values.slice(9,12)};
+    lo:values.slice(6,9),hi:values.slice(9,12),unitExp:minE};
+}
+// The rounded Number t is a reporting approximation only; physical hit order
+// uses exact ray-plane parameter reconstructed from original finite float64.
+function hitRatio(hit){
+  const input=hit.sourceDepth;
+  const parts=input?[input.origin,input.bound,input.direction]:[0,hit.t,1];
+  const v=parts.map(dyadic),minE=Math.min(0,...v.filter(x=>x.m!==0n).map(x=>x.e));
+  const ints=v.map(x=>x.m===0n?0n:x.m<<BigInt(x.e-minE));
+  let n=ints[1]-ints[0],d=ints[2];
+  if(d<0n){n=-n;d=-d;}
+  if(d===0n)throw Error('E_EXACT_DEPTH_KEY');
+  return {n,d};
+}
+function compareExactDepth(a,b){
+  const x=hitRatio(a),y=hitRatio(b);
+  const difference=x.n*y.d-y.n*x.d;
+  return difference<0n?-1:difference>0n?1:0;
+}
+// Exact bucket ownership for the synthetic global range [-4,4]^3.
+// This groups ALL candidate hits; no fragment culling/clip boundary is used.
+function exactBucketCoord(r,b,face,partition){
+  const frame=exactFrame(r,b);
+  const t=exactPlaneT(frame,Number(face[0]),face[1]);
+  const unit=1n<<BigInt(-frame.unitExp);
+  const denom=8n*unit*t.d,cap=BigInt(partition-1);
+  return frame.o.map((o,i)=>{
+    const position=o*t.d+frame.d[i]*t.n;
+    const numerator=BigInt(partition)*(position+4n*unit*t.d);
+    if(numerator<=0n)return 0;
+    const index=numerator/denom;
+    return Number(index>cap?cap:index);
+  });
 }
 function exactPlaneT(frame,axis,side){
   let n=(side==='-'?frame.lo:frame.hi)[axis]-frame.o[axis],d=frame.d[axis];
@@ -119,7 +163,10 @@ function slab(r,b){
   }
   const selected=near&&near.t>0?near:far&&far.t>0?far:null;
   if(!selected)return null;
-  return {t:selected.t,id:b.id,priority:b.priority,face:`${selected.axis}${selected.side}`};
+  return {t:selected.t,id:b.id,priority:b.priority,face:`${selected.axis}${selected.side}`,
+    sourceDepth:{origin:r.o[selected.axis],
+      bound:(selected.side==='-'?b.lo:b.hi)[selected.axis],
+      direction:r.d[selected.axis]}};
 }
 function oracle(r,scene){let best=null;for(const b of scene){const h=slab(r,b);if(h&&oracleBetter(h,best))best=h;}return best;}
 // Candidate: independent six world-space FACE-plane intersections (not clipped-cell box faces).
@@ -142,14 +189,16 @@ function faces(r,b){
         break;
       }
     }
-    if(contains)out.push({t,id:b.id,priority:b.priority,face:`${k}${side}`,p});
+    if(contains)out.push({t,id:b.id,priority:b.priority,face:`${k}${side}`,
+      p,sourceDepth:{origin:r.o[k],bound:(side==='-'?b.lo:b.hi)[k],direction:r.d[k]}});
+      // p is only an APPROXIMATE diagnostic point; not a coverage or bucket key.
   }
   return out;
 }
 function candidate(r,scene,partition=1){
   const buckets=new Map();
   for(const b of scene)for(const h of faces(r,b)){
-    const coord=h.p.map(v=>Math.min(partition-1,Math.max(0,Math.floor((v+4)/8*partition))));
+    const coord=exactBucketCoord(r,b,h.face,partition);
     const k=coord.join(':');const a=buckets.get(k)||[];a.push(h);buckets.set(k,a);
   }
   let best=null;
@@ -363,6 +412,72 @@ const coverage=test('P2-A0-03 strict AABB near-miss/grazing/near-parallel hit pa
     false_hit_reproduced_pre_fix:true,near_parallel_nonzero_tested:true,
     interval_gap_rejected:true};
 });
+// P2-A0-04: strict global first-hit identity requires EXACT interobject t,
+// even when distinct dyadic rationals round to the SAME Number t.
+const globalDepth=test('P2-A0-04 global exact first-hit/priority and exact bucket membership',()=>{
+  const e=Number.EPSILON;
+  const A=box('A',[1,-1,-1],[1+e,1,1],0);
+  const B=box('B',[1+2*e,-1,-1],[1+3*e,1,1],1);
+  const C=box('C',[1+4*e,-1,-1],[1+5*e,1,1],2);
+  const r=ray([-4,0,0],[5,0,0]);
+  const ha=slab(r,A),hb=slab(r,B);
+  assert.equal(ha.t,1);assert.equal(hb.t,1);
+  assert(compareExactDepth(ha,hb)<0);
+  const oldFloatPriority=(ha.t===hb.t?hb.priority>ha.priority:hb.t<ha.t);
+  assert(oldFloatPriority,'old rounded comparator negative control must fail');
+  let permutationsChecked=0,partitionComparisons=0;
+  for(const list of permutations([A,B,C])){
+    permutationsChecked++;
+    assert.equal(oracle(r,list).id,'A');
+    for(const part of [1,2,4]){
+      const winner=candidate(r,list,part);
+      assert.equal(winner.id,'A');
+      assert.equal(winner.face,'0-');
+      partitionComparisons++;
+    }
+  }
+  // Only a true equal rational depth is eligible for priority arbitration.
+  const D=box('D',[1,-1,-1],[1+e,1,1],0);
+  const E=box('E',[1,-1,-1],[1+e,1,1],5);
+  for(const list of [[D,E],[E,D]]){
+    assert.equal(oracle(r,list).id,'E');
+    for(const part of [1,2,4])assert.equal(candidate(r,list,part).id,'E');
+  }
+  // Exact ownership across the x=0 synthetic region boundary must not
+  // derive from p rounded to x=0. No geometry may be clipped by this bucket.
+  const left=box('NearLeft',[-e,-1,-1],[-e/2,1,1],0);
+  const right=box('NearRight',[e,-1,-1],[2*e,1,1],0);
+  const splitRay=ray([-5,0,0],[5,0,0]);
+  assert.deepEqual(exactBucketCoord(splitRay,left,'0-',2),[0,1,1]);
+  assert.deepEqual(exactBucketCoord(splitRay,right,'0-',2),[1,1,1]);
+  // Independent expected order: for common r.o and positive r.d[0],
+  // the least representable world-space lower bound is nearest.
+  let randomSeed=115092431,seededCases=0;
+  const rnd=()=>{randomSeed=(Math.imul(1664525,randomSeed)+1013904223)>>>0;
+    return randomSeed/4294967296;};
+  for(let trial=0;trial<180;trial++){
+    const offset=trial%4,boxesNear=[0,1,2].map((i)=>{
+      const start=1+(offset+2*i)*e;
+      return box('N'+i,[start,-1,-1],[start+e,1,1],i+1);
+    });
+    for(const scene of permutations(boxesNear)){
+      assert.equal(oracle(r,scene).id,'N0');
+      for(const part of [1,2,4]){
+        assert.equal(candidate(r,scene,part).id,'N0');
+        seededCases++;
+      }
+    }
+    // A separate shuffled accumulation with priority inversions, but no
+    // access to compareHit as the expected-value oracle.
+    const order=boxesNear.map(b=>({b,order:rnd()})).sort((x,y)=>x.order-y.order).map(x=>x.b);
+    assert.equal(oracle(r,order).id,'N0');
+  }
+  return {original_counterexample:'A_nearest_even_when_rounded_t_equal',
+    original_rounded_t:[ha.t,hb.t],exact_ratio_order:'A_before_B',
+    permutations:permutationsChecked,partition_comparisons:partitionComparisons,
+    coplanar_priority:'E',global_exact_bucket_boundary:'NearLeft_vs_NearRight',
+    seeded_near_ulp_comparisons:seededCases,source_depth_key:'finite_float64_triple'};
+});
 const naiveClip=test('R0-01/05 negative: artificial cut-face is invalid',()=>{
   const b=box('whole',[-1,-1,-1],[1,1,1]);const r=ray([-.5,0,0],[1,0,0]);
   const trueHit=oracle(r,[b]),clipped=oracle(r,[box('whole',[0,-1,-1],[1,1,1])]);
@@ -411,6 +526,6 @@ function bench(name,fn,runs=11){
 const benchScene=boxes.slice(0,5),benchN=48;
 const benches=[bench('O-H global slab CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)oracle(pixel(baseCam,x,y,benchN),benchScene);}),
  bench('face candidate + 8-region merge CPU (48x48 1spp)',()=>{for(let y=0;y<benchN;y++)for(let x=0;x<benchN;x++)candidate(pixel(baseCam,x,y,benchN),benchScene,2);})];
-const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with bucketed global depth/ID',eps_verify_depth:VERIFY_DEPTH_EPS,depth_order_policy:'strict_finite_t_then_priority_then_ascii_id_and_axis_minus_first',coverage_policy:'closed_AABB_exact_dyadic_predicates_for_ambiguous_float64',eq,ordering,coverage,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
+const report={schema:'fgmp-dr3-r0-cpu-preflight/1',classification:'CPU_ONLY_ANALYTIC_NOT_FGM0_NOT_GPU',fixture_sha256:hash,fixture_boxes:boxes.length,reference:'global slab O-H',candidate:'six-plane face intersections with exact dyadic global first-hit and bucket keys',eps_verify_depth:VERIFY_DEPTH_EPS,depth_order_policy:'exact_dyadic_interobject_t_then_priority_then_ascii_id_and_axis_minus_first',coverage_policy:'closed_AABB_exact_dyadic_predicates_for_ambiguous_float64',eq,ordering,coverage,globalDepth,naiveClip,phase,unseen,overhang,opacity,benches,hardware:{platform:process.platform,arch:process.arch,cpus:os.cpus()?.[0]?.model,logical_cpus:os.cpus()?.length,node:process.version},declared_remaining:'R0-02/07/08/13/14/16/17/19/20; real FGM-0, R07, GPU/VRAM, certifiable culling, UV/normal/mips and all 16 cold-warm E1 rows NOT RUN'};
 console.log('R0_PREFLIGHT_JSON '+JSON.stringify(report));
 if(process.exitCode)process.exit(process.exitCode);
