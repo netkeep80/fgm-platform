@@ -1,75 +1,77 @@
-# DR3-R0 / A0 — CPU analytic falsification preflight (RESEARCH ONLY)
+# DR3-R0 / A0 — предварительное аналитическое исследование на CPU
 
-> **Status 23 Nov 2026:** research execution authorized in [Issue #73](https://github.com/netkeep80/fgm-platform/issues/73). **No renderer backend selection, no normative acceptance, no production code, no main merge.**
+**Статус на 23.11.2026:** проведение научных экспериментов разрешено автором в [Issue #73](https://github.com/netkeep80/fgm-platform/issues/73). **Backend не выбран, нормативная приёмка не проведена, Production и main не изменяются.**
 
-## Authority, exact source and pre-registration
+## 1. Основание и точная версия
 
-- Approved plan: [DR3-A–H index](https://github.com/netkeep80/fgm-platform/issues/54#issuecomment-7053636697), [DR3-E R0 cases/measurements](https://github.com/netkeep80/fgm-platform/issues/56#issuecomment-7053590542), [DR3-D/E1 16 events and R0-21](https://github.com/netkeep80/fgm-platform/issues/56#issuecomment-7053810653).
-- Author separately authorized execution in [Issue #73](https://github.com/netkeep80/fgm-platform/issues/73). [Pre-registered A0 experiment before reported run](https://github.com/netkeep80/fgm-platform/issues/73#issuecomment-7094989831).
-- BASE main: `59f11fc44078c66759b77e7dcdc7809df3ba60f3`; TREE `f4aa18098ade371bf427ae2612edd84e15878ea6`.
-- First frozen research script commit: `262bf2b1acd132157f1587546648c9b1c7b6707f`; research file `r0-preflight.mjs` SHA-256 `0346d142ac04d9b84239e52f8faaee815c272a9f85d9d81128472e7d2ab1c9ef`; Git blob `5ca658c4d11142d99a6d48bb89bea9d1054f9af9`.
-- Seven-box synthetic fixture SHA-256 `7becb398c34e776c180963ce947dcf2f7a91894c0f96ff392daf2e81401a9d1a`.
-- Runtime: Linux x86-64 container, AMD EPYC 9V74 (5 logical CPUs visible), Node.js v22.16.0, **GPU unavailable**. One pre-reg run; host load and p95 confidence **not controlled**.
+- Утверждённый план: [индекс DR3-A–H](https://github.com/netkeep80/fgm-platform/issues/54#issuecomment-7053636697), [план сценариев DR3-E](https://github.com/netkeep80/fgm-platform/issues/56#issuecomment-7053590542), [исправленная матрица DR3-D/E1](https://github.com/netkeep80/fgm-platform/issues/56#issuecomment-7053810653).
+- [Предварительная регистрация A0](https://github.com/netkeep80/fgm-platform/issues/73#issuecomment-7094989831) опубликована до измеряемого запуска. До неё выполнялся только отладочный пробный запуск, не включённый в результаты.
+- Базовый `main`: `59f11fc44078c66759b77e7dcdc7809df3ba60f3`; дерево `f4aa18098ade371bf427ae2612edd84e15878ea6`.
+- Исследовательский скрипт зафиксирован коммитом `262bf2b1acd132157f1587546648c9b1c7b6707f`; его SHA-256: `0346d142ac04d9b84239e52f8faaee815c272a9f85d9d81128472e7d2ab1c9ef`, Git blob: `5ca658c4d11142d99a6d48bb89bea9d1054f9af9`.
+- SHA-256 семи синтетических объектов: `7becb398c34e776c180963ce947dcf2f7a91894c0f96ff392daf2e81401a9d1a`.
+- Среда выполнения: Linux x86-64, AMD EPYC 9V74, доступно 5 логических CPU, Node.js v22.16.0. Аппаратного GPU для сопоставительных экспериментов нет.
 
-## Reproduction
+## 2. Воспроизведение
 
-From repository root, on the **research branch** (not main):
+Из корня репозитория на **исследовательской ветке**, а не на `main`:
 
 ```sh
 node research/dr3-r0/r0-preflight.mjs
 ```
 
-Check exit status 0, six `PASS` records, no `FAIL`, and machine-readable `R0_PREFLIGHT_JSON` final line. No npm dependencies or private UFO assets are required. A preliminary debugging pilot occurred before preregistration and **is excluded** from the measured data below.
+Проверить код завершения 0, шесть строк `PASS`, отсутствие `FAIL` и последнюю строку `R0_PREFLIGHT_JSON`. Не требуются приватные данные UFO и внешние пакеты Node.
 
-## Design of the preflight
+## 3. Проверяемая математическая гипотеза
 
-Independent **O-H** global ray vs axis-aligned box intersection using slab intervals; candidate uses separately implemented six global surface-plane intersections, associates hits with 1/8/64 deterministic spatial buckets and merges by world-ray `t` then priority/instance/face. **This candidate does not perform real partial FGM extraction, true localized clipping or certified culling**: it computes the global primitive faces first. Thus it checks order-independent first-hit composition of supported analytic surfaces, **not** scalability of independent regional geometry or an implementation of E2 cached sprites.
+Независимый глобальный аналитический оракул `O-H` вычисляет пересечение луча с ограниченным параллелепипедом методом интервалов. Исследуемый вариант **отдельно** вычисляет пересечения луча с шестью мировыми гранями, раскладывает попадания в 1, 8 или 64 пространственные области и соединяет результаты по глобальной глубине `t`, затем по приоритету и идентификатору.
 
-Orthographic rays: parallel for each yaw/pitch, fixed global subpixel lattice (40×40×4 spp for 9 orientations + 48×48×4 spp baseline). Depth tolerance 1e-9; hit/instance/face exact. No normal/UV, textures, R05 pixel parity, shadows, game LOS, real CSG or arbitrary FGM solver.
+**Существенное ограничение:** проверяемый вариант сначала перечисляет грани **глобальных** объектов и только потом раскладывает попадания по областям. Это **не** независимое извлечение FGM-поверхности в клетках, не построение геометрических спрайтов и не сертифицированное отсечение. Поэтому сравнение проверяет порядок композиции ограниченных аналитических попаданий, но **не** производительность RVI или корректность фрактальной геометрии.
 
-## Pre-registered execution results
+Лучевые выборки выполняются только с ортографической камерой, с общей фазой субпиксельной сетки. Девять ракурсов: yaw 0.2/0.6/1.2 радиан и pitch 0.28/0.7/1.03 радиан, 40×40×4 субвыборки на ракурс. Дополнительный базовый ракурс: 48×48×4. Шаг камеры 0.14 мировых единиц на пиксель. Допуск глубины 1e-9; совпадение признака попадания, идентификатора и имени грани — строгое. Нормали, UV, затенение и реальный глобальный CSG здесь **не проверяются**.
 
-| Probe | Actual observation | Narrow interpretation |
+## 4. Результаты после предварительной регистрации
+
+| Проверка | Наблюдение | Допустимый вывод |
 |---|---|---|
-| 9 viewpoints × 40×40 × 4 spp × 1/8/64 | 172,800 sample-candidate comparisons, **0 mismatches** | Analytic world-face hit/depth/semantic ID for the chosen finite fixture |
-| Baseline 48×48 × 4 spp × 1/8/64 | **27,648 comparisons, 0 mismatches**; 4,277 hit samples / 4,939 misses | Same class; not independent FGM fragmentation |
-| Deliberately wrong clipped-box physical cap | True exit `t=1.5`, wrong cap `t=0.5` | Negative control: cell clip planes must not become object surfaces |
-| Integer pan and fractional pan reuse | Exact 1-pixel shift: **0** disagreements; 0.5-pixel naive reuse: **278** disagreements | Phase compatibility cannot be assumed for fractional pan |
-| Hidden previously nonvisible contributor | Winner `old` → `new`, earlier visible-only cache would be stale | Requires scene revision/conservative candidate dependency |
-| Offscreen anchor, actual overhang intersects ray | `anchor_x=4`, visible hit `overhang`; anchor-only cull loses it | Negative control for R0-21; not a proof of certified culling |
-| Opaque texture tick vs cutout | Opaque tick preserves hit; removing opaque front reveals `rear` | Conceptual cutout visibility counterexample, not a UV/alpha sampler implementation |
+| Девять ракурсов, 1/8/64 области | **172 800 сравнений, 0 расхождений** | Совпадение аналитических глубин, попаданий и идентификаторов в ограниченном наборе |
+| Базовый ракурс 48×48×4 | **27 648 сравнений, 0 расхождений**; 4277 попаданий и 4939 промахов | Та же ограниченная модель |
+| Ложная грань после обрезки клетки | Истинный выход `t=1.5`; ложная внутренняя грань `t=0.5` | Запрещено превращать границу TileCell в поверхность объекта |
+| Сдвиг камеры | Целый пиксель: **0** отличий; дробные 0.5 пикселя: **278** отличий | Дробный сдвиг нельзя считать точным повторным использованием буфера |
+| Ранее скрытый объект | Победитель изменился `old → new` | Только предыдущие видимые объекты не образуют достаточный ключ кэша |
+| Нависающая геометрия | Якорь `x=4` вне области, но поверхность видна | Отбор только по якорю объекта некорректен |
+| Материал и вырез | Непрозрачная смена кадра сохраняет попадание; вырез открывает `rear` | Однослойный старый буфер не годится после смены покрытия |
 
-**CPU exploratory timing (48×48 × 1 spp; 11 runs each, first two discarded):**
+Диагностическое время **только CPU**, 48×48×1 субвыборка, по 11 прогонов с исключением первых двух:
 
-| Algorithm (not E0/E2) | p50 | p95 | min–max |
+| Алгоритм | p50 | p95 | Диапазон |
 |---|---:|---:|---:|
-| Global slab oracle O-H | 1.309 ms | 1.524 ms | 1.226–1.524 ms |
-| Independent face enumeration + 8-region bucket merge | 14.312 ms | 15.732 ms | 13.496–15.732 ms |
+| Глобальный оракул пересечения с параллелепипедом | 1.309 мс | 1.524 мс | 1.226–1.524 мс |
+| Перечисление граней и композиция 8 областей | 14.312 мс | 15.732 мс | 13.496–15.732 мс |
 
-These **do not compare actual renderer implementations**. The second path does more arithmetic and allocations. A slower result here is **not** evidence to reject cached sprites, nor is a zero-error sample evidence that cached sprites or RVI will be efficient. No GPU, VRAM measurements, predeclared adoption speedup or confidence bounds exist. Recorded local pre-reg execution log SHA-256 `b02d75fcb9f576aae3456afa5aab154ee2faf773b6f4a88bc90cf4971879a38c`; JSON-line SHA-256 `510442810e09d94de4f1584da88e1d2d524639e3751395e1ca6bce3f05e19967`.
+**Важное предупреждение:** эти времена **не** являются сравнением E0 против E2, реального GPU или кэшированных геометрических спрайтов. Второй алгоритм выполняет больше операций и выделений памяти. По этим значениям **нельзя** выбирать backend или считать подтверждённым ускорение/замедление будущего рендерера. Нагрузка хоста, доверительные интервалы p95, пропускная способность GPU и VRAM не измерялись.
 
-## Case coverage (a preflight observation is not a full R0 case PASS)
+SHA-256 журнала измеряемого запуска: `b02d75fcb9f576aae3456afa5aab154ee2faf773b6f4a88bc90cf4971879a38c`; SHA-256 его строки JSON: `510442810e09d94de4f1584da88e1d2d524639e3751395e1ca6bce3f05e19967`.
 
-| Case(s) | A0 state | Remaining independent obligation |
+## 5. Матрица полноты доказательств
+
+| Сценарии | Статус A0 | Что остаётся проверить |
 |---|---|---|
-| R0-01 / 03 / 04 / 06 / 09 / 10 | **PARTIAL_ANALYTIC** | True semantic prototype/instance registry, CSG/material priority at same-depth, full two-floor visible pick, free ortho and calibrated R05, real per-cell FGM extraction/UV/normals |
-| R0-05 | **NEGATIVE_CONTROL_ONLY** | Actual serialized nested FGM-0 CSG/subtraction and global Core semantic oracle |
-| R0-11 / 12 | **NEGATIVE_CONTROL_ONLY** | Per-instance opaque sampler, animated material, subpixel cutout and recomposition |
-| R0-15 | **NEGATIVE_CONTROL_ONLY** | UserChangeSet and formally certified incremental dependency closure |
-| R0-18 | **PARTIAL_ANALYTIC** | Cold/warm actual sprite shift and phase keys with proper resource updates |
-| R0-21 | **NEGATIVE_CONTROL_ONLY** | Rotated/tall overhang across MapBlock and floors, subpixel and certified conservative 3D bounds |
-| R0-02 / 07 / 08 / 13 / 14 / 16 / 17 / 19 / 20 | **NOT_RUN** | Block boundary, thin wall/AA, true fractal, moving door/light, 50×50, real FGM-0/R07, GPU loss, UV/mips/atlas |
-| 16 DR3-D/E1 cache events | **NOT_RUN AS COLD/WARM MATRIX** | Full 16×6 state matrix needs actual instrumented L0–L5 cache and fresh oracle |
+| R0-01/03/04/06/09/10 | `PARTIAL_ANALYTIC` | Реальные определения/экземпляры, материалы, пересечения CSG, этажи, отдельная точная исходная R05, нормали/UV, локальное извлечение |
+| R0-05 | `NEGATIVE_CONTROL_ONLY` | Сериализованная FGM-0 и независимый оракул глобальных операций CSG |
+| R0-11/12 | `NEGATIVE_CONTROL_ONLY` | Текстурный сэмплер, прозрачные субвыборки, реальная анимация и перестройка |
+| R0-15 | `NEGATIVE_CONTROL_ONLY` | Правки UserChangeSet и доказуемое замыкание зависимостей |
+| R0-18 | `PARTIAL_ANALYTIC` | Реальные холодные/тёплые геометрические спрайты и проверка ключей |
+| R0-21 | `NEGATIVE_CONTROL_ONLY` | Наклонные многоэтажные объекты, MapBlock и сертифицированные 3D-границы |
+| R0-02/07/08/13/14/16/17/19/20 | `NOT_RUN` | Границы блоков, тонкие стены, фракталы, двери, свет, карта 50×50, FGM-0/R07, потеря GPU, UV/mip/atlas |
+| Все 16 событий DR3-D/E1 | `NOT_RUN` | Реальная матрица холодной/выборочной инвалидизации L0–L5 и независимое сравнение |
 
-**R0-E0…E5: NOT_RUN.** **O-F actual serialized FGM-0: NOT_RUN. O-G independent triangle oracle: NOT_RUN. O-X authentic source/game: NOT_RUN.** **G0: PARTIAL_ANALYTIC only; G1/G2/G3/G4: PENDING.**
+**Ни один из полноценных вариантов E0–E5 не запускался.** Оракулы реальной сериализованной FGM-0, треугольной геометрии R07 и исходной игровой семантики не выполнялись. **G0 — лишь частичная аналитическая проверка; G1/G2/G3/G4 остаются открытыми.**
 
-## Next independent research phases (not approved as backend or Production)
+## 6. Последующие научные эксперименты и границы
 
-1. **R0-B:** same serialized supported FGM-0 through actual Core and separate certified ray/triangle oracle; R07-derived mesh; negative unknown bounds; true boundary fragments, CSG and counterexamples R0-02/05/07/17/21.
-2. **R0-C:** measured matched E0/E2/E3/E4/E5 comparisons at fixed device, view/lattice/quality, actual WebGPU capability, tracked CPU/GPU memory and cold/warm/orbit churn; certify optional pruning before claiming RVI gain.
-3. **R0-D:** all 16 DR3-D/E1 events fresh vs warm selective L0–L5 replay, invalidation traces (incl new occluders, cutout, GPU loss and stale epochs), UV/normal/filter/lighting and source/game separation.
-4. **Independent scientific READ-ONLY audit** of exact research artifacts and primary measurements, then **separate** author backend decision; never infer approval from this preflight.
+1. **R0-B:** настоящая сериализованная FGM-0 через существующий Core, отдельный оракул луча/треугольников, поверхность R07, неизвестные границы `UNSUPPORTED`, пересечения глобального CSG.
+2. **R0-C:** сопоставимые E0–E5 на фиксированном GPU/WebGPU и одинаковой сетке лучей/качестве; бюджет времени, VRAM, выделений и пересылок — до испытаний.
+3. **R0-D:** все 16 событий DR3-D/E1 с трассой L0–L5 и проверкой результата по свежему глобальному оракулу, а также потеря GPU, старые Worker-ответы, UV/материалы и освещение.
+4. **Независимый READ-ONLY аудит** исходников, допусков, самостоятельности оракулов и измерений, после него — отдельное решение автора о backend. До этого никаких изменений Production.
 
-### COMPLEXITY_DELTA
-
-No production complexity added: all new files under `research/dr3-r0/` only, no change to RendererSession/Core/WASM, Studio, workflow, requirements, Pages, public assets or source-game data. Proposed optional octree/cache and GPU ABI remain unchosen. Scientific debt is explicit, not hidden.
+**COMPLEXITY_DELTA:** добавлены только два исследовательских файла. Ничего не добавлено в Studio, Core, RendererSession, WASM, требования, workflows, Pages или публичные игровые данные. Будущий кэш/октодерево/GPU ABI не выбраны.
