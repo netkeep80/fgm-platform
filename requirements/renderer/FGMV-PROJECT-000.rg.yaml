@@ -16,3 +16,13 @@ relations:
     target:
       kind: artifact
       path: docs/requirements-hierarchy.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/README.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/r0-preflight.mjs
