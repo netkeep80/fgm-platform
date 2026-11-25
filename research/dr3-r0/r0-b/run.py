@@ -349,6 +349,139 @@ def b2_measure(out,mhash,receipt):
                       "failures":[r["id"] for r in results if not r["pass"]]}))
     return 0 if report["pass"]==len(results) else 1
 
+
+# B2b.1 corpus and preregistration. No candidate call in prepare or reference.
+def b2b_cli():
+    import argparse, hashlib, json, pathlib, subprocess, sys
+    from fractions import Fraction as F
+    from collections import Counter
+    from oracle import b2b_oracle
+    p=argparse.ArgumentParser();p.add_argument('action',choices=['b2b-prepare','b2b-reference','b2b-measure']);p.add_argument('--out',type=pathlib.Path,required=True);p.add_argument('--manifest-sha');p.add_argument('--reference-sha');p.add_argument('--receipt');args=p.parse_args()
+    out=args.out.resolve();here=pathlib.Path(__file__).resolve().parent
+    def canon(x):return json.dumps(x,sort_keys=True,separators=(',', ':'),ensure_ascii=True).encode()
+    def h(x):return hashlib.sha256(x).hexdigest()
+    def put(name,x):
+        b=canon(x); (out/name).write_bytes(b);return h(b)
+    def source_hashes():
+        # Bind the exact B2b.1 blocks (also used inside the existing repository files).
+        markers={'oracle.py':('# B2b.1: exact world box arrangement','# END B2B1 ORACLE'),
+                 'candidate.mjs':('// B2b.1: separate exact sign-sector','// END B2B1 CANDIDATE'),
+                 'run.py':('# B2b.1 corpus and preregistration.','# END B2B1 RUNNER')}
+        result={}
+        for n,(start,end) in markers.items():
+            b=(here/n).read_bytes();i=b.index(start.encode());j=b.index(b"\n"+end.encode()+b"\n",i)+1+len(end)
+            result[n]=h(b[i:j]+b'\n')
+        return result
+    if args.action=='b2b-prepare':
+        out.mkdir(parents=True,exist_ok=False);packages={};scenes={};rows=[]
+        def package(name, specs):
+            cs=[]
+            for cid,material,priority,half,offset in specs:
+                ns=[{'id':'h','op':'constant','type':'vec3','value':half},{'id':'b','op':'box','halfSize':'h'}]
+                if offset!=[0,0,0]:ns.extend([{'id':'v','op':'constant','type':'vec3','value':offset},{'id':'m','op':'translate','field':'b','offset':'v'}])
+                cs.append({'id':cid,'material':material,'priority':priority,'field':{'op':'program','program':{'version':'fgm-0','nodes':ns,'root':ns[-1]['id']},'parameters':{}}})
+            g={'algorithm':'r0b','version':'1.0.0','parameters':{},'resources':{}}
+            pkg={'format':'fgm-package/1','interpreter':'fgm-0/1','generation':g,'model':{'contributions':sorted(cs,key=lambda c:c['id']),'volumes':{},'seed':h(canon(['fgm:seed:1',{'generation':g,'purpose':'model'}]))}}
+            file=name+'.fgm.json';raw=put(file,pkg);packages[name]={'file':file,'raw_sha256':raw,'canonical_sha256':raw,'package_sha256':h(canon(['fgm:package:1',pkg])),'model_sha256':h(canon(['fgm:model:1',{k:pkg[k] for k in ('format','interpreter','model')}]))}
+        def box(name,half,offset=None,priority=0,material='stone'):
+            package(name,[('solid',material,priority,half,offset or [0,0,0])])
+        box('unit',[1,1,1],priority=10);box('mask',[2,2,2],priority=10)
+        box('absorbed',[2,1,2],[0,-1,0],priority=0,material='metal')
+        box('coincident',[2,1,2],priority=0,material='metal')
+        box('cutter',[1,1,1],priority=99,material='metal')
+        box('lower',[1,.5,1],[0,-.5,0],priority=10);box('upper',[1,.5,1],[0,.5,0],priority=10,material='metal')
+        box('near_low',[1,1,1],priority=0);box('near_high',[1,1,1],priority=99,material='metal')
+        box('asym',[1,2,.5],[.5,0,0],priority=10)
+        package('tie_contrib',[('a','stone',7,[1,1,1],[0,0,0]),('b','metal',7,[1,1,1],[0,0,0])])
+        package('priority_contrib',[('a','stone',7,[1,1,1],[0,0,0]),('b','metal',8,[1,1,1],[0,0,0])])
+        box('left',[.5,1,1],[-.5,0,0],priority=10);box('right',[.5,1,1],[.5,0,0],priority=10,material='metal')
+        I=[[1,0,0],[0,1,0],[0,0,1]];R=[[0,-1,0],[1,0,0],[0,0,1]]
+        def inst(id,pkg,t=None,s=1,r=None):return {'id':id,'package':pkg,'package_sha256':packages[pkg]['package_sha256'],'model_sha256':packages[pkg]['model_sha256'],'translation':t or [0,0,0],'scale':s,'rotation':r or I}
+        def scene(name,mode,instances,expr=None):
+            scenes[name]={'mode':mode,'instances':sorted(instances,key=lambda x:x['id']),'expr':expr}
+        scene('simple','world',[inst('a','unit')],'a')
+        scene('absorb','world',[inst('a','unit'),inst('b','absorbed')],['union','a',['intersection','a','b']])
+        scene('coincident','world',[inst('a','unit'),inst('b','coincident')],['union','a',['intersection','a','b']])
+        scene('shared','world',[inst('a','unit')],['union','a','a'])
+        scene('mask','world',[inst('a','mask'),inst('b','unit')],['union','a','b'])
+        scene('cavity','world',[inst('a','mask'),inst('b','cutter')],['subtract','a','b'])
+        scene('ambiguous','world',[inst('a','lower'),inst('b','upper')],['union','a','b'])
+        scene('intersection','world',[inst('a','mask'),inst('b','cutter')],['intersection','a','b'])
+        scene('opaque_tie','opaque',[inst('a','unit'),inst('b','unit')])
+        scene('opaque_near','opaque',[inst('a','near_low',[2,0,0]),inst('b','near_high',[2.0000000000000004,0,0])])
+        scene('contrib_tie','world',[inst('a','tie_contrib')],'a')
+        scene('contrib_priority','world',[inst('a','priority_contrib')],'a')
+        scene('pose','opaque',[inst('a','asym',[-3,2,-1],2,R),inst('b','asym',[6,6,0],.5,I)])
+        scene('contact_world','world',[inst('a','left'),inst('b','right')],['union','a','b'])
+        scene('contact_opaque','opaque',[inst('a','left'),inst('b','right')])
+        def add(id,name,o,d,t=None,**w):
+            expected=None if t is None else {'status':'HIT','t':str(t),**w}
+            rows.append({'id':id,'scene':name,'ray':{'o':list(map(str,o)),'d':list(map(str,d)),'near':'0','far':'8'},'expected':expected})
+        add('absorption_distinct','absorb',[3,0,0],[-1,0,0],2,support=[[[0,'1'],[1]]],active=2,witnesses=3,owners=[['a','solid','stone',10]])
+        add('absorption_coincident','coincident',[3,3,0],[-1,-1,0],2,support=[[[0,'1'],[1]],[[1,'1'],[1]]],active=5,witnesses=5,coincident=True)
+        add('shared_paths','shared',[3,0,0],[-1,0,0],2,active=2,witnesses=2,coincident=True)
+        add('masked_inside','mask',[0,0,0],[1,0,0],2,owners=[['a','solid','stone',10]])
+        add('cutter_owner','cavity',[0,0,0],[1,0,0],1,owners=[['a','solid','stone',10]],support=[[[0,'1'],[-1]]],polarity=-1)
+        add('ambiguity','ambiguous',[3,0,0],[-1,0,0],2,support=[[[0,'1'],[1]]],active=2,witnesses=4,ownerStatus='AMBIGUOUS_OWNER',owners=[['a','solid','stone',10],['b','solid','metal',10]])
+        add('intersection_rank','intersection',[3,0,0],[-1,0,0],2,owners=[['b','solid','metal',99]])
+        add('opaque_exact_tie','opaque_tie',[-3,0,0],[1,0,0],2,owners=[['a','solid','stone',10]])
+        add('opaque_near_ulp','opaque_near',[-4,0,0],[5,0,0],1,owners=[['a','solid','stone',0]])
+        add('priority_tie','contrib_tie',[-3,0,0],[1,0,0],2,owners=[['a','a','stone',7]])
+        add('priority_high','contrib_priority',[-3,0,0],[1,0,0],2,owners=[['a','b','metal',8]])
+        add('pose_a','pose',[-3,0,-1],[0,1,0],1,addresses=[['a','1',0,['-1','0','0']],['a','1',1,['-1','0','0']],['a','1',2,['-2','0','0']]])
+        add('pose_same_point','pose',[-3,-1,-1],[0,1,0],2)
+        add('nondyadic','simple',[-2,0,0],[3,-1,0],'1/3',point=['-1','-1/3','0'],addresses=[['world','1',0,['-1','-1','0']],['world','1',1,['-2','-1','0']],['world','1',2,['-4','-2','0']]])
+        add('nondyadic_same_point','simple',[-5,1,0],[3,-1,0],'4/3')
+        add('contact_world','contact_world',['-1/2',0,0],[1,0,0],'3/2',owners=[['b','solid','metal',10]])
+        add('contact_opaque','contact_opaque',['-1/2',0,0],[1,0,0],'1/2',owners=[['a','solid','stone',10]])
+        add('contact_corner','contact_world',[-2,-2,0],[1,1,0],1,active=2)
+        state=123456789
+        def rng():
+            nonlocal state
+            state=(1664525*state+1013904223)%(2**32);return state>>16
+        for j in range(256):
+            target=[F(rng()%7-3,4) for _ in range(3)];d=[rng()%7-3 for _ in range(3)]
+            if not any(d):d[0]=1
+            o=target if j%2 else [x-3*v for x,v in zip(target,d)]
+            if j%2:
+                times=[(F(1 if v>0 else -1)-x)/v for x,v in zip(target,d) if v];t=min(times)
+            else:
+                times=[(F(-1 if v>0 else 1)-x)/v for x,v in zip(o,d) if v];t=max(times)
+            add(f'directed_{j:03}','simple',o,d,t)
+        m={'schema':'r0b-b2b1/1','scope_sha256':'f1380a2bd5ec801f85e5de75a3de540d1da6385ca1e4c7ed441f1ce9cf585f88','prior_head':'7f21d9e41af6baf5d765c3857350c55053195d1a','sources':source_hashes(),'packages':packages,'scenes':scenes,'rows':rows,'seed':123456789,'limits':'single translated box per contribution; address hierarchy not spatial fragmentation; no sphere/unsupported grammar/budget completion'}
+        print(json.dumps({'manifest_sha256':put('manifest.json',m),'rows':len(rows),'packages':len(packages),'scenes':len(scenes)}));return 0
+    raw=(out/'manifest.json').read_bytes();assert h(raw)==args.manifest_sha;m=json.loads(raw);assert m['sources']==source_hashes()
+    pk={}
+    for k,v in m['packages'].items():
+        b=(out/v['file']).read_bytes();assert h(b)==v['raw_sha256'];pk[k]=json.loads(b)
+    def hand(r,o):
+        e=r['expected'];assert e is not None
+        assert o['status']==e['status'],r['id'];hit=o['hit'];assert hit['t']==e['t'],(r['id'],hit['t'],e['t'])
+        for k,v in e.items():
+            if k in ('status','t'):continue
+            actual=len(hit['boundaryPrimitiveId']) if k=='active' else len(hit['zeroWitnessSet']) if k=='witnesses' else hit['boundaryPrimitiveId'][0][5] if k=='polarity' else hit[k]
+            assert actual==v,(r['id'],k,actual,v)
+        for a,b in zip(hit['addresses'],hit['addresses'][1:]):assert [str(int(x)//2) for x in b[3]]==a[3]
+    if args.action=='b2b-reference':
+        result=[]
+        for row in m['rows']:
+            o=b2b_oracle(m['scenes'][row['scene']],pk,row['ray']);hand(row,o);result.append({'id':row['id'],'reference':o})
+        by={r['id']:r['reference']['hit'] for r in result}
+        for a,b in [('pose_a','pose_same_point'),('nondyadic','nondyadic_same_point')]:assert by[a]['globalHitKey']==by[b]['globalHitKey'] and by[a]['boundaryFragmentId']==by[b]['boundaryFragmentId']
+        print(json.dumps({'reference_sha256':put('reference.json',result),'rows':len(result),'status':dict(Counter(x['reference']['status'] for x in result))}));return 0
+    assert args.receipt and args.reference_sha
+    ref=(out/'reference.json').read_bytes();assert h(ref)==args.reference_sha
+    before=json.loads(ref)
+    proc=subprocess.run(['node',str(here/'candidate.mjs'),'--b2b',str(out)],input=raw,capture_output=True,timeout=180);assert proc.returncode==0,proc.stderr
+    cand=json.loads(proc.stdout);assert len(cand)==len(before)
+    results=[{'id':r['id'],'pass':r['id']==c['id'] and r['reference']==c['forward']==c['reverse'],'reference':r['reference'],'candidate':c} for r,c in zip(before,cand)]
+    report={'manifest_sha256':args.manifest_sha,'reference_sha256':args.reference_sha,'receipt':args.receipt,'results':results}
+    sha=put('result.json',report);print(json.dumps({'result_sha256':sha,'pass':sum(r['pass'] for r in results),'total':len(results),'failures':[r['id'] for r in results if not r['pass']]}));return 0 if all(r['pass'] for r in results) else 1
+# END B2B1 RUNNER
+
+if __name__=="__main__" and len(sys.argv)>1 and sys.argv[1] in ("b2b-prepare","b2b-reference","b2b-measure"):
+    raise SystemExit(b2b_cli())
+
 if __name__=="__main__" and len(sys.argv)>1 and sys.argv[1] in ("b2-prepare","b2-measure"):
     p=argparse.ArgumentParser();p.add_argument("action");p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--manifest-sha");p.add_argument("--receipt")

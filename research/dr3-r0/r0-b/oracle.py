@@ -143,3 +143,111 @@ def b2_oracle(pkg, ray):
     hit=next((e for e in events if e["kind"]=="BOUNDARY"),None)
     status="UNSUPPORTED_RAY_ON_SURFACE" if any(v["sample"]["kind"]=="BOUNDARY" for v in intervals) else "HIT" if hit else "MISS"
     return {"status":status,"hit":hit if status=="HIT" else None,"events":events,"intervals":intervals}
+
+# B2b.1: exact world box arrangement, independent scalar-field interpreter.
+def b2b_oracle(scene, packages, ray):
+    from fractions import Fraction as F
+    from itertools import product
+    import hashlib, json
+    def canonical(x):
+        return json.dumps(x, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
+    snapshot=hashlib.sha256(canonical(scene)).hexdigest()
+    inst={i['id']:i for i in scene['instances']}
+    def local(i,p):
+        a=inst[i]; t=list(map(F,a['translation'])); s=F(a['scale']); R=a['rotation']
+        return tuple(sum(R[j][k]*(p[j]-t[j]) for j in range(3))/s for k in range(3))
+    def leaf(i,sp,pol):
+        a=inst[i]; pkg=packages[a['package']]; rows=[]
+        for c in pkg['model']['contributions']:
+            expr=c['field']; assert expr['op']=='program'
+            ns={n['id']:n for n in expr['program']['nodes']}; path=[]; offset=[F(0)]*3
+            k=expr['program']['root']
+            while ns[k]['op'] in ('translate','material'):
+                n=ns[k]
+                if n['op']=='translate':
+                    v=ns[n['offset']]; offset=[x+F(y) for x,y in zip(offset,v['value'] if v['op']=='constant' else expr['parameters'][v['id']])]
+                k=n['field'];path.append('field')
+            n=ns[k]; assert n['op']=='box'
+            v=ns[n['halfSize']]; half=list(map(F,v['value'] if v['op']=='constant' else expr['parameters'][v['id']]))
+            assert all(x>0 for x in half)
+            R=a['rotation']; s=F(a['scale']);t=list(map(F,a['translation']))
+            center=[t[j]+s*sum(R[j][l]*offset[l] for l in range(3)) for j in range(3)]
+            h=[s*sum(abs(R[j][l])*half[l] for l in range(3)) for j in range(3)]
+            rows.append((i,c['id'],k,tuple(path),tuple(sp),pol,tuple(x-y for x,y in zip(center,h)),tuple(x+y for x,y in zip(center,h)),c['material'],c['priority']))
+        return rows
+    def solve(expr, namespace):
+        leaves=[]
+        def expand(e,sp=(),pol=1):
+            if isinstance(e,str):
+                ix=list(range(len(leaves),len(leaves)+len(packages[inst[e]['package']]['model']['contributions'])))
+                leaves.extend(leaf(e,sp,pol));return ('package',ix)
+            op,l,r=e
+            return (op,expand(l,sp+('left',),pol),expand(r,sp+('right',),-pol if op=='subtract' else pol))
+        graph=expand(expr)
+        planes=sorted({(j,b[j]) for l in leaves for b in (l[6],l[7]) for j in range(3)})
+        def evaluate(g,p):
+            if g[0]=='package':
+                vals=[]
+                for k in g[1]:
+                    l=leaves[k];v=max(max(l[6][j]-p[j],p[j]-l[7][j]) for j in range(3))
+                    vals.append((v,l))
+                return min(v for v,l in vals),{(l[0],l[1],l[8],l[9]) for v,l in vals if v<0}
+            op=g[0];lv,lc=evaluate(g[1],p);rv,rc=evaluate(g[2],p)
+            value=min(lv,rv) if op=='union' else max(lv,-rv if op=='subtract' else rv)
+            return value,(lc if op=='subtract' else lc|rc) if value<0 else set()
+        o=tuple(map(F,ray['o']));d=tuple(map(F,ray['d']));near,far=map(F,(ray['near'],ray['far']))
+        def at(t):
+            p=tuple(a+t*b for a,b in zip(o,d));zg=[(j,x) for j,x in planes if p[j]==x]
+            sectors=[]; winners=set()
+            for bits in product((-1,1),repeat=len(zg)):
+                v=list(p)
+                for (j,x),side in zip(zg,bits):
+                    ds=[abs(y-x) for k,y in planes if k==j and (y-x)*side>0]
+                    v[j]+=side*(min(ds)/2 if ds else F(1))
+                f,owners=evaluate(graph,v);assert f!=0
+                w=min(owners,key=lambda x:(-x[3],x[0],x[1])) if f<0 else None
+                if w is not None:winners.add(w)
+                sectors.append([list(bits),-1 if f<0 else 1,list(w) if w is not None else None])
+            signs={s[1] for s in sectors};kind='BOUNDARY' if len(signs)==2 else 'INTERIOR' if -1 in signs else 'EXTERIOR'
+            table={tuple(b):v for b,v,_ in sectors};sup=[]
+            for i,g in enumerate(zg):
+                sides=set()
+                for b,v,_ in sectors:
+                    if b[i]!=-1:continue
+                    other=list(b);other[i]=1;v2=table[tuple(other)]
+                    if v!=v2:sides.add(1 if v==-1 else -1)
+                if sides:sup.append([[g[0],str(g[1])],sorted(sides)])
+            ws=[]
+            for i,c,k,pp,sp,pol,lo,hi,_,_ in leaves:
+                if all(lo[j]<=p[j]<=hi[j] for j in range(3)):
+                    for j in range(3):
+                        for side,x in ((-1,lo[j]),(1,hi[j])):
+                            if p[j]==x:ws.append((i,c,k,pp,sp,pol,j,x,side))
+            ws.sort(); active=[w for w in ws if [w[6],str(w[7])] in [s[0] for s in sup]]
+            def wire(w):return [*w[:3],list(w[3]),list(w[4]),w[5],[w[6],str(w[7])],w[8]]
+            sig=[snapshot,scene['mode'],sup,[wire(w) for w in active]] if kind=='BOUNDARY' else None
+            hitkey=[sig,list(map(str,p))] if sig is not None else None
+            owner_rows=sorted(winners) if sig is not None else []
+            gp=p if namespace=='world' else local(namespace,p)
+            addresses=[[namespace,'1',lev,[str(x*(2**lev)//1) for x in gp]] for lev in range(3)] if sig is not None else []
+            return {'t':str(t),'point':list(map(str,p)),'kind':kind,'zeroGroups':[[j,str(x)] for j,x in zg],
+                    'rank':len(zg),'minor':1,'sectors':sectors,'support':sup,'zeroWitnessSet':[wire(w) for w in ws],
+                    'boundaryPrimitiveId':[wire(w) for w in active],
+                    'coincident':any(sum(w[6]==s[0][0] and str(w[7])==s[0][1] for w in active)>1 for s in sup),
+                    'normal':sup[0] if sig is not None and len(sup)==1 and len(sup[0][1])==1 else None,
+                    'owners':[list(w) for w in owner_rows], 'ownerStatus':('AMBIGUOUS_OWNER' if len(owner_rows)>1 else 'UNIQUE') if sig is not None else None,
+                    'objectInstanceId':sorted({w[0] for w in owner_rows}), 'globalHitKey':hitkey,
+                    'addresses':addresses,'boundaryFragmentId':[[hitkey,a] for a in addresses]}
+        ts=sorted({near,far}|{(x-o[j])/d[j] for j,x in planes if d[j] and near<=(x-o[j])/d[j]<=far})
+        events=[at(t) for t in ts if t>0]; intervals=[{'lo':str(a),'hi':str(b),'sample':at((a+b)/2)} for a,b in zip(ts,ts[1:])]
+        hit=next((e for e in events if e['kind']=='BOUNDARY'),None)
+        status='UNSUPPORTED_RAY_ON_SURFACE' if any(i['sample']['kind']=='BOUNDARY' for i in intervals) else 'HIT' if hit else 'MISS'
+        return {'status':status,'hit':hit if status=='HIT' else None,'events':events,'intervals':intervals}
+    if scene['mode']=='world':return solve(scene['expr'],'world')
+    parts={i:solve(i,i) for i in sorted(inst)}
+    hs=[r['hit'] for r in parts.values() if r['status']=='HIT']
+    def order(h):
+        w=min(h['owners'],key=lambda x:(-x[3],x[0],x[1]));return (F(h['t']),-w[3],w[0],w[1])
+    status='UNSUPPORTED_RAY_ON_SURFACE' if any(r['status']=='UNSUPPORTED_RAY_ON_SURFACE' for r in parts.values()) else 'HIT' if hs else 'MISS'
+    return {'status':status,'hit':min(hs,key=order) if status=='HIT' else None,'parts':parts}
+# END B2B1 ORACLE
