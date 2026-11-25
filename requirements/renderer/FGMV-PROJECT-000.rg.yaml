@@ -26,3 +26,38 @@ relations:
     target:
       kind: artifact
       path: research/dr3-r0/r0-preflight.mjs
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/r0-b/CMakeLists.txt
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/r0-b/native-probe.cpp
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/r0-b/oracle.py
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/r0-b/run.py
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/r0-b/README.md
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: .github/workflows/research-r0b.yml
+  - predicates:
+      - documents
+    target:
+      kind: artifact
+      path: research/dr3-r0/r0-b/candidate.mjs

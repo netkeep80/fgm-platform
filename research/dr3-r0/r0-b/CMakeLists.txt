@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.24)
+project(r0b_native_probe LANGUAGES CXX)
+# Standalone consumer, never included by product CMake.
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(FGMC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../../core" "${CMAKE_CURRENT_BINARY_DIR}/core")
+add_executable(r0b_native_probe native-probe.cpp)
+target_link_libraries(r0b_native_probe PRIVATE fgm::cpu)
+target_compile_features(r0b_native_probe PRIVATE cxx_std_20)
+set_target_properties(r0b_native_probe PROPERTIES CXX_EXTENSIONS OFF)

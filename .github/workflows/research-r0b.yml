@@ -1,0 +1,62 @@
+name: DR3-R0-B isolated research runner
+on:
+  push:
+    branches:
+      - research/dr3-r0-b
+permissions:
+  contents: read
+  actions: read
+jobs:
+  measure:
+    name: R0-B B2a measure frozen F01 reference
+    if: github.repository == 'netkeep80/fgm-platform' && github.ref == 'refs/heads/research/dr3-r0-b'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Restore exact preregistered inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^1)" = "949cae56254693f641d13bfab463e31899c79cdd"
+          test "$(git diff --name-only HEAD^1 HEAD)" = ".github/workflows/research-r0b.yml"
+          evidence="$RUNNER_TEMP/r0b-b2a-measure"
+          mkdir -p "$evidence"
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/15058493381/zip" -o "$RUNNER_TEMP/b2a.zip"
+          echo "9545deaa0ee76ee96ab4166b044ba41673e5bee6295ab8145acb8340bca058f9  $RUNNER_TEMP/b2a.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/b2a.zip" -d "$evidence"
+          (cd "$evidence"; sha256sum -c SHA256SUMS)
+          echo "d4e66f93a3d60617f722c374a38757dc0e807e55625b25e7fcb4b2264fa4e6f3  $evidence/inputs/manifest.json" | sha256sum -c -
+      - name: Exact candidate comparison and frozen reference verification
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/r0b-b2a-measure"
+          { git rev-parse HEAD HEAD^{tree}; python3 --version; node --version; } | tee "$evidence/measurement-environment.txt"
+          set +e
+          python3 research/dr3-r0/r0-b/run.py b2-measure --out "$evidence/inputs" --manifest-sha d4e66f93a3d60617f722c374a38757dc0e807e55625b25e7fcb4b2264fa4e6f3 --receipt 7173289267 2>&1 | tee "$evidence/measurement.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "$status" > "$evidence/measurement-exit.txt"
+          python3 - "$evidence/inputs/result.json" "$evidence/reference.json" <<'PY'
+          import json,sys,hashlib,pathlib
+          report=json.loads(pathlib.Path(sys.argv[1]).read_bytes())
+          reference=json.dumps([{"id":r["id"],"oracle":r["oracle"]} for r in report["results"]],sort_keys=True,separators=(",",":")).encode()
+          pathlib.Path(sys.argv[2]).write_bytes(reference)
+          h=hashlib.sha256(reference).hexdigest()
+          print("FROZEN_REFERENCE_SHA256",h)
+          assert h=="ba5f3c63208106dfb9105883fd1ad59d338afac064940415f0390767651d02b3"
+          PY
+          test "$status" = 0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: r0b-b2a-f01-measured
+          path: ${{ runner.temp }}/r0b-b2a-measure/
+          if-no-files-found: error
+          retention-days: 14
