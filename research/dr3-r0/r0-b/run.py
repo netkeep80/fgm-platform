@@ -137,12 +137,85 @@ def prepare(out):
         add("volume:"+res,"F05",v,[0,0,0],res=res,error=code)
     for i,U in enumerate([pose(s=0),pose(r=((-1,0,0),(0,1,0),(0,0,1))),pose(r=((1,1,0),(0,1,0),(0,0,1)))]):
         add(f"tie:invalidpose{i}","F05",pair,[0,0,0],U,error="E_SPACE_TRANSFORM")
+    # Supplemental P2-01: all three CSG operations and translated branch are live.
+    active_nodes=[{"id":"h","op":"parameter","type":"vec3"},{"id":"a","op":"box","halfSize":"h"},
+                  {"id":"r","op":"parameter","type":"length"},{"id":"s","op":"sphere","radius":"r"},
+                  const("mr",1),{"id":"ms","op":"sphere","radius":"mr"},const("offset",[1.5,0,0]),
+                  {"id":"m","op":"translate","field":"ms","offset":"offset"},
+                  {"id":"u","op":"union","left":"a","right":"m"},const("clip_extent",[2,1,1]),
+                  {"id":"clip","op":"box","halfSize":"clip_extent"},
+                  {"id":"i","op":"intersection","left":"u","right":"clip"},
+                  {"id":"cut","op":"subtract","left":"i","right":"s"},
+                  {"id":"mat","op":"material","field":"cut","kind":"ignored"}]
+    active=package([con("part","stone",3,prog(active_nodes,"mat",{"h":[1,2,1],"r":.5}))])
+    add_pkg("active",active)
+    points=[[x,0,0] for x in [-3,-2,-1.5,-1,-.5,0,.5,.75,1,1.25,1.5,1.75,2,2.25,2.5,3]]
+    points += [[.75,1,0],[.75,-1,0],[.75,0,1],[.75,0,-1]]
+    for i,p in enumerate(points):
+        add(f"active:{i}:local","F02",active,p)
+        add(f"active:{i}:world","F02",active,world(p,T),T)
+    # Directly observe mutated serialized expressions, not modified product code.
+    witnesses=[]
+    for name,node,key,replacement,index,expected,altered in [
+            ("drop_union","i","left","a",10,"-1/2","1/2"),
+            ("drop_intersection","cut","left","u",13,"1/4","-1/4"),
+            ("drop_translation","u","right","ms",10,"-1/2","1/2"),
+            ("drop_subtraction","mat","field","i",5,"1/2","-1")]:
+        mutant=copy.deepcopy(active)
+        ns=mutant["model"]["contributions"][0]["field"]["program"]["nodes"]
+        next(n for n in ns if n["id"]==node)[key]=replacement
+        add_pkg(name,mutant)
+        add(name+":witness","F02",mutant,points[index])
+        witnesses.append({"kind":name,"correct":f"active:{index}:local","altered":name+":witness",
+                          "correct_value":expected,"altered_value":altered})
+    TT=pose(T["translation"],T["scale"],list(zip(*T["rotation"])))
+    add("active:transpose","F02",active,world(points[10],T),TT)
+    witnesses.append({"kind":"transpose_rotation","correct":"active:10:world","altered":"active:transpose",
+                      "correct_value":"-1/2","altered_value":"1/2"})
+    # Supplemental P2-02: ordered validation and eager left-before-right runtime.
+    for name,first,code in [("precedence_early",True,"E_OPERATION"),("precedence_late",False,"E_PARAMETER")]:
+        obj=copy.deepcopy(param)
+        fld=obj["model"]["contributions"][0]["field"]
+        fld["parameters"].pop("r")
+        ns=fld["program"]["nodes"]
+        ns.insert(0 if first else len(ns),{"id":"unused","op":"not_valid"})
+        add_pkg(name,obj,valid=False)
+        add(name+":error","F05",obj,[0,0,0],error=code)
+    # Same immutable source bytes, two explicit synthetic resolver interpretations.
+    volumes={"throws":{"format":"r0b_fixed","sha256":sha(VOL)},
+             "nonfinite":{"format":"r0b_nonfinite","sha256":sha(VOL)}}
+    fault_nodes=[const("h",[1,1,1]),{"id":"a","op":"box","halfSize":"h"},
+                 {"id":"t","op":"volume","source":"throws"},
+                 {"id":"n","op":"volume","source":"nonfinite"}]
+    for root,code in [("t","E_VOLUME"),("n","E_NUMERIC")]:
+        name="dual_"+root
+        obj=package([con("part","stone",3,prog(fault_nodes,root))],volumes)
+        add_pkg(name,obj)
+        add(name+":error","F05",obj,[0,0,0],res="dual",error=code)
+    for op in ("union","intersection","subtract"):
+        for suffix,left,right,point,code in [
+                ("right_needed","a","t",[0,0,0] if op=="union" else [2,0,0],"E_VOLUME"),
+                ("left_needed","t","a",[2,0,0] if op=="intersection" else [0,0,0],"E_VOLUME"),
+                ("throw_first","t","n",[0,0,0],"E_VOLUME"),
+                ("numeric_first","n","t",[0,0,0],"E_NUMERIC")]:
+            name=op+"_"+suffix
+            obj=package([con("part","stone",3,prog(fault_nodes+[{"id":"root","op":op,"left":left,"right":right}],"root"))],volumes)
+            add_pkg(name,obj)
+            add(name+":error","F05",obj,point,res="dual",error=code)
+    # Assert manually derived distinguishing witnesses before measuring anything.
+    by_id={r["id"]:r for r in rows}
+    for w in witnesses:
+        assert by_id[w["correct"]]["expected"]["value"]==w["correct_value"],w
+        assert by_id[w["altered"]]["expected"]["value"]==w["altered_value"],w
+        assert by_id[w["correct"]]["expected"]["sign"]!=by_id[w["altered"]]["expected"]["sign"],w
+    assert by_id["active:10:local"]["expected"]==by_id["active:10:world"]["expected"]
     for family in ("F01","F02","F03","F04"):
         assert sum(r["family"]==family for r in rows)>=12
     assert all(r["package"] in packages for r in rows)
     manifest={"schema":"r0b-b1-predeclaration/1","base":BASE,"scope_sha256":SCOPE,
               "sources":source_hashes(),"original_c04_file_sha256":sha(orig),
               "volume_source_sha256":sha(VOL),"packages":packages,"rows":rows,
+              "supplemental_witnesses":witnesses,"historical_manifest_sha256":"286f0fe1824bb4f5a5fcf67380843f77fb996da8a80488ee34634a95c3fa6e03",
               "point_tolerance":"1e-9","ray_status":"NOT_RUN","p3_caps":{"B2_occurrences_per_contribution":16,
                "B3_mandatory_boxes":5,"B3_native_import_cap_not_coverage":128}}
     data=json.dumps(manifest,sort_keys=True,indent=2).encode()

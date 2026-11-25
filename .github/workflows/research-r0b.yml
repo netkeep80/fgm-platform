@@ -5,13 +5,12 @@ on:
       - research/dr3-r0-b
 permissions:
   contents: read
-  actions: read
 jobs:
-  measure:
-    name: R0-B B1 measure preregistered binary
+  prepare:
+    name: R0-B B1 prepare only
     if: github.repository == 'netkeep80/fgm-platform' && github.ref == 'refs/heads/research/dr3-r0-b'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
@@ -19,59 +18,39 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
           persist-credentials: false
-      - name: Verify source and fetch preregistered artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Exact inputs, pinned dependency and native probe
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^1)" = "4da27b8b7c6db30bd70f0c757331ebcbdca7cba3"
-          test "$(git diff --name-only HEAD^1 HEAD)" = ".github/workflows/research-r0b.yml"
-          evidence="$RUNNER_TEMP/r0b-measure"
-          mkdir -p "$evidence"
-          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/15054113104/zip" -o "$RUNNER_TEMP/r0b-prepared.zip"
-          echo "73fd5f065b5ffd220e10b310f1e0b056a8c83dea7c010722e42ec65e440d56d1  $RUNNER_TEMP/r0b-prepared.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/r0b-prepared.zip" -d "$evidence"
-          (
-            cd "$evidence"
-            sha256sum -c SHA256SUMS
-            echo "286f0fe1824bb4f5a5fcf67380843f77fb996da8a80488ee34634a95c3fa6e03  inputs/manifest.json" | sha256sum -c -
-            echo "e1af45a2feaaef9495bb7a65fde5843e8d944f11f065ac2e4ebbd9a47b6aa134  r0b_native_probe" | sha256sum -c -
-          )
-          chmod u+x "$evidence/r0b_native_probe"
-      - name: Execute exact B1 probes
-        run: |
-          set -euo pipefail
-          evidence="$RUNNER_TEMP/r0b-measure"
+          evidence="$RUNNER_TEMP/r0b-evidence"
+          mkdir -p "$evidence" "$RUNNER_TEMP/r0b-deps"
           {
             git rev-parse HEAD HEAD^{tree}
             uname -a
+            cmake --version
+            c++ --version
             python3 --version
-            ldd "$evidence/r0b_native_probe"
-          } | tee "$evidence/measurement-environment.txt"
-          set +e
-          python3 research/dr3-r0/r0-b/run.py execute --out "$evidence/inputs" --binary "$evidence/r0b_native_probe" --manifest-sha 286f0fe1824bb4f5a5fcf67380843f77fb996da8a80488ee34634a95c3fa6e03 --binary-sha e1af45a2feaaef9495bb7a65fde5843e8d944f11f065ac2e4ebbd9a47b6aa134 --receipt 7171894131 2>&1 | tee "$evidence/measurement.log"
-          status=${PIPESTATUS[0]}
-          set -e
-          printf '%s\n' "$status" > "$evidence/measurement-exit.txt"
-          if test -f "$evidence/inputs/result.json"; then
-            sha256sum "$evidence/inputs/result.json"
-            python3 - "$evidence/inputs/result.json" <<'PY'
-          import json,sys
-          r=json.load(open(sys.argv[1]))
-          for row in r["results"]:
-              if not row["pass_"]:
-                  print(json.dumps(row,ensure_ascii=True))
-          print("B1_RESULT",r["pass"],r["total"])
-          PY
-          fi
-          test "$status" = 0
+          } | tee "$evidence/environment.txt"
+          curl -fLsS --retry 3 https://codeload.github.com/nlohmann/json/tar.gz/refs/tags/v3.12.0 -o "$RUNNER_TEMP/r0b-deps/json.tar.gz"
+          echo "4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187  $RUNNER_TEMP/r0b-deps/json.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/r0b-deps/json.tar.gz" -C "$RUNNER_TEMP/r0b-deps"
+          python3 research/dr3-r0/r0-b/run.py prepare --out "$evidence/inputs" | tee "$evidence/prepare.log"
+          echo "4d44f869500fb47b39a8dc8aa1122496958652213dd536ef256c22081ef2af6c  $evidence/inputs/manifest.json" | sha256sum -c -
+          build="$RUNNER_TEMP/r0b-build"
+          set -x
+          cmake -S research/dr3-r0/r0-b -B "$build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_DISABLE_FIND_PACKAGE_nlohmann_json=TRUE -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="$RUNNER_TEMP/r0b-deps/json-3.12.0" 2>&1 | tee "$evidence/configure.log"
+          cmake --build "$build" --config Release --parallel 2 --verbose 2>&1 | tee "$evidence/build.log"
+          set +x
+          cp "$build/r0b_native_probe" "$evidence/r0b_native_probe"
+          cp "$build/CMakeCache.txt" "$evidence/CMakeCache.txt"
+          (
+            cd "$evidence"
+            sha256sum inputs/manifest.json r0b_native_probe environment.txt configure.log build.log CMakeCache.txt prepare.log | tee SHA256SUMS
+          )
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
         with:
-          name: r0b-b1-measured
-          path: ${{ runner.temp }}/r0b-measure/
+          name: r0b-b1-supplement-prepared
+          path: ${{ runner.temp }}/r0b-evidence/
           if-no-files-found: error
           retention-days: 14

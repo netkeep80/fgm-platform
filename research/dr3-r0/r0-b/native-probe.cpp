@@ -25,9 +25,15 @@ int main(int argc, char** argv) {
     };
     fgm::VolumeResolver resolver;
     if (kind != "none") {
-      if (kind != "fixed" && kind != "reject" && kind != "throw" && kind != "inf")
+      if (kind != "fixed" && kind != "reject" && kind != "throw" && kind != "inf" && kind != "dual")
         throw std::runtime_error("E_PROBE_RESOLVER");
       resolver = [kind](const fgm::VolumeDescriptor& desc) -> fgm::VolumeSampler {
+        if (kind == "dual") {
+          if (desc.sha256 != "046d40de544b17b35b5f123def77c65429e4516da6aca960bfd0ddd0c66a8e5e") return {};
+          if (desc.format == "r0b_fixed") return [](const fgm::Point&) -> double { throw std::runtime_error("fixture failure"); };
+          if (desc.format == "r0b_nonfinite") return [](const fgm::Point&) { return std::numeric_limits<double>::infinity(); };
+          return {};
+        }
         if (desc.format != "r0b_fixed" ||
             desc.sha256 != "046d40de544b17b35b5f123def77c65429e4516da6aca960bfd0ddd0c66a8e5e" ||
             kind == "reject") return {};
