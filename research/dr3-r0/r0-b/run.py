@@ -251,6 +251,113 @@ def execute(out,binary,mhash,bhash,receipt):
     with target.open("xb") as f:f.write(json.dumps(report,sort_keys=True,indent=2).encode())
     print(json.dumps({k:report[k] for k in ("pass","total")}|{"result_sha256":sha(target.read_bytes())}))
     return 0 if report["pass"]==report["total"] else 1
+
+# B2a incremental exact box kernel. Separate manifest; historical B1 untouched.
+def b2_sources():
+    return {str(p.relative_to(ROOT)):sha(p.read_bytes()) for p in
+            [HERE/"oracle.py",HERE/"candidate.mjs",HERE/"run.py",HERE/"README.md"]}
+
+def b2_prepare(out):
+    out.mkdir(parents=True,exist_ok=False)
+    pkgs={}; rows=[]
+    def fixture(name, boxes, op):
+        nodes=[]
+        for id,lo,hi in boxes:
+            h=[(b-a)/2 for a,b in zip(lo,hi)]; t=[(a+b)/2 for a,b in zip(lo,hi)]
+            nodes.extend([const(id+"_h",h),{"id":id+"_b","op":"box","halfSize":id+"_h"},
+                          const(id+"_t",t),{"id":id,"op":"translate","field":id+"_b","offset":id+"_t"}])
+        root=boxes[0][0]
+        if op:
+            nodes.append({"id":"root","op":op,"left":root,"right":boxes[-1][0]}); root="root"
+        pkg=package([con("solid","stone",0,prog(nodes,root))]); raw=canon(pkg)
+        file=name+".fgm.json";write_new(out/file,raw)
+        pkgs[name]={"file":file,"raw_sha256":sha(raw),"canonical_sha256":sha(raw),
+                    "model_sha256":digest("fgm:model:1",{k:pkg[k] for k in ("format","interpreter","model")}),
+                    "package_sha256":digest("fgm:package:1",pkg)}
+    a=("a",[-1,-1,-1],[0,1,1]);b=("b",[0,-1,-1],[1,1,1])
+    fixture("face",[a,b],"union");fixture("touch",[a,b],"intersection")
+    fixture("single",[a],None);fixture("self",[a],"subtract");fixture("duplicate",[a],"union")
+    fixture("edge",[("a",[-1,-1,-1],[0,0,1]),("b",[0,0,-1],[1,1,1])],"union")
+    def add(id,pkg,o,d,near,far,status=None,t=None):
+        rows.append({"id":id,"package":pkg,"ray":{"o":list(map(str,o)),"d":list(map(str,d)),
+                      "near":str(near),"far":str(far)},"expected":None if status is None else {"status":status,"t":t}})
+    H="HIT";M="MISS";U="UNSUPPORTED_RAY_ON_SURFACE"
+    add("face_entry","face",[-2,0,0],[1,0,0],0,4,H,"1")
+    add("face_skip_internal","face",[-2,0,0],[1,0,0],"3/2",4,H,"3")
+    add("face_from_internal","face",[0,0,0],[1,0,0],0,4,H,"1")
+    add("face_contained","face",[0,-2,0],[0,1,0],0,4,H,"1")
+    add("single_contained","single",[0,-2,0],[0,1,0],0,4,U)
+    add("single_endpoint","single",[0,-2,0],[0,1,0],3,4,H,"3")
+    add("single_clip_miss","single",[-2,0,0],[1,0,0],0,"1/2",M)
+    add("touch_empty","touch",[-2,0,0],[1,0,0],0,4,M)
+    add("self_empty","self",[-2,0,0],[1,0,0],0,4,M)
+    add("edge_entry","edge",[-2,-2,0],[1,1,0],0,4,H,"1")
+    add("edge_contact","edge",[-2,-2,0],[1,1,0],"3/2",4,H,"2")
+    add("edge_coplanar","edge",[-2,0,0],[1,0,0],0,4,U)
+    add("duplicate_paths","duplicate",[-2,0,0],[1,0,0],0,4,H,"1")
+    add("zero_excluded","single",[-1,0,0],[1,0,0],0,4,H,"1")
+    state=123456789
+    def rand():
+        nonlocal state
+        state=(1664525*state+1013904223)%(2**32)
+        return state
+    names=list(pkgs)
+    for i in range(256):
+        name=names[(rand()>>16)%len(names)];axis=(rand()>>16)%3
+        direction=1 if (rand()>>16)%2 else -1
+        o=[Q(2*((rand()>>16)%12)-11,4) for _ in range(3)]
+        o[axis]=-3*direction; d=[0,0,0];d[axis]=direction
+        # Odd quarter transverse coordinates never coincide with integral support planes.
+        add(f"gen_{i:03}",name,o,d,0,6)
+    manifest={"schema":"r0b-b2a-f01-predeclaration/1","scope_sha256":SCOPE,
+              "b1_audited_head":"85854ff3190ca2636565f5d0b458ad72cc449573",
+              "sources":b2_sources(),"packages":pkgs,"rows":rows,"seed":123456789,
+              "limitations":["identity pose","one contribution","box-only","no fragments or partition comparisons",
+                             "no native point integration yet","no full F01 or B-G03/G04 acceptance"]}
+    data=json.dumps(manifest,sort_keys=True,indent=2).encode();write_new(out/"manifest.json",data)
+    print(json.dumps({"manifest_sha256":sha(data),"bytes":len(data),"rows":len(rows),"packages":len(pkgs)}))
+
+def b2_measure(out,mhash,receipt):
+    from oracle import b2_oracle
+    raw=(out/"manifest.json").read_bytes()
+    assert sha(raw)==mhash
+    m=json.loads(raw);assert m["sources"]==b2_sources() and m["scope_sha256"]==SCOPE
+    packages={}
+    for name,p in m["packages"].items():
+        b=(out/p["file"]).read_bytes();assert sha(b)==p["raw_sha256"]
+        packages[name]=json.loads(b)
+    jobs=[{"id":r["id"],"file":m["packages"][r["package"]]["file"],"ray":r["ray"]} for r in m["rows"]]
+    proc=subprocess.run(["node",str(HERE/"candidate.mjs"),str(out)],input=json.dumps(jobs),capture_output=True,text=True,timeout=180)
+    assert proc.returncode==0,proc.stderr
+    cand=json.loads(proc.stdout);assert len(cand)==len(jobs)
+    results=[]
+    for r,actual in zip(m["rows"],cand):
+        expected=b2_oracle(packages[r["package"]],r["ray"])
+        observed=dict(actual);assert observed.pop("id")==r["id"]
+        named=r["expected"];hand=(named is None or (expected["status"]==named["status"] and
+                    (expected["hit"]["t"] if expected["hit"] else None)==named["t"]))
+        results.append({"id":r["id"],"pass":expected==observed and hand,"hand":hand,
+                        "oracle":expected,"candidate":observed})
+    report={"schema":"r0b-b2a-f01-partial-result/1","manifest_sha256":mhash,"receipt":receipt,
+            "pass":sum(r["pass"] for r in results),"total":len(results),"results":results}
+    target=out/"result.json"
+    with target.open("xb") as f:f.write(json.dumps(report,sort_keys=True,separators=(",",":")).encode())
+    from collections import Counter
+    print(json.dumps({"pass":report["pass"],"total":len(results),"result_sha256":sha(target.read_bytes()),
+                      "classes":dict(Counter(r["oracle"]["status"] for r in results)),
+                      "generated":dict(Counter(r["oracle"]["status"] for r in results if r["id"].startswith("gen_"))),
+                      "failures":[r["id"] for r in results if not r["pass"]]}))
+    return 0 if report["pass"]==len(results) else 1
+
+if __name__=="__main__" and len(sys.argv)>1 and sys.argv[1] in ("b2-prepare","b2-measure"):
+    p=argparse.ArgumentParser();p.add_argument("action");p.add_argument("--out",type=pathlib.Path,required=True)
+    p.add_argument("--manifest-sha");p.add_argument("--receipt")
+    a=p.parse_args();o=a.out.resolve()
+    if o==ROOT or ROOT in o.parents:p.error("output outside checkout required")
+    if a.action=="b2-prepare":b2_prepare(o);sys.exit(0)
+    if not a.manifest_sha or not a.receipt:p.error("exact receipt and hash required")
+    sys.exit(b2_measure(o,a.manifest_sha,a.receipt))
+
 if __name__=="__main__":
     p=argparse.ArgumentParser();p.add_argument("action",choices=["prepare","execute"]);p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--binary",type=pathlib.Path);p.add_argument("--manifest-sha");p.add_argument("--binary-sha");p.add_argument("--receipt")

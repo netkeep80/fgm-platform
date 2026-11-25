@@ -5,73 +5,31 @@ on:
       - research/dr3-r0-b
 permissions:
   contents: read
-  actions: read
 jobs:
-  measure:
-    name: R0-B B1 measure preregistered binary
+  prepare:
+    name: R0-B B2a prepare only
     if: github.repository == 'netkeep80/fgm-platform' && github.ref == 'refs/heads/research/dr3-r0-b'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
           persist-credentials: false
-      - name: Verify source and fetch preregistered artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Prepare exact F01 input corpus without comparisons
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^1)" = "7b0281055990fc9463e201d33a4135a986f0a550"
-          test "$(git diff --name-only HEAD^1 HEAD)" = ".github/workflows/research-r0b.yml"
-          evidence="$RUNNER_TEMP/r0b-measure"
+          evidence="$RUNNER_TEMP/r0b-b2a"
           mkdir -p "$evidence"
-          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/15056655540/zip" -o "$RUNNER_TEMP/r0b-prepared.zip"
-          echo "307a3cf43375936610efae5b382c8185da5fedc74ef91f596928f6a96489ef77  $RUNNER_TEMP/r0b-prepared.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/r0b-prepared.zip" -d "$evidence"
-          (
-            cd "$evidence"
-            sha256sum -c SHA256SUMS
-            echo "4d44f869500fb47b39a8dc8aa1122496958652213dd536ef256c22081ef2af6c  inputs/manifest.json" | sha256sum -c -
-            echo "76105acf64e6f980ebc8fba52077a171b5622c124cb16cdb476e7230bddcaab3  r0b_native_probe" | sha256sum -c -
-          )
-          chmod u+x "$evidence/r0b_native_probe"
-      - name: Execute exact B1 probes
-        run: |
-          set -euo pipefail
-          evidence="$RUNNER_TEMP/r0b-measure"
-          {
-            git rev-parse HEAD HEAD^{tree}
-            uname -a
-            python3 --version
-            ldd "$evidence/r0b_native_probe"
-          } | tee "$evidence/measurement-environment.txt"
-          set +e
-          python3 research/dr3-r0/r0-b/run.py execute --out "$evidence/inputs" --binary "$evidence/r0b_native_probe" --manifest-sha 4d44f869500fb47b39a8dc8aa1122496958652213dd536ef256c22081ef2af6c --binary-sha 76105acf64e6f980ebc8fba52077a171b5622c124cb16cdb476e7230bddcaab3 --receipt 7172288481 2>&1 | tee "$evidence/measurement.log"
-          status=${PIPESTATUS[0]}
-          set -e
-          printf '%s\n' "$status" > "$evidence/measurement-exit.txt"
-          if test -f "$evidence/inputs/result.json"; then
-            sha256sum "$evidence/inputs/result.json"
-            python3 - "$evidence/inputs/result.json" <<'PY'
-          import json,sys
-          r=json.load(open(sys.argv[1]))
-          for row in r["results"]:
-              if not row["pass_"]:
-                  print(json.dumps(row,ensure_ascii=True))
-          print("B1_RESULT",r["pass"],r["total"])
-          PY
-          fi
-          test "$status" = 0
+          { git rev-parse HEAD HEAD^{tree}; python3 --version; node --version; } | tee "$evidence/environment.txt"
+          python3 research/dr3-r0/r0-b/run.py b2-prepare --out "$evidence/inputs" | tee "$evidence/prepare.log"
+          python3 research/dr3-r0/r0-b/run.py b2-prepare --out "$RUNNER_TEMP/r0b-b2a-repeat"
+          diff -qr "$evidence/inputs" "$RUNNER_TEMP/r0b-b2a-repeat"
+          (cd "$evidence"; sha256sum inputs/manifest.json environment.txt prepare.log | tee SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
         with:
-          name: r0b-b1-supplement-measured
-          path: ${{ runner.temp }}/r0b-measure/
+          name: r0b-b2a-f01-prepared
+          path: ${{ runner.temp }}/r0b-b2a/
           if-no-files-found: error
           retention-days: 14
