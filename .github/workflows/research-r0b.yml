@@ -1,0 +1,56 @@
+name: DR3-R0-B isolated research runner
+on:
+  push:
+    branches:
+      - research/dr3-r0-b
+permissions:
+  contents: read
+jobs:
+  prepare:
+    name: R0-B B1 prepare only
+    if: github.repository == 'netkeep80/fgm-platform' && github.ref == 'refs/heads/research/dr3-r0-b'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Exact inputs, pinned dependency and native probe
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          evidence="$RUNNER_TEMP/r0b-evidence"
+          mkdir -p "$evidence" "$RUNNER_TEMP/r0b-deps"
+          {
+            git rev-parse HEAD HEAD^{tree}
+            uname -a
+            cmake --version
+            c++ --version
+            python3 --version
+          } | tee "$evidence/environment.txt"
+          curl -fLsS --retry 3 https://codeload.github.com/nlohmann/json/tar.gz/refs/tags/v3.12.0 -o "$RUNNER_TEMP/r0b-deps/json.tar.gz"
+          echo "4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187  $RUNNER_TEMP/r0b-deps/json.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/r0b-deps/json.tar.gz" -C "$RUNNER_TEMP/r0b-deps"
+          python3 research/dr3-r0/r0-b/run.py prepare --out "$evidence/inputs" | tee "$evidence/prepare.log"
+          echo "286f0fe1824bb4f5a5fcf67380843f77fb996da8a80488ee34634a95c3fa6e03  $evidence/inputs/manifest.json" | sha256sum -c -
+          build="$RUNNER_TEMP/r0b-build"
+          set -x
+          cmake -S research/dr3-r0/r0-b -B "$build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_DISABLE_FIND_PACKAGE_nlohmann_json=TRUE -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="$RUNNER_TEMP/r0b-deps/json-3.12.0" 2>&1 | tee "$evidence/configure.log"
+          cmake --build "$build" --config Release --parallel 2 --verbose 2>&1 | tee "$evidence/build.log"
+          set +x
+          cp "$build/r0b_native_probe" "$evidence/r0b_native_probe"
+          cp "$build/CMakeCache.txt" "$evidence/CMakeCache.txt"
+          (
+            cd "$evidence"
+            sha256sum inputs/manifest.json r0b_native_probe environment.txt configure.log build.log CMakeCache.txt prepare.log | tee SHA256SUMS
+          )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r0b-b1-prepared
+          path: ${{ runner.temp }}/r0b-evidence/
+          if-no-files-found: error
+          retention-days: 14
